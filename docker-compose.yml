@@ -32,7 +32,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8001:8000"
+      - "8001:8001"
     environment:
       DATABASE_URL: postgresql+asyncpg://osiris:osiris_dev_pass@postgres:5432/osiris_facturacion
       REDIS_URL: redis://redis:6379/0
