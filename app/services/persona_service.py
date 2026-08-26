@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.persona import Persona, TipoPersona
+from app.models.persona import Cliente, Persona, Proveedor, TipoPersona
 from app.repositories.persona_repository import PersonaRepository
 from app.schemas.persona import PersonaCreate, PersonaUpdate
 
@@ -16,7 +16,8 @@ class PersonaService:
         if existing:
             raise ConflictError("PERSONA_EXISTS", f"Ya existe una persona con identificación {data.identificacion}")
 
-        persona = Persona(empresa_id=empresa_id, **data.model_dump())
+        persona_class = Cliente if data.tipo == TipoPersona.cliente else Proveedor
+        persona = persona_class(empresa_id=empresa_id, **data.model_dump())
         await self.repo.create(persona)
         await self.db.commit()
         await self.db.refresh(persona)
