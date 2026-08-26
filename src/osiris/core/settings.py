@@ -19,6 +19,11 @@ class Settings(BaseSettings):
         description="development|staging|production",
     )
 
+    SECRET_KEY: str = Field(default="dev-secret-key-change-in-production", min_length=16)
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
     # Facturacion electronica / FE-EC
     FEEC_P12_PATH: Path | None = None
     FEEC_P12_PASSWORD: str | None = None

@@ -49,6 +49,7 @@ from osiris.core.security_audit import (
     parse_attempted_payload,
 )
 from osiris.modules.common.audit_log.router import router as audit_log_router
+from osiris.modules.common.auth_router import router as auth_router
 from osiris.modules.common.cliente.router import router as cliente_router
 from osiris.modules.common.empleado.router import router as empleado_router
 from osiris.modules.common.empresa.router import router as empresa_router
@@ -425,6 +426,7 @@ async def metrics() -> PlainTextResponse:
     )
 
 # Incluir routers
+app.include_router(auth_router)
 app.include_router(empresa_router)
 app.include_router(sucursal_router)
 app.include_router(punto_emision_router)
