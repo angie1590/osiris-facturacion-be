@@ -20,6 +20,16 @@ async def create_persona(
     return await service.create_persona(empresa_id, data)
 
 
+@router.get("/buscar/{identificacion}", response_model=PersonaResponse)
+async def search_persona(
+    identificacion: str,
+    empresa_id: int = Depends(get_current_empresa_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = PersonaService(db)
+    return await service.search_persona(empresa_id, identificacion)
+
+
 @router.get("/{tipo}", response_model=list[PersonaResponse])
 async def list_personas(
     tipo: TipoPersona,
