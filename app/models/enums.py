@@ -20,3 +20,8 @@ class ComprobanteTipo(str, enum.Enum):
     nota_debito = "05"
     guia_remision = "06"
     retencion = "07"
+
+
+class TipoPersona(str, enum.Enum):
+    cliente = "cliente"
+    proveedor = "proveedor"
