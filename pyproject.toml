@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "osiris-facturacion"
+version = "0.1.0"
+description = "Sistema de facturación electrónica para PyMEs (Ecuador)"
+authors = ["Andrea Peralta <andrea.peraltabravo@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.0"}
+alembic = "^1.14.0"
+asyncpg = "^0.30.0"
+pydantic = "^2.10.0"
+pydantic-settings = "^2.6.0"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+bcrypt = "4.0.1"
+redis = {extras = ["asyncio"], version = "^5.2.0"}
+python-multipart = "^0.0.20"
+httpx = "^0.28.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+pytest-cov = "^6.0.0"
+anyio = {extras = ["trio"], version = "^4.0.0"}
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
