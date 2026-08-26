@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import Any, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlmodel import select
 from sqlmodel import Session
 
 from osiris.core.db import get_session
@@ -19,11 +22,17 @@ from osiris.modules.inventario.producto.models_atributos import (
 )
 from osiris.modules.inventario.producto.service import ProductoService
 from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
+from osiris.modules.common.proveedor_persona.entity import ProveedorPersona
+from osiris.modules.common.proveedor_sociedad.entity import ProveedorSociedad
 
 
 router = APIRouter(prefix="/api/v1/productos", tags=["Productos"])
 service = ProductoService()
 atributo_valor_service = ProductoAtributoValorService()
+
+
+class ProveedoresProductoRequest(BaseModel):
+    proveedor_ids: List[UUID]
 
 
 @router.get("", response_model=PaginatedResponse[ProductoListadoRead])
@@ -83,3 +92,25 @@ def upsert_producto_atributos(
 ):
     entities = atributo_valor_service.upsert_valores_producto_validando_aplicabilidad(session, producto_id, payload)
     return [ProductoAtributoValorRead.model_validate(item) for item in entities]
+
+
+def _set_proveedores(session: Session, producto_id: UUID, provider_ids: List[UUID], model: Any, setter: Any) -> None:
+    if not service.get(session, producto_id):
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    providers = session.exec(select(model).where(model.id.in_(provider_ids), model.activo.is_(True))).all()
+    if len(providers) != len(set(provider_ids)):
+        raise HTTPException(status_code=404, detail="Uno o más proveedores no existen o están inactivos")
+    setter(session, producto_id, provider_ids)
+    session.commit()
+
+
+@router.put("/{producto_id}/proveedores-persona")
+def asignar_proveedores_persona(producto_id: UUID, payload: ProveedoresProductoRequest, session: Session = Depends(get_session)):
+    _set_proveedores(session, producto_id, payload.proveedor_ids, ProveedorPersona, service.repo.set_proveedores_persona)
+    return service.get_producto_completo(session, producto_id)
+
+
+@router.put("/{producto_id}/proveedores-sociedad")
+def asignar_proveedores_sociedad(producto_id: UUID, payload: ProveedoresProductoRequest, session: Session = Depends(get_session)):
+    _set_proveedores(session, producto_id, payload.proveedor_ids, ProveedorSociedad, service.repo.set_proveedores_sociedad)
+    return service.get_producto_completo(session, producto_id)

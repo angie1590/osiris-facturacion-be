@@ -346,6 +346,7 @@ class ProductoService(BaseService):
                 persona = session.get(Persona, prov.persona_id)
                 if persona:
                     proveedores_persona.append({
+                        "id": prov.id,
                         "nombres": persona.nombre,
                         "apellidos": persona.apellido,
                         "nombre_comercial": getattr(prov, "nombre_comercial", None)
@@ -361,6 +362,7 @@ class ProductoService(BaseService):
             prov = session.get(ProveedorSociedad, prov_id)
             if prov:
                 proveedores_sociedad.append({
+                    "id": prov.id,
                     "razon_social": prov.razon_social,
                     "nombre_comercial": getattr(prov, "nombre_comercial", None)
                 })

@@ -23,12 +23,14 @@ class CategoriaNested(BaseOSModel):
 
 
 class ProveedorPersonaNested(BaseOSModel):
+    id: UUID
     nombres: str
     apellidos: str
     nombre_comercial: Optional[str] = None
 
 
 class ProveedorSociedadNested(BaseOSModel):
+    id: UUID
     razon_social: str
     nombre_comercial: Optional[str] = None
 
