@@ -15,7 +15,7 @@ class AuthService:
         self.user_repo = UserRepository(db)
 
     async def login(self, username: str, password: str) -> dict:
-        user = await self.user_repo.get_by_username(username)
+        user = await self.user_repo.get_by_username(username.lower())
         if not user or not verify_password(password, user.hashed_password):
             raise UnauthorizedError("INVALID_CREDENTIALS", "Invalid credentials")
         if not user.is_active:
