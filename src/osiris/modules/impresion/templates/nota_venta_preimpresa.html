@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="ticket-template" content="PREIMPRESA_NOTA_VENTA" />
+    <style>
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      body {
+        margin: 0;
+        padding-top: {{ margen_superior_cm }}cm;
+        padding-left: 1cm;
+        padding-right: 1cm;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+      }
+      .page {
+        min-height: 29.7cm;
+        position: relative;
+        page-break-after: always;
+      }
+      .page:last-child {
+        page-break-after: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border-bottom: 1px dotted #666;
+        padding: 2px 4px;
+      }
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: 10%;
+        text-align: right;
+      }
+      th:nth-child(2),
+      td:nth-child(2) {
+        width: 54%;
+      }
+      th:nth-child(3),
+      td:nth-child(3),
+      th:nth-child(4),
+      td:nth-child(4) {
+        width: 18%;
+        text-align: right;
+      }
+      .totales {
+        position: absolute;
+        right: 0;
+        bottom: 2.2cm;
+        width: 38%;
+      }
+      .totales .row {
+        display: flex;
+        justify-content: space-between;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    {% for pagina in paginas %}
+    <section class="page">
+      <table>
+        <thead>
+          <tr>
+            <th>Cantidad</th>
+            <th>Descripción</th>
+            <th>V. Unitario</th>
+            <th>V. Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in pagina %}
+          <tr>
+            <td>{{ item.cantidad }}</td>
+            <td>{{ item.descripcion }}</td>
+            <td>{{ item.valor_unitario }}</td>
+            <td>{{ item.valor_total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if loop.last %}
+      <div class="totales">
+        <div class="row">
+          <span>Total</span>
+          <span>{{ total }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </body>
+</html>
+

@@ -1,0 +1,791 @@
+# Estructura de datos para seed completo de osiris-be
+# Completa los valores según tus necesidades
+
+# 1. PERSONA BASE (para empresa)
+persona_empresa:
+  identificacion: "0103523908001"
+  tipo_identificacion: "RUC"
+  nombre: "DANIEL FERNANDO PINEDA ALVAREZ"
+  apellido: "PINEDA ALVAREZ"
+  email: "dpineda@openlatina.com"
+  telefono: "0999123456"
+
+# 2. EMPRESA
+empresa:
+  nombre_comercial: "OpenLatina"
+  razon_social: "PINEDA ALVAREZ DANIEL FERNANDO"
+  ruc: "0103523908001"  # mismo que persona
+  direccion: "Av. Principal 123"
+  telefono: "071234567"
+  email: "contacto@openlatina.com"
+  logo: "https://openlatina.com/logo.png"
+  tipo_contribuyente_id: "01"  # RISE o Contribuyente Especial
+
+# 3. SUCURSALES (2 sucursales)
+sucursales:
+  - codigo: "001"
+    nombre: "Sucursal Centro"
+    direccion: "Av. Principal 123 - Centro"
+    telefono: "071234567"
+
+  - codigo: "002"
+    nombre: "Sucursal Norte"
+    direccion: "Av. Norte 456"
+    telefono: "077654321"
+
+# 4. PUNTOS DE EMISIÓN (matriz sin sucursal, resto con sucursal)
+puntos_emision:
+  - codigo: "001"
+    descripcion: "Punto Matriz Principal"
+    sucursal: null  # Punto de emisión directo de empresa (matriz)
+
+  - codigo: "002"
+    descripcion: "Punto Matriz Secundario"
+    sucursal: null  # Punto de emisión directo de empresa (matriz)
+
+  - codigo: "001"
+    descripcion: "Punto Centro"
+    sucursal: "001"
+
+  - codigo: "001"
+    descripcion: "Punto Norte"
+    sucursal: "002"
+
+# 5. BODEGAS (3 bodegas: 1 matriz, 2 por sucursal)
+bodegas:
+  - codigo_bodega: "BOD-MATRIZ"
+    nombre_bodega: "Bodega Matriz"
+    descripcion: "Bodega Principal - Matriz"
+    sucursal: null  # Sin sucursal = bodega general
+
+  - codigo_bodega: "BOD-001"
+    nombre_bodega: "Bodega Sucursal Centro"
+    descripcion: "Bodega Centro"
+    sucursal: "001"
+
+  - codigo_bodega: "BOD-002"
+    nombre_bodega: "Bodega Sucursal Norte"
+    descripcion: "Bodega Norte"
+    sucursal: "002"
+
+# 6. JERARQUÍA DE CATEGORÍAS
+categorias:
+  # Nivel 1: Padre raíz
+  - nombre: "Tecnología"
+    es_padre: true
+    parent: null
+    hijos:
+      # Nivel 2: Subcategorías
+      - nombre: "Computadoras"
+        es_padre: true
+        hijos:
+          # Nivel 3: Hojas
+          - nombre: "Laptop"
+            es_padre: false
+          - nombre: "All-in-one"
+            es_padre: false
+
+      - nombre: "Periféricos"
+        es_padre: true
+        hijos:
+          - nombre: "Mouse"
+            es_padre: false
+          - nombre: "Teclado"
+            es_padre: false
+          - nombre: "Audífonos"
+            es_padre: true
+            hijos:
+              - nombre: "Earbuds"
+                es_padre: false
+              - nombre: "Diadema"
+                es_padre: false
+
+# 7. ATRIBUTOS (para asignar a categorías o productos)
+atributos:
+  # Atributos de hardware/especificaciones
+  - nombre: "Procesador"
+    tipo_dato: "string"
+    nivel_asignacion: "Computadoras"  # categoría padre
+
+  - nombre: "RAM"
+    tipo_dato: "string"
+    nivel_asignacion: "Computadoras"
+
+  - nombre: "Almacenamiento"
+    tipo_dato: "string"
+    nivel_asignacion: "Computadoras"
+
+  - nombre: "Tamaño Pantalla"
+    tipo_dato: "string"
+    nivel_asignacion: "Computadoras"
+
+  # Atributos de periféricos
+  - nombre: "Tipo Conexión"
+    tipo_dato: "string"
+    nivel_asignacion: "Periféricos"
+
+  - nombre: "DPI"
+    tipo_dato: "integer"
+    nivel_asignacion: "Mouse"
+
+  - nombre: "Teclas"
+    tipo_dato: "integer"
+    nivel_asignacion: "Teclado"
+
+  - nombre: "Tipo Switch"
+    tipo_dato: "string"
+    nivel_asignacion: "Teclado"
+
+  - nombre: "Cancelación Ruido"
+    tipo_dato: "boolean"
+    nivel_asignacion: "Audífonos"
+
+  - nombre: "Batería (horas)"
+    tipo_dato: "decimal"
+    nivel_asignacion: "Audífonos"
+
+  - nombre: "Color"
+    tipo_dato: "string"
+    nivel_asignacion: "Tecnología"  # aplica a todos
+
+  - nombre: "Garantía (meses)"
+    tipo_dato: "integer"
+    nivel_asignacion: "Tecnología"
+
+# 8. PROVEEDORES PERSONA (usar RUCs que proporcionaste)
+proveedores_persona:
+  - persona:
+      identificacion: "0104815956001"
+      tipo_identificacion: "RUC"
+      nombre: "JUAN CARLOS"
+      apellido: "MARTINEZ LOPEZ"
+      email: "jmartinez@proveedor.com"
+      telefono: "0987654321"
+    proveedor:
+      nombre_comercial: "Distribuidora Martínez"
+      tipo_contribuyente_id: "01"  # RISE
+
+  - persona:
+      identificacion: "0152131330001"
+      tipo_identificacion: "RUC"
+      nombre: "MARIA ELENA"
+      apellido: "RODRIGUEZ PEREZ"
+      email: "mrodriguez@tech.com"
+      telefono: "0998765432"
+    proveedor:
+      nombre_comercial: "Tech Solutions Rodriguez"
+      tipo_contribuyente_id: "01"
+
+# 9. PROVEEDORES SOCIEDAD (usar RUCs de empresas)
+proveedores_sociedad:
+  - ruc: "0190123456001"
+    razon_social: "IMPORTADORA TECH S.A."
+    nombre_comercial: "ImportaTech"
+    direccion: "Av. Américas 789"
+    telefono: "042345678"
+    email: "ventas@importatech.com"
+    tipo_contribuyente_id: "02"  # Contribuyente Especial
+    persona_contacto: "0104815956001"  # Juan Martínez
+
+  - ruc: "1790345678001"
+    razon_social: "DISTRIBUIDORA GLOBAL CIA. LTDA."
+    nombre_comercial: "GlobalDist"
+    direccion: "Av. Eloy Alfaro 456"
+    telefono: "023456789"
+    email: "info@globaldist.com"
+    tipo_contribuyente_id: "02"
+    persona_contacto: "0152131330001"  # María Rodríguez
+
+# 10. CASA COMERCIAL
+casas_comerciales:
+  - nombre: "HP"
+  - nombre: "Dell"
+  - nombre: "Logitech"
+  - nombre: "Razer"
+  - nombre: "Sony"
+
+# 11. IMPUESTOS (IVA e ICE - obtener desde aux_impuesto_catalogo)
+# Estos DEBEN existir en la tabla aux_impuesto_catalogo (se cargan desde conf/aux_impuesto_catalogo.json)
+# El script buscará por codigo_sri y tipo_impuesto
+impuestos_usados:
+  - codigo_sri: "0"    # IVA 0%
+  - codigo_sri: "4"    # IVA 15%
+  - codigo_sri: "3011" # ICE Cigarrillos Rubios (ejemplo para productos con ICE)
+
+# 12. PRODUCTOS (15 productos: ~3 por categoría hoja)
+productos:
+  # === LAPTOPS (3) ===
+  - nombre: "Laptop HP Pavilion 15"
+    descripcion: "Laptop HP Pavilion 15.6 pulgadas, Intel Core i5, 8GB RAM, 256GB SSD"
+    categoria: "Laptop"
+    casa_comercial: "HP"
+    precio: 850.00
+    codigo_barras: "HP-PAV-15-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      Procesador: "Intel Core i5-1235U"
+      RAM: "8GB DDR4"
+      Almacenamiento: "256GB SSD"
+      "Tamaño Pantalla": "15.6 pulgadas"
+      Color: "Plata"
+      "Garantía (meses)": 12
+      "Tipo Conexión": "WiFi 6"
+    proveedores: ["0190123456001", "1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 10
+      BOD-001: 3
+      BOD-002: 2
+
+  - nombre: "Laptop Dell Inspiron 14"
+    descripcion: "Laptop Dell Inspiron 14 pulgadas, AMD Ryzen 5, 16GB RAM, 512GB SSD"
+    categoria: "Laptop"
+    casa_comercial: "Dell"
+    precio: 950.00
+    codigo_barras: "DELL-INS-14-2024"
+    impuestos: ["4", "3011"]  # IVA 15% + ICE
+    atributos:
+      Procesador: "AMD Ryzen 5 5500U"
+      RAM: "16GB DDR4"
+      Almacenamiento: "512GB SSD"
+      "Tamaño Pantalla": "14 pulgadas"
+      Color: "Negro"
+      "Garantía (meses)": 12
+      "Tipo Conexión": "WiFi 6"
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 8
+      BOD-001: 4
+
+  - nombre: "Laptop HP EliteBook 840"
+    descripcion: "Laptop empresarial HP EliteBook 14 pulgadas, Intel Core i7, 16GB RAM, 512GB SSD"
+    categoria: "Laptop"
+    casa_comercial: "HP"
+    precio: 1350.00
+    codigo_barras: "HP-ELITE-840-2024"
+    impuestos: ["4", "3011"]  # IVA 15% + ICE
+    atributos:
+      Procesador: "Intel Core i7-1265U"
+      RAM: "16GB DDR4"
+      Almacenamiento: "512GB SSD NVMe"
+      "Tamaño Pantalla": "14 pulgadas"
+      Color: "Gris oscuro"
+      "Garantía (meses)": 24
+      "Tipo Conexión": "WiFi 6E"
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 5
+      BOD-002: 2
+
+  - nombre: "Laptop Dell para Educación"
+    descripcion: "Laptop básica Dell para estudiantes, Intel Celeron, 4GB RAM, 128GB SSD - IVA 0%"
+    categoria: "Laptop"
+    casa_comercial: "Dell"
+    precio: 420.00
+    codigo_barras: "DELL-EDU-2024"
+    impuestos: ["0"]  # IVA 0% para productos educativos
+    atributos:
+      Procesador: "Intel Celeron N4020"
+      RAM: "4GB DDR4"
+      Almacenamiento: "128GB SSD"
+      "Tamaño Pantalla": "14 pulgadas HD"
+      Color: "Negro"
+      "Garantía (meses)": 12
+      "Tipo Conexión": "WiFi 5"
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 15
+      BOD-001: 5
+      BOD-002: 5
+
+  # === ALL-IN-ONE (3) ===
+  - nombre: "HP All-in-One 24-df"
+    descripcion: "Computadora All-in-One HP 23.8 pulgadas, Intel Core i3, 8GB RAM, 1TB HDD"
+    categoria: "All-in-one"
+    casa_comercial: "HP"
+    precio: 680.00
+    codigo_barras: "HP-AIO-24DF-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      Procesador: "Intel Core i3-1115G4"
+      RAM: "8GB DDR4"
+      Almacenamiento: "1TB HDD"
+      "Tamaño Pantalla": "23.8 pulgadas Full HD"
+      Color: "Blanco"
+      "Garantía (meses)": 12
+      "Tipo Conexión": "WiFi 5"
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 6
+      BOD-001: 2
+
+  - nombre: "Dell Inspiron 27 All-in-One"
+    descripcion: "Dell All-in-One 27 pulgadas, Intel Core i5, 12GB RAM, 256GB SSD + 1TB HDD"
+    categoria: "All-in-one"
+    casa_comercial: "Dell"
+    precio: 1100.00
+    codigo_barras: "DELL-AIO-27-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      Procesador: "Intel Core i5-1235U"
+      RAM: "12GB DDR4"
+      Almacenamiento: "256GB SSD + 1TB HDD"
+      "Tamaño Pantalla": "27 pulgadas QHD"
+      Color: "Negro"
+      "Garantía (meses)": 12
+      "Tipo Conexión": "WiFi 6"
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 4
+      BOD-002: 2
+
+  - nombre: "HP Envy 32 All-in-One"
+    descripcion: "HP Envy 32 pulgadas 4K, Intel Core i7, 16GB RAM, 512GB SSD + 2TB HDD"
+    categoria: "All-in-one"
+    casa_comercial: "HP"
+    precio: 1800.00
+    codigo_barras: "HP-ENVY-32-2024"
+    impuestos: ["4", "3011"]  # IVA 15% + ICE
+    atributos:
+      Procesador: "Intel Core i7-1265U"
+      RAM: "16GB DDR4"
+      Almacenamiento: "512GB SSD + 2TB HDD"
+      "Tamaño Pantalla": "32 pulgadas 4K UHD"
+      Color: "Negro y Plata"
+      "Garantía (meses)": 24
+      "Tipo Conexión": "WiFi 6E"
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 3
+
+  # === MOUSE (3) ===
+  - nombre: "Logitech MX Master 3S"
+    descripcion: "Mouse inalámbrico Logitech MX Master 3S, 8000 DPI, ergonómico"
+    categoria: "Mouse"
+    casa_comercial: "Logitech"
+    precio: 99.00
+    codigo_barras: "LGT-MX3S-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      DPI: 8000
+      "Tipo Conexión": "Bluetooth y USB-C"
+      Color: "Negro"
+      "Garantía (meses)": 12
+    proveedores: ["1790345678001", "Distribuidora Martínez"]
+    bodegas:
+      BOD-MATRIZ: 20
+      BOD-001: 8
+      BOD-002: 7
+
+  - nombre: "Razer DeathAdder V3"
+    descripcion: "Mouse gaming Razer DeathAdder V3, 30000 DPI, RGB"
+    categoria: "Mouse"
+    casa_comercial: "Razer"
+    precio: 85.00
+    codigo_barras: "RZR-DA-V3-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      DPI: 30000
+      "Tipo Conexión": "USB cableado"
+      Color: "Negro con RGB"
+      "Garantía (meses)": 24
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 15
+      BOD-001: 5
+      BOD-002: 5
+
+  - nombre: "Logitech G305 Wireless"
+    descripcion: "Mouse gaming inalámbrico Logitech G305, 12000 DPI"
+    categoria: "Mouse"
+    casa_comercial: "Logitech"
+    precio: 45.00
+    codigo_barras: "LGT-G305-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      DPI: 12000
+      "Tipo Conexión": "Wireless 2.4GHz"
+      Color: "Blanco"
+      "Garantía (meses)": 12
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 25
+      BOD-001: 10
+      BOD-002: 10
+
+  # === TECLADO (3) ===
+  - nombre: "Logitech MX Keys"
+    descripcion: "Teclado inalámbrico Logitech MX Keys, retroiluminado"
+    categoria: "Teclado"
+    casa_comercial: "Logitech"
+    precio: 110.00
+    codigo_barras: "LGT-MXKEYS-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      Teclas: 104
+      "Tipo Switch": "Membrana de bajo perfil"
+      "Tipo Conexión": "Bluetooth y USB"
+      Color: "Gris"
+      "Garantía (meses)": 12
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 12
+      BOD-001: 5
+      BOD-002: 4
+
+  - nombre: "Razer BlackWidow V4"
+    descripcion: "Teclado mecánico gaming Razer BlackWidow V4, RGB, switches verdes"
+    categoria: "Teclado"
+    casa_comercial: "Razer"
+    precio: 140.00
+    codigo_barras: "RZR-BWV4-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      Teclas: 104
+      "Tipo Switch": "Mecánico Razer Green"
+      "Tipo Conexión": "USB cableado"
+      Color: "Negro con RGB"
+      "Garantía (meses)": 24
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 10
+      BOD-001: 4
+      BOD-002: 3
+
+  - nombre: "HP K500F"
+    descripcion: "Teclado mecánico HP K500F, retroiluminado, switches rojos"
+    categoria: "Teclado"
+    casa_comercial: "HP"
+    precio: 65.00
+    codigo_barras: "HP-K500F-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      Teclas: 87
+      "Tipo Switch": "Mecánico Red"
+      "Tipo Conexión": "USB cableado"
+      Color: "Negro"
+      "Garantía (meses)": 12
+    proveedores: ["0190123456001", "1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 18
+      BOD-001: 6
+      BOD-002: 8
+
+  # === EARBUDS (3) ===
+  - nombre: "Sony WF-1000XM5"
+    descripcion: "Audífonos inalámbricos Sony WF-1000XM5, cancelación de ruido"
+    categoria: "Earbuds"
+    casa_comercial: "Sony"
+    precio: 280.00
+    codigo_barras: "SONY-WF1000XM5-2024"
+    impuestos: ["4", "3011"]  # IVA 15% + ICE
+    atributos:
+      "Tipo Conexión": "Bluetooth 5.3"
+      "Cancelación Ruido": true
+      "Batería (horas)": 8.0
+      Color: "Negro"
+      "Garantía (meses)": 12
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 15
+      BOD-001: 6
+      BOD-002: 5
+
+  - nombre: "Razer Hammerhead True Wireless"
+    descripcion: "Audífonos gaming Razer Hammerhead, baja latencia, 60ms"
+    categoria: "Earbuds"
+    casa_comercial: "Razer"
+    precio: 100.00
+    codigo_barras: "RZR-HHTH-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      "Tipo Conexión": "Bluetooth 5.2"
+      "Cancelación Ruido": false
+      "Batería (horas)": 4.5
+      Color: "Negro con RGB"
+      "Garantía (meses)": 12
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 20
+      BOD-001: 8
+      BOD-002: 8
+
+  - nombre: "HP Elite Wireless Earbuds"
+    descripcion: "Audífonos inalámbricos HP Elite para trabajo"
+    categoria: "Earbuds"
+    casa_comercial: "HP"
+    precio: 120.00
+    codigo_barras: "HP-ELITE-EB-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      "Tipo Conexión": "Bluetooth 5.1"
+      "Cancelación Ruido": true
+      "Batería (horas)": 6.0
+      Color: "Negro"
+      "Garantía (meses)": 12
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 12
+      BOD-001: 5
+      BOD-002: 4
+
+  # === DIADEMA (3) ===
+  - nombre: "Sony WH-1000XM5"
+    descripcion: "Audífonos over-ear Sony WH-1000XM5, cancelación de ruido premium"
+    categoria: "Diadema"
+    casa_comercial: "Sony"
+    precio: 380.00
+    codigo_barras: "SONY-WH1000XM5-2024"
+    impuestos: ["4", "3011"]  # IVA 15% + ICE
+    atributos:
+      "Tipo Conexión": "Bluetooth 5.2 y cable auxiliar"
+      "Cancelación Ruido": true
+      "Batería (horas)": 30.0
+      Color: "Plata"
+      "Garantía (meses)": 12
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 10
+      BOD-001: 4
+      BOD-002: 3
+
+  - nombre: "Razer BlackShark V2 Pro"
+    descripcion: "Audífonos gaming Razer BlackShark V2 Pro, THX Spatial Audio"
+    categoria: "Diadema"
+    casa_comercial: "Razer"
+    precio: 180.00
+    codigo_barras: "RZR-BSV2PRO-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      "Tipo Conexión": "Wireless 2.4GHz"
+      "Cancelación Ruido": true
+      "Batería (horas)": 24.0
+      Color: "Negro"
+      "Garantía (meses)": 24
+    proveedores: ["0190123456001"]
+    bodegas:
+      BOD-MATRIZ: 12
+      BOD-001: 5
+      BOD-002: 5
+
+  - nombre: "Logitech G733 Wireless"
+    descripcion: "Audífonos gaming Logitech G733, RGB LIGHTSYNC, ligeros"
+    categoria: "Diadema"
+    casa_comercial: "Logitech"
+    precio: 130.00
+    codigo_barras: "LGT-G733-2024"
+    impuestos: ["4"]  # IVA 15%
+    atributos:
+      "Tipo Conexión": "Wireless 2.4GHz"
+      "Cancelación Ruido": false
+      "Batería (horas)": 29.0
+      Color: "Blanco con RGB"
+      "Garantía (meses)": 12
+    proveedores: ["1790345678001"]
+    bodegas:
+      BOD-MATRIZ: 15
+      BOD-001: 6
+      BOD-002: 6
+
+# 13. USUARIOS (opcional, para gestión)
+usuarios:
+  - persona:
+      identificacion: "0103523908001"  # misma persona de empresa
+      tipo_identificacion: "RUC"
+    usuario:
+      email: "admin@openlatina.com"
+      password: "Admin123!"  # debe hashearse
+      es_superusuario: true
+      roles: ["ADMIN", "VENTAS", "INVENTARIO"]
+
+# 14. ROLES
+roles:
+  - nombre: "ADMIN"
+    descripcion: "Administrador del sistema"
+  - nombre: "VENTAS"
+    descripcion: "Personal de ventas"
+  - nombre: "INVENTARIO"
+    descripcion: "Gestión de inventario"
+  - nombre: "CONTADOR"
+    descripcion: "Contabilidad y finanzas"
+  - nombre: "Administrador"
+    descripcion: "Rol de administrador general"
+  - nombre: "Vendedor"
+    descripcion: "Rol de vendedor"
+  - nombre: "Jefe de Almacén"
+    descripcion: "Rol de jefe de almacén"
+
+# 14.1. MÓDULOS DEL SISTEMA
+modulos:
+  - codigo: "VENTAS"
+    nombre: "Ventas"
+    descripcion: "Módulo de gestión de ventas y facturación"
+    orden: 1
+    icono: "shopping-cart"
+
+  - codigo: "COMPRAS"
+    nombre: "Compras"
+    descripcion: "Módulo de gestión de compras y proveedores"
+    orden: 2
+    icono: "shopping-bag"
+
+  - codigo: "INVENTARIO"
+    nombre: "Inventario"
+    descripcion: "Módulo de gestión de productos y bodegas"
+    orden: 3
+    icono: "package"
+
+  - codigo: "CONTABILIDAD"
+    nombre: "Contabilidad"
+    descripcion: "Módulo de contabilidad y finanzas"
+    orden: 4
+    icono: "calculator"
+
+# 14.2. PERMISOS POR ROL Y MÓDULO
+permisos:
+  # Administrador: acceso completo a todos los módulos
+  - rol: "Administrador"
+    modulo: "VENTAS"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  - rol: "Administrador"
+    modulo: "INVENTARIO"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  - rol: "Administrador"
+    modulo: "COMPRAS"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  - rol: "Administrador"
+    modulo: "CONTABILIDAD"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  # Vendedor: acceso completo a ventas, solo lectura en inventario
+  - rol: "Vendedor"
+    modulo: "VENTAS"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: false
+
+  - rol: "Vendedor"
+    modulo: "INVENTARIO"
+    puede_leer: true
+    puede_crear: false
+    puede_actualizar: false
+    puede_eliminar: false
+
+  # Jefe de Almacén: acceso completo a inventario, lectura en compras
+  - rol: "Jefe de Almacén"
+    modulo: "INVENTARIO"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  - rol: "Jefe de Almacén"
+    modulo: "COMPRAS"
+    puede_leer: true
+    puede_crear: false
+    puede_actualizar: false
+    puede_eliminar: false
+
+  # Contador: solo lectura en ventas, sin acceso a eliminar en contabilidad
+  - rol: "CONTADOR"
+    modulo: "CONTABILIDAD"
+    puede_leer: true
+    puede_crear: false
+    puede_actualizar: false
+    puede_eliminar: false
+
+# 14.3. EMPLEADOS (3 empleados con roles asignados)
+empleados:
+  - persona:
+      identificacion: "0105841035"
+      tipo_identificacion: "CEDULA"
+      nombre: "JUAN PABLO"
+      apellido: "SANCHEZ TORRES"
+      email: "jsanchez@openlatina.com"
+      telefono: "0987654321"
+    empleado:
+      salario: 2500.00
+      fecha_ingreso: "2024-01-15"
+      fecha_nacimiento: "1990-05-20"
+      usuario:
+        username: "jsanchez"
+        password: "Test1234"
+        rol: "Administrador"
+
+  - persona:
+      identificacion: "0103511606"
+      tipo_identificacion: "CEDULA"
+      nombre: "MARIA JOSE"
+      apellido: "RAMIREZ LOPEZ"
+      email: "mramirez@openlatina.com"
+      telefono: "0991234567"
+    empleado:
+      salario: 1800.00
+      fecha_ingreso: "2024-02-20"
+      fecha_nacimiento: "1992-08-15"
+      usuario:
+        username: "mramirez"
+        password: "Test1234"
+        rol: "Vendedor"
+
+  - persona:
+      identificacion: "0103605408"
+      tipo_identificacion: "CEDULA"
+      nombre: "CARLOS EDUARDO"
+      apellido: "MARTINEZ GARCIA"
+      email: "cmartinez@openlatina.com"
+      telefono: "0998765432"
+    empleado:
+      salario: 2000.00
+      fecha_ingreso: "2024-03-10"
+      fecha_nacimiento: "1988-11-30"
+      usuario:
+        username: "cmartinez"
+        password: "Test1234"
+        rol: "Jefe de Almacén"
+
+# 15. CLIENTES (opcional, algunos clientes de prueba)
+clientes:
+  - persona:
+      identificacion: "0102345678"
+      tipo_identificacion: "CEDULA"
+      nombre: "CARLOS ANDRES"
+      apellido: "GOMEZ CASTRO"
+      email: "cgomez@email.com"
+      telefono: "0991234567"
+    cliente:
+      tipo_cliente: "FRECUENTE"
+      descuento_porcentaje: 5.0
+
+  - persona:
+      identificacion: "0105678901"
+      tipo_identificacion: "CEDULA"
+      nombre: "LUCIA PATRICIA"
+      apellido: "MORALES DIAZ"
+      email: "lmorales@email.com"
+      telefono: "0998765432"
+    cliente:
+      tipo_cliente: "VIP"
+      descuento_porcentaje: 10.0
+
+# NOTAS:
+# - Los códigos SRI de impuestos deben existir en aux_impuesto_catalogo
+# - Los RUCs deben ser válidos según validación ecuatoriana
+# - Las referencias entre tablas se resolverán por códigos/nombres
+# - El script creará las relaciones automáticamente
+# - usuario_auditoria será "seed_script" para todos los registros

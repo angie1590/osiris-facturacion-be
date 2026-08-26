@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="ticket-template" content="80mm" />
+    <style>
+      @page { margin: 0; width: 80mm; }
+      body {
+        margin: 0;
+        padding: 2mm;
+        width: 80mm;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+      }
+      .line { border-top: 1px dashed #000; margin: 4px 0; }
+      .row { display: flex; justify-content: space-between; }
+      .title { font-weight: bold; text-align: center; }
+      .right { text-align: right; }
+    </style>
+  </head>
+  <body>
+    <div class="title">TICKET TÉRMICO POS (80mm)</div>
+    <div class="row"><span>{{ razon_social }}</span></div>
+    <div class="row"><span>RUC:</span><span>{{ ruc }}</span></div>
+    <div class="row"><span>Fecha:</span><span>{{ fecha_emision }}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Subtotal</span><span>{{ subtotal }}</span></div>
+    <div class="row"><span>IVA</span><span>{{ iva_total }}</span></div>
+    <div class="row"><strong>Total</strong><strong>{{ total }}</strong></div>
+    <div class="line"></div>
+    <div class="row"><span>Total Pagado</span><span>{{ total_pagado }}</span></div>
+    <div class="row"><span>Efectivo</span><span>{{ efectivo }}</span></div>
+    <div class="row"><span>Cambio</span><span>{{ cambio }}</span></div>
+    <div class="line"></div>
+    <div>Clave de Acceso:</div>
+    <div class="right">{{ clave_acceso }}</div>
+  </body>
+</html>
+

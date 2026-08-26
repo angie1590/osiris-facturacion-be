@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page { size: A4; margin: 14mm; }
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #222; }
+      .header { display: flex; justify-content: space-between; align-items: start; }
+      .logo { width: 150px; height: 80px; object-fit: contain; border: 1px solid #ddd; }
+      .box { border: 1px solid #999; padding: 8px; border-radius: 3px; margin-top: 8px; }
+      .title { font-size: 16px; font-weight: bold; margin: 0 0 4px 0; }
+      .meta { margin: 2px 0; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .totals td { padding: 3px 0; }
+      .barcode { margin-top: 8px; width: 100%; max-width: 560px; }
+      .small { font-size: 10px; color: #555; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div>
+        {% if logo_url %}
+        <img class="logo" src="{{ logo_url }}" alt="Logo" />
+        {% else %}
+        <div class="logo"></div>
+        {% endif %}
+      </div>
+      <div class="box" style="min-width: 310px;">
+        <p class="title">RIDE - Documento Electrónico</p>
+        <p class="meta"><strong>Razón Social:</strong> {{ razon_social }}</p>
+        <p class="meta"><strong>RUC:</strong> {{ ruc }}</p>
+        <p class="meta"><strong>Ambiente:</strong> {{ ambiente }}</p>
+      </div>
+    </div>
+
+    <div class="box">
+      <p class="meta"><strong>Clave de Acceso:</strong> {{ clave_acceso }}</p>
+      <img class="barcode" src="{{ barcode_data_uri }}" alt="Código de barras clave acceso" />
+    </div>
+
+    <div class="grid">
+      <div class="box">
+        <p class="meta"><strong>Fecha Emisión:</strong> {{ fecha_emision }}</p>
+      </div>
+      <div class="box">
+        <table class="totals" style="width: 100%;">
+          <tr><td><strong>Subtotal:</strong></td><td style="text-align:right;">{{ subtotal }}</td></tr>
+          <tr><td><strong>IVA:</strong></td><td style="text-align:right;">{{ iva_total }}</td></tr>
+          <tr><td><strong>Total:</strong></td><td style="text-align:right;">{{ total }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <p class="small">Desglose de IVA incluido para cumplimiento SRI.</p>
+  </body>
+</html>
+

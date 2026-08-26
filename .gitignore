@@ -1,13 +1,61 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-.venv/
-venv/
-.env
-*.egg-info/
-.pytest_cache/
-.coverage
-htmlcov/
+*.py[cod]
+*$py.class
+
+# Poetry
 poetry.lock
-.idea/
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Pytest cache
+.pytest_cache/
+
+# VSCode
 .vscode/
-storage/
+
+# IDEs
+.idea/
+*.sw?
+
+# Logs
+*.log
+
+# MacOS
+.DS_Store
+
+# SQLite / DB local (por si llegas a usar SQLite para test)
+*.sqlite3
+
+# Docker artifacts
+*.tar
+*.img
+docker-compose.override.yml
+
+# Facturación electrónica temporal
+*.xml
+*.p12
+*.xsd
+test.py
+test2.py
+
+#Variables de entorno
+.env.*
+
+# Facturación firmada
+fact_firmado.xml
+
+# Archivos de producción
+*.whl
+
+# =========================
+# Documentación (Docusaurus)
+# =========================
+docs/node_modules/
+docs/build/
+docs/.docusaurus/
+docs/.cache-loader/

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="ticket-template" content="58mm" />
+    <style>
+      @page { margin: 0; width: 58mm; }
+      body {
+        margin: 0;
+        padding: 1.5mm;
+        width: 58mm;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 10px;
+      }
+      .line { border-top: 1px dashed #000; margin: 3px 0; }
+      .row { display: flex; justify-content: space-between; }
+      .title { font-weight: bold; text-align: center; }
+      .right { text-align: right; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <div class="title">TICKET POS (58mm)</div>
+    <div>{{ razon_social }}</div>
+    <div class="row"><span>RUC</span><span>{{ ruc }}</span></div>
+    <div class="row"><span>Fecha</span><span>{{ fecha_emision }}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Subt.</span><span>{{ subtotal }}</span></div>
+    <div class="row"><span>IVA</span><span>{{ iva_total }}</span></div>
+    <div class="row"><strong>Total</strong><strong>{{ total }}</strong></div>
+    <div class="line"></div>
+    <div class="row"><span>Pagado</span><span>{{ total_pagado }}</span></div>
+    <div class="row"><span>Efect.</span><span>{{ efectivo }}</span></div>
+    <div class="row"><span>Cambio</span><span>{{ cambio }}</span></div>
+    <div class="line"></div>
+    <div>Clave:</div>
+    <div class="right">{{ clave_acceso }}</div>
+  </body>
+</html>
+

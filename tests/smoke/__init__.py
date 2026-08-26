@@ -1,0 +1,1 @@
+# Mantener vacío - archivo necesario para que tests sea un módulo importable

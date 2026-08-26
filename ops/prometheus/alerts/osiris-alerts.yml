@@ -1,0 +1,62 @@
+groups:
+  - name: osiris-api-health
+    interval: 30s
+    rules:
+      - alert: OsirisReadinessDown
+        expr: increase(osiris_health_readiness_checks_total{status="down"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: osiris-api
+        annotations:
+          summary: "Readiness de Osiris en estado DOWN"
+          description: "Se detectaron checks de readiness fallidos en los últimos 5 minutos."
+
+      - alert: OsirisOverloadRejectionsHigh
+        expr: increase(osiris_http_overload_rejections_total[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          service: osiris-api
+        annotations:
+          summary: "Rechazos por sobrecarga elevados"
+          description: "El middleware de protección está rechazando tráfico por encima del umbral esperado."
+
+  - name: osiris-security
+    interval: 30s
+    rules:
+      - alert: OsirisUnauthorizedAccessSpike
+        expr: increase(osiris_security_unauthorized_access_total[10m]) > 25
+        for: 5m
+        labels:
+          severity: warning
+          service: osiris-api
+        annotations:
+          summary: "Pico de accesos no autorizados"
+          description: "Incremento inusual de eventos UNAUTHORIZED_ACCESS en endpoints sensibles."
+
+  - name: osiris-fe-worker
+    interval: 30s
+    rules:
+      - alert: OsirisFEWorkerErrors
+        expr: increase(osiris_fe_worker_errors_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: osiris-fe-worker
+        annotations:
+          summary: "Errores en worker de facturación electrónica"
+          description: "Se detectaron errores del worker FE durante la ventana de observación."
+
+  - name: osiris-db-performance
+    interval: 30s
+    rules:
+      - alert: OsirisSlowQueriesDetected
+        expr: increase(osiris_db_slow_queries_total[10m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: osiris-db
+        annotations:
+          summary: "Slow queries por encima del umbral"
+          description: "El número de consultas lentas supera el nivel esperado."

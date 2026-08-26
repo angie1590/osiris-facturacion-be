@@ -1,54 +1,42 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: osiris
-      POSTGRES_PASSWORD: osiris_dev_pass
-      POSTGRES_DB: osiris_facturacion
-    ports:
-      - "5434:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U osiris -d osiris_facturacion"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  api:
+  osiris-backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8001:8001"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://osiris:osiris_dev_pass@postgres:5432/osiris_facturacion
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: dev-secret-key-change-in-production
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      REFRESH_TOKEN_EXPIRE_DAYS: 7
-      APP_ENV: development
-      CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+      dockerfile: Dockerfile.dev
+    container_name: osiris-backend
+    env_file:
+      - .env.development
     volumes:
-      - ./app:/app/app
+      - .:/app
+    ports:
+      - "8002:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - postgres
+
+  docs:
+    image: node:20-alpine
+    container_name: osiris_docs
+    working_dir: /app
+    volumes:
+      - ./docs:/app
+      - docs_node_modules:/app/node_modules
+      - docs_docusaurus:/app/.docusaurus
+    ports:
+      - "3001:3000"
+    command: sh -c "npm install && rm -rf build node_modules/.cache && if [ -d .docusaurus ]; then find .docusaurus -mindepth 1 -exec rm -rf {} +; fi && npm start -- --host 0.0.0.0"
+
+  postgres:
+    image: postgres:15
+    container_name: osiris-be_postgres
+    restart: always
+    env_file:
+      - .env.development
+    ports:
+      - "5435:5432"
+    volumes:
+      - osiris-be_postgres_data:/var/lib/postgresql/data
 
 volumes:
-  postgres_data:
-  redis_data:
+  osiris-be_postgres_data:
+  docs_node_modules:
+  docs_docusaurus:

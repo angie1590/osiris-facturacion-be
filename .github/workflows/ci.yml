@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-quality:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+      SRI_MODO_EMISION: NO_ELECTRONICO
+      FEEC_TIPO_EMISION: "1"
+      FEEC_REGIMEN: GENERAL
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost/osiris_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: osiris_test
+      RUN_LIVE_SMOKE: "false"
+      PYTHONPATH: ./src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root
+
+      - name: Ruff
+        run: poetry run ruff check src tests
+
+      - name: Pytest (main suite)
+        run: |
+          set -euo pipefail
+          poetry run pytest -q -rs | tee /tmp/pytest.log
+          if grep -q "SKIPPED" /tmp/pytest.log; then
+            echo "ERROR: se detectaron SKIPPED en la suite principal."
+            exit 1
+          fi
+
+  docs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install docs dependencies
+        working-directory: docs
+        run: npm ci
+
+      - name: Build docs
+        working-directory: docs
+        run: npm run build --silent
