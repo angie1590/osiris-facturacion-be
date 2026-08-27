@@ -16,5 +16,6 @@ class Usuario(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     password_hash: str = Field(nullable=False, max_length=255)
     requiere_cambio_password: bool = Field(default=True, nullable=False)
     sesion_invalidada_en: datetime | None = Field(default=None, nullable=True)
+    codigo_aprobacion_hash: str | None = Field(default=None, nullable=True, max_length=255)
 
     usuario_auditoria: Optional[str] = Field(default=None, max_length=255)

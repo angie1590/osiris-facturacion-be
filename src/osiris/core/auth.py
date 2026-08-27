@@ -102,5 +102,5 @@ def user_response(session: Session, usuario: Usuario) -> dict[str, Any]:
         "role": role,
         "is_active": usuario.activo,
         "require_password_change": usuario.requiere_cambio_password,
-        "has_approval_code": False,
+        "has_approval_code": usuario.codigo_aprobacion_hash is not None,
     }

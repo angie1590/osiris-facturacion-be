@@ -25,6 +25,10 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 
+class ApprovalCodeRequest(BaseModel):
+    approval_code: str = Field(pattern=r"^\d{4}$")
+
+
 @router.post("/login")
 def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
     usuario = authenticate(session, form.username, form.password)
@@ -86,3 +90,17 @@ def change_password(body: ChangePasswordRequest, usuario=Depends(get_current_usu
     session.add(usuario)
     session.commit()
     return {"message": "Password changed successfully"}
+
+
+@router.post("/approval-code")
+def set_approval_code(
+    body: ApprovalCodeRequest,
+    usuario=Depends(get_current_usuario),
+    session: Session = Depends(get_session),
+):
+    from osiris.core.security import hash_password
+
+    usuario.codigo_aprobacion_hash = hash_password(body.approval_code)
+    session.add(usuario)
+    session.commit()
+    return {"message": "Approval code saved successfully"}
