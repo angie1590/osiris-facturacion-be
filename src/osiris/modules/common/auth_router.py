@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from osiris.core.auth import authenticate, create_token, decode_token, get_current_usuario, is_token_invalidated, user_response
+from osiris.core.auth import authenticate, create_token, decode_token, get_current_usuario, is_token_invalidated, user_response, verify_approval_code
 from osiris.core.db import get_session
 from osiris.core.settings import get_settings
 from osiris.modules.common.usuario.entity import Usuario
@@ -104,3 +104,13 @@ def set_approval_code(
     session.add(usuario)
     session.commit()
     return {"message": "Approval code saved successfully"}
+
+
+@router.post("/approval-code/verify")
+def verify_approval_code_endpoint(
+    body: ApprovalCodeRequest,
+    usuario=Depends(get_current_usuario),
+):
+    if not verify_approval_code(usuario, body.approval_code):
+        raise HTTPException(status_code=401, detail="Approval code inválido")
+    return {"valid": True}

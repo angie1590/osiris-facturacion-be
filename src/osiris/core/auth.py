@@ -80,6 +80,14 @@ def authenticate(session: Session, username: str, password: str) -> Usuario | No
     return usuario
 
 
+def verify_approval_code(usuario: Usuario, approval_code: str) -> bool:
+    if not usuario.codigo_aprobacion_hash:
+        return False
+    from osiris.core.security import verify_password
+
+    return verify_password(approval_code, usuario.codigo_aprobacion_hash)
+
+
 def user_response(session: Session, usuario: Usuario) -> dict[str, Any]:
     persona = session.get(Persona, usuario.persona_id)
     rol = session.get(Rol, usuario.rol_id)
