@@ -13,6 +13,7 @@ from osiris.modules.compras.schemas import (
     CuentaPorPagarListItemRead,
     CuentaPorPagarRead,
     CompraRead,
+    CompraListItemRead,
     CompraRegistroCreate,
     CompraUpdate,
     GuardarPlantillaRetencionRequest,
@@ -49,6 +50,18 @@ cxp_service = CuentaPorPagarService()
 @compras_router.post("", response_model=CompraRead, status_code=status.HTTP_201_CREATED, summary="Registrar compra", responses=COMMON_RESPONSES)
 def crear_compra(payload: CompraCreate, session: Session = Depends(get_session)):
     return compra_service.registrar_compra(session, payload)
+
+
+@compras_router.get("", response_model=PaginatedResponse[CompraListItemRead], summary="Listar compras", responses=COMMON_RESPONSES)
+def listar_compras(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    only_active: bool = Query(True),
+    texto: str | None = Query(default=None, min_length=1),
+    session: Session = Depends(get_session),
+):
+    items, meta = compra_service.listar_compras(session, limit=limit, offset=offset, only_active=only_active, texto=texto)
+    return {"items": items, "meta": meta}
 
 
 @compras_router.post("/desde-productos", response_model=CompraRead, status_code=status.HTTP_201_CREATED, summary="Registrar compra desde catálogo", responses=COMMON_RESPONSES)

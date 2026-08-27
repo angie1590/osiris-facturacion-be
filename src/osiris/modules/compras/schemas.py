@@ -160,6 +160,16 @@ class CompraRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CompraListItemRead(BaseModel):
+    id: UUID
+    proveedor_id: UUID
+    secuencial_factura: str
+    fecha_emision: date
+    identificacion_proveedor: str
+    valor_total: Decimal
+    estado: EstadoCompra
+
+
 class CuentaPorPagarRead(BaseModel):
     id: UUID
     compra_id: UUID

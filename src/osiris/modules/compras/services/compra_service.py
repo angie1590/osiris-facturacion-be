@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from decimal import Decimal
@@ -25,6 +26,7 @@ from osiris.modules.sri.core_sri.all_schemas import (
     VentaCompraDetalleCreate,
     q2,
 )
+from osiris.utils.pagination import build_pagination_meta
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.movimientos.models import (
     EstadoMovimientoInventario,
@@ -236,6 +238,20 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
 
     def registrar_compra(self, session: Session, payload: CompraCreate) -> Compra:
         return self.execute_create(session, payload)
+
+    def listar_compras(self, session: Session, *, limit: int, offset: int, only_active: bool = True, texto: str | None = None):
+        stmt = select(Compra)
+        empresa_scope = resolve_company_scope()
+        if empresa_scope is not None:
+            stmt = stmt.where(Compra.empresa_id == empresa_scope)
+        if only_active:
+            stmt = stmt.where(Compra.activo.is_(True))
+        if texto:
+            pattern = f"%{texto.strip()}%"
+            stmt = stmt.where(or_(Compra.identificacion_proveedor.ilike(pattern), Compra.secuencial_factura.ilike(pattern)))
+        total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+        compras = list(session.exec(stmt.order_by(Compra.fecha_emision.desc(), Compra.creado_en.desc()).offset(offset).limit(limit)).all())
+        return compras, build_pagination_meta(total=total, limit=limit, offset=offset)
 
     def _execute_create(
         self,
