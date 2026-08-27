@@ -8,7 +8,6 @@ Create Date: 2026-02-19 21:00:00.000000
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -18,57 +17,40 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def _tables_with_usuario_auditoria() -> list[str]:
-    inspector = sa.inspect(op.get_bind())
-    tables: list[str] = []
-    for table_name in inspector.get_table_names():
-        columns = {column["name"] for column in inspector.get_columns(table_name)}
-        if "usuario_auditoria" in columns:
-            tables.append(table_name)
-    return tables
-
-
 def upgrade() -> None:
-    for table_name in _tables_with_usuario_auditoria():
-        inspector = sa.inspect(op.get_bind())
-        columns = {column["name"] for column in inspector.get_columns(table_name)}
-        indexes = {index["name"] for index in inspector.get_indexes(table_name)}
-
-        if "created_by" not in columns:
-            op.add_column(table_name, sa.Column("created_by", sa.String(length=255), nullable=True))
-        if "updated_by" not in columns:
-            op.add_column(table_name, sa.Column("updated_by", sa.String(length=255), nullable=True))
-
-        op.execute(
-            sa.text(
-                f'UPDATE "{table_name}" '
-                "SET created_by = COALESCE(created_by, usuario_auditoria), "
-                "updated_by = COALESCE(updated_by, usuario_auditoria)"
-            )
-        )
-
-        idx_created = f"ix_{table_name}_created_by"
-        idx_updated = f"ix_{table_name}_updated_by"
-        if idx_created not in indexes:
-            op.create_index(idx_created, table_name, ["created_by"], unique=False)
-        if idx_updated not in indexes:
-            op.create_index(idx_updated, table_name, ["updated_by"], unique=False)
+    op.execute("""
+    DO $$
+    DECLARE table_record record;
+    BEGIN
+        FOR table_record IN
+            SELECT DISTINCT table_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND column_name = 'usuario_auditoria'
+        LOOP
+            EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS created_by VARCHAR(255)', table_record.table_name);
+            EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255)', table_record.table_name);
+            EXECUTE format('UPDATE %I SET created_by = COALESCE(created_by, usuario_auditoria), updated_by = COALESCE(updated_by, usuario_auditoria)', table_record.table_name);
+            EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I (created_by)', 'ix_' || table_record.table_name || '_created_by', table_record.table_name);
+            EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I (updated_by)', 'ix_' || table_record.table_name || '_updated_by', table_record.table_name);
+        END LOOP;
+    END $$;
+    """)
 
 
 def downgrade() -> None:
-    for table_name in _tables_with_usuario_auditoria():
-        inspector = sa.inspect(op.get_bind())
-        columns = {column["name"] for column in inspector.get_columns(table_name)}
-        indexes = {index["name"] for index in inspector.get_indexes(table_name)}
-
-        idx_created = f"ix_{table_name}_created_by"
-        idx_updated = f"ix_{table_name}_updated_by"
-        if idx_created in indexes:
-            op.drop_index(idx_created, table_name=table_name)
-        if idx_updated in indexes:
-            op.drop_index(idx_updated, table_name=table_name)
-
-        if "updated_by" in columns:
-            op.drop_column(table_name, "updated_by")
-        if "created_by" in columns:
-            op.drop_column(table_name, "created_by")
+    op.execute("""
+    DO $$
+    DECLARE table_record record;
+    BEGIN
+        FOR table_record IN
+            SELECT DISTINCT table_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND column_name = 'usuario_auditoria'
+        LOOP
+            EXECUTE format('DROP INDEX IF EXISTS %I', 'ix_' || table_record.table_name || '_created_by');
+            EXECUTE format('DROP INDEX IF EXISTS %I', 'ix_' || table_record.table_name || '_updated_by');
+            EXECUTE format('ALTER TABLE %I DROP COLUMN IF EXISTS updated_by', table_record.table_name);
+            EXECUTE format('ALTER TABLE %I DROP COLUMN IF EXISTS created_by', table_record.table_name);
+        END LOOP;
+    END $$;
+    """)

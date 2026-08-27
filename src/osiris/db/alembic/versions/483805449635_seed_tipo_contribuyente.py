@@ -52,27 +52,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Insert seed rows for aux_tipo_contribuyente if not present."""
-    bind = op.get_bind()
-    existing = set(r[0] for r in bind.execute(sa.text("SELECT codigo FROM aux_tipo_contribuyente")))
-    to_insert = [r for r in ROWS if r["codigo"] not in existing]
-    if not to_insert:
-        return
-    op.bulk_insert(
-        sa.table(
-            "aux_tipo_contribuyente",
-            sa.column("codigo", sa.String()),
-            sa.column("nombre", sa.String()),
-            sa.column("descripcion", sa.String()),
-            sa.column("activo", sa.Boolean()),
-        ),
-        to_insert,
+    """Insert seed rows without querying the database in offline mode."""
+    values = ", ".join(
+        "('{codigo}', '{nombre}', '{descripcion}', TRUE)".format(**row).replace("'", "''")
+        for row in ROWS
+    )
+    op.execute(
+        sa.text(
+            "INSERT INTO aux_tipo_contribuyente "
+            "(codigo, nombre, descripcion, activo) VALUES "
+            f"{values} ON CONFLICT (codigo) DO NOTHING"
+        )
     )
 
 
 def downgrade() -> None:
     """Remove seeded rows (only those we added)."""
-    codes = tuple(r["codigo"] for r in ROWS)
-    bind = op.get_bind()
-    # Delete only if they match our set (safe even if partially present)
-    bind.execute(sa.text("DELETE FROM aux_tipo_contribuyente WHERE codigo IN :codes").bindparams(codes=codes))
+    codes = ", ".join(f"'{row['codigo']}'" for row in ROWS)
+    op.execute(sa.text(f"DELETE FROM aux_tipo_contribuyente WHERE codigo IN ({codes})"))
