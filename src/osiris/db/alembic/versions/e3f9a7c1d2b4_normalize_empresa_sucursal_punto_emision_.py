@@ -12,6 +12,7 @@ from typing import Sequence, Union
 from uuid import uuid4
 
 import sqlalchemy as sa
+from alembic import context
 from alembic import op
 
 
@@ -69,6 +70,24 @@ def _next_sucursal_codigo(bind: sa.Connection, sucursal: sa.Table, empresa_id: o
 
 
 def upgrade() -> None:
+    if context.is_offline_mode():
+        op.drop_column("tbl_empresa", "codigo_establecimiento")
+        op.add_column(
+            "tbl_sucursal",
+            sa.Column("es_matriz", sa.Boolean(), nullable=True, server_default=sa.text("false")),
+        )
+        op.execute(
+            "UPDATE tbl_sucursal SET es_matriz = "
+            "CASE WHEN codigo = '001' THEN true ELSE COALESCE(es_matriz, false) END"
+        )
+        op.alter_column("tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), nullable=False)
+        op.alter_column("tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), server_default=None)
+        op.drop_constraint("uq_pe_empresa_sucursal_codigo", "tbl_punto_emision", type_="unique")
+        op.alter_column("tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=False)
+        op.drop_column("tbl_punto_emision", "empresa_id")
+        op.create_unique_constraint("uq_pe_sucursal_codigo", "tbl_punto_emision", ["sucursal_id", "codigo"])
+        return
+
     bind = op.get_bind()
 
     empresa_columns = _table_columns("tbl_empresa")
@@ -213,6 +232,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if context.is_offline_mode():
+        op.drop_constraint("uq_pe_sucursal_codigo", "tbl_punto_emision", type_="unique")
+        op.add_column("tbl_punto_emision", sa.Column("empresa_id", sa.Uuid(), nullable=True))
+        op.alter_column("tbl_punto_emision", "empresa_id", existing_type=sa.Uuid(), nullable=False)
+        op.alter_column("tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=True)
+        op.create_unique_constraint(
+            "uq_pe_empresa_sucursal_codigo",
+            "tbl_punto_emision",
+            ["empresa_id", "sucursal_id", "codigo"],
+        )
+        op.add_column("tbl_empresa", sa.Column("codigo_establecimiento", sa.String(length=3), nullable=True))
+        op.drop_column("tbl_sucursal", "es_matriz")
+        return
+
     bind = op.get_bind()
 
     empresa_columns = _table_columns("tbl_empresa")

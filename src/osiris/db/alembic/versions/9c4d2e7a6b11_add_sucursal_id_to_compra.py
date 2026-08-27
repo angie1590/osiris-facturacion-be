@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 
 # revision identifiers, used by Alembic.
@@ -31,17 +31,17 @@ def _has_index(table_name: str, index_name: str) -> bool:
 
 
 def upgrade() -> None:
-    if not _has_column("tbl_compra", "sucursal_id"):
+    if context.is_offline_mode() or not _has_column("tbl_compra", "sucursal_id"):
         op.add_column("tbl_compra", sa.Column("sucursal_id", sa.Uuid(), nullable=True))
 
-    if not _has_index("tbl_compra", "ix_tbl_compra_sucursal_id"):
+    if context.is_offline_mode() or not _has_index("tbl_compra", "ix_tbl_compra_sucursal_id"):
         op.create_index("ix_tbl_compra_sucursal_id", "tbl_compra", ["sucursal_id"], unique=False)
 
 
 def downgrade() -> None:
-    if _has_index("tbl_compra", "ix_tbl_compra_sucursal_id"):
+    if context.is_offline_mode() or _has_index("tbl_compra", "ix_tbl_compra_sucursal_id"):
         op.drop_index("ix_tbl_compra_sucursal_id", table_name="tbl_compra")
 
-    if _has_column("tbl_compra", "sucursal_id"):
+    if context.is_offline_mode() or _has_column("tbl_compra", "sucursal_id"):
         op.drop_column("tbl_compra", "sucursal_id")
 

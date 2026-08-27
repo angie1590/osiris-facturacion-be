@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 
 # revision identifiers, used by Alembic.
@@ -43,14 +43,14 @@ def upgrade() -> None:
         )
     )
 
-    if not _has_unique_constraint("tbl_sucursal", "uq_sucursal_empresa_codigo"):
+    if context.is_offline_mode() or not _has_unique_constraint("tbl_sucursal", "uq_sucursal_empresa_codigo"):
         op.create_unique_constraint(
             "uq_sucursal_empresa_codigo",
             "tbl_sucursal",
             ["empresa_id", "codigo"],
         )
 
-    if not _has_check_constraint("tbl_sucursal", "ck_sucursal_matriz_codigo"):
+    if context.is_offline_mode() or not _has_check_constraint("tbl_sucursal", "ck_sucursal_matriz_codigo"):
         op.create_check_constraint(
             "ck_sucursal_matriz_codigo",
             "tbl_sucursal",
@@ -59,9 +59,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if _has_check_constraint("tbl_sucursal", "ck_sucursal_matriz_codigo"):
+    if context.is_offline_mode() or _has_check_constraint("tbl_sucursal", "ck_sucursal_matriz_codigo"):
         op.drop_constraint("ck_sucursal_matriz_codigo", "tbl_sucursal", type_="check")
 
-    if _has_unique_constraint("tbl_sucursal", "uq_sucursal_empresa_codigo"):
+    if context.is_offline_mode() or _has_unique_constraint("tbl_sucursal", "uq_sucursal_empresa_codigo"):
         op.drop_constraint("uq_sucursal_empresa_codigo", "tbl_sucursal", type_="unique")
 
