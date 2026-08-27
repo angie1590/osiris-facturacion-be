@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from osiris.core.auth import authenticate, create_token, decode_token, get_current_usuario, user_response
+from osiris.core.auth import authenticate, create_token, decode_token, get_current_usuario, is_token_invalidated, user_response
 from osiris.core.db import get_session
 from osiris.core.settings import get_settings
 from osiris.modules.common.usuario.entity import Usuario
@@ -51,6 +51,8 @@ def refresh(body: RefreshRequest, session: Session = Depends(get_session)):
         raise HTTPException(status_code=401, detail="Refresh token inválido o expirado") from exc
     if not usuario or not usuario.activo:
         raise HTTPException(status_code=401, detail="Usuario inactivo")
+    if is_token_invalidated(payload, usuario):
+        raise HTTPException(status_code=401, detail="Sesión invalidada")
     settings = get_settings()
     return {
         "access_token": create_token(usuario.id, "access", timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
@@ -66,7 +68,10 @@ def me(usuario=Depends(get_current_usuario), session: Session = Depends(get_sess
 
 
 @router.post("/logout")
-def logout(usuario=Depends(get_current_usuario)):
+def logout(usuario=Depends(get_current_usuario), session: Session = Depends(get_session)):
+    usuario.sesion_invalidada_en = datetime.utcnow()
+    session.add(usuario)
+    session.commit()
     return {"message": "Logged out successfully"}
 
 

@@ -25,6 +25,7 @@ def create_token(subject: UUID, token_type: str, expires: timedelta) -> str:
     payload = {
         "sub": str(subject),
         "type": token_type,
+        "iat": datetime.now(timezone.utc).timestamp(),
         "exp": datetime.now(timezone.utc) + expires,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
@@ -33,6 +34,14 @@ def create_token(subject: UUID, token_type: str, expires: timedelta) -> str:
 def decode_token(token: str) -> dict[str, Any]:
     settings = get_settings()
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+
+def is_token_invalidated(payload: dict[str, Any], usuario: Usuario) -> bool:
+    issued_at = payload.get("iat")
+    if not usuario.sesion_invalidada_en or not isinstance(issued_at, (int, float)):
+        return False
+    invalidated_at = usuario.sesion_invalidada_en.replace(tzinfo=timezone.utc)
+    return datetime.fromtimestamp(issued_at, timezone.utc) <= invalidated_at
 
 
 def get_current_usuario(
@@ -54,6 +63,10 @@ def get_current_usuario(
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Usuario inactivo")
+    if is_token_invalidated(payload, usuario):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=401, detail="Sesión invalidada")
     return usuario
 
 

@@ -1,5 +1,6 @@
 # src/osiris/modules/common/usuario/entity.py
 from __future__ import annotations
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 from sqlmodel import Field
@@ -14,5 +15,6 @@ class Usuario(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     username: str = Field(nullable=False, unique=True, index=True, max_length=120)
     password_hash: str = Field(nullable=False, max_length=255)
     requiere_cambio_password: bool = Field(default=True, nullable=False)
+    sesion_invalidada_en: datetime | None = Field(default=None, nullable=True)
 
     usuario_auditoria: Optional[str] = Field(default=None, max_length=255)
