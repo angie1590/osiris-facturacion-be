@@ -4,6 +4,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from osiris.core.company_scope import resolve_company_scope
@@ -36,6 +37,7 @@ from osiris.modules.sri.core_sri.all_schemas import (
 )
 from osiris.modules.sri.facturacion_electronica.services.sri_async_service import SriAsyncService
 from osiris.modules.compras.strategies.validacion_impuestos_sri_strategy import ValidacionImpuestosSRIStrategy
+from osiris.utils.pagination import build_pagination_meta
 
 
 class RetencionService:
@@ -210,6 +212,25 @@ class RetencionService:
             detalles=sugeridos,
             total_retenido=q2(total_retenido),
         )
+
+    def listar_retenciones(self, session: Session, *, limit: int, offset: int, texto: str | None = None):
+        stmt = select(Retencion).join(Compra, Compra.id == Retencion.compra_id).where(Retencion.activo.is_(True))
+        empresa_scope = self._empresa_scope()
+        if empresa_scope is not None:
+            stmt = stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(Sucursal.empresa_id == empresa_scope)
+        if texto:
+            pattern = f"%{texto.strip()}%"
+            stmt = stmt.where(
+                or_(Compra.secuencial_factura.ilike(pattern), Compra.identificacion_proveedor.ilike(pattern))
+            )
+        total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+        retenciones = list(session.exec(stmt.order_by(Retencion.fecha_emision.desc()).offset(offset).limit(limit)).all())
+        items = []
+        for retencion in retenciones:
+            compra = session.get(Compra, retencion.compra_id)
+            if compra is not None:
+                items.append({"id": retencion.id, "compra_id": compra.id, "numero_factura": compra.secuencial_factura, "proveedor": compra.identificacion_proveedor, "fecha_emision": retencion.fecha_emision, "estado": retencion.estado, "estado_sri": retencion.estado_sri, "total_retenido": retencion.total_retenido})
+        return items, build_pagination_meta(total=total, limit=limit, offset=offset)
 
     def crear_retencion(
         self,

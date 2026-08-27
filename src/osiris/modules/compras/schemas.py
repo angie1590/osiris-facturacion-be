@@ -305,6 +305,17 @@ class RetencionDetalleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RetencionListItemRead(BaseModel):
+    id: UUID
+    compra_id: UUID
+    numero_factura: str
+    proveedor: str
+    fecha_emision: date
+    estado: EstadoRetencion
+    estado_sri: str
+    total_retenido: Decimal
+
+
 class RetencionRead(BaseModel):
     id: UUID
     compra_id: UUID

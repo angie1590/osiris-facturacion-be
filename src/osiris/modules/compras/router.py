@@ -24,6 +24,7 @@ from osiris.modules.compras.schemas import (
     RetencionEmitRequest,
     RetencionFEPayloadRead,
     RetencionRead,
+    RetencionListItemRead,
     RetencionSugeridaRead,
 )
 from osiris.modules.sri.core_sri.models import EstadoCuentaPorPagar
@@ -117,6 +118,17 @@ def emitir_retencion(
     session: Session = Depends(get_session),
 ):
     return retencion_service.emitir_retencion(session, retencion_id, payload, background_tasks=background_tasks)
+
+
+@retenciones_router.get("", response_model=PaginatedResponse[RetencionListItemRead], summary="Listar retenciones emitidas", responses=COMMON_RESPONSES)
+def listar_retenciones(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    texto: str | None = Query(default=None, min_length=1),
+    session: Session = Depends(get_session),
+):
+    items, meta = retencion_service.listar_retenciones(session, limit=limit, offset=offset, texto=texto)
+    return {"items": items, "meta": meta}
 
 
 @retenciones_router.get("/{retencion_id}/fe-payload", response_model=RetencionFEPayloadRead, summary="Obtener payload FE-EC de retención", responses=COMMON_RESPONSES)
