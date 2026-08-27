@@ -78,6 +78,7 @@ from osiris.modules.reportes.router import router as reportes_router
 from osiris.modules.sri.facturacion_electronica.router import router as facturacion_electronica_router
 from osiris.modules.sri.facturacion_electronica.services.orquestador_fe_service import OrquestadorFEService
 from osiris.modules.sri.impuesto_catalogo.router import router as impuesto_catalogo_router
+from osiris.modules.sri.tipo_contribuyente.router import router as tipo_contribuyente_router
 from osiris.modules.ventas.router import router as ventas_router
 
 logger = logging.getLogger(__name__)
@@ -453,6 +454,7 @@ app.include_router(producto_impuesto_router)
 app.include_router(movimientos_router)
 
 app.include_router(impuesto_catalogo_router)
+app.include_router(tipo_contribuyente_router)
 app.include_router(facturacion_electronica_router)
 
 app.include_router(ventas_router)
