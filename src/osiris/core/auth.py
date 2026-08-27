@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from osiris.core.db import get_session
@@ -71,7 +72,9 @@ def get_current_usuario(
 
 
 def authenticate(session: Session, username: str, password: str) -> Usuario | None:
-    usuario = session.exec(select(Usuario).where(Usuario.username == username.lower())).first()
+    usuario = session.exec(
+        select(Usuario).where(func.lower(Usuario.username) == username.strip().lower())
+    ).first()
     if not usuario or not usuario.activo or not verify_password(password, usuario.password_hash):
         return None
     return usuario

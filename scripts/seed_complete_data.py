@@ -783,6 +783,34 @@ def crear_empleados(session: Session, empleados_data: list, empresa_id: UUID, ro
         print(f"  ✓ Empleado creado: {persona.nombre} {persona.apellido} - {rol_nombre}")
 
 
+def crear_superadmin(session: Session, persona: Persona, roles_map: dict) -> None:
+    """Crea o actualiza la cuenta administrativa principal."""
+    rol_id = roles_map.get("ADMIN") or roles_map.get("Administrador")
+    if not rol_id:
+        print("  ⚠ Rol ADMIN no encontrado; superadministrador omitido")
+        return
+
+    usuario = session.exec(select(Usuario).where(Usuario.username.ilike("ADMIN"))).first()
+    if usuario is None:
+        usuario = Usuario(
+            persona_id=persona.id,
+            username="ADMIN",
+            password_hash=hash_password("Admin123!"),
+            rol_id=rol_id,
+            activo=True,
+            requiere_cambio_password=False,
+            usuario_auditoria=AUDIT_USER,
+        )
+        session.add(usuario)
+    else:
+        usuario.persona_id = persona.id
+        usuario.rol_id = rol_id
+        usuario.activo = True
+        usuario.requiere_cambio_password = False
+    session.commit()
+    print("  ✓ Superadministrador disponible: ADMIN")
+
+
 def main():
     """Función principal."""
     print("=" * 80)
@@ -858,6 +886,7 @@ def main():
         # 14. Roles
         print("\n14. Creando roles...")
         roles_map = crear_roles(session, data.get("roles", []))
+        crear_superadmin(session, persona_empresa, roles_map)
 
         # 15. Módulos
         print("\n15. Creando módulos del sistema...")
