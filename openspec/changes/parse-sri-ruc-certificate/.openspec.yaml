@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-09-30
+goal: Autocompletar de forma segura la configuración empresarial a partir de
+  certificados oficiales del SRI.
+initiative:
+  store: osiris-facturacion-context
+  id: ecuador-inventory-billing-mvp

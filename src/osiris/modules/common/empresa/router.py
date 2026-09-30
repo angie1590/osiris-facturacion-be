@@ -2,17 +2,39 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Path, Query, UploadFile, status
 from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
 from osiris.modules.common.empresa.models import EmpresaCreate, EmpresaRead, EmpresaUpdate
 from osiris.modules.common.empresa.service import EmpresaService
+from osiris.modules.common.empresa.ruc_certificate import (
+    MAX_CERTIFICATE_BYTES,
+    SriRucCertificatePreview,
+    SriRucCertificateService,
+    certificate_error,
+)
 
 
 router = APIRouter(prefix="/api/v1/empresas", tags=["Empresas"])
 service = EmpresaService()
+
+
+@router.post(
+    "/importar-certificado-ruc",
+    response_model=SriRucCertificatePreview,
+    summary="Previsualizar datos de certificado RUC PDF",
+)
+async def importar_certificado_ruc(file: UploadFile = File(...)):
+    if file.content_type != "application/pdf":
+        raise certificate_error("Debe seleccionar un archivo PDF.")
+    content = await file.read(MAX_CERTIFICATE_BYTES + 1)
+    await file.close()
+    try:
+        return SriRucCertificateService.extract_pdf(content)
+    except ValueError as exc:
+        raise certificate_error(str(exc)) from exc
 
 
 @router.get("", response_model=PaginatedResponse[EmpresaRead])
