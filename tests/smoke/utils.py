@@ -6,8 +6,8 @@ from typing import Callable
 import os
 
 import httpx
+from tests.live_smoke.config import BASE, BASE_ROOT
 
-BASE = "http://localhost:8000/api/v1"
 TIMEOUT = 10.0
 
 # Flag para determinar si hacer hard delete (físico) o soft delete (a través de API)
@@ -29,7 +29,7 @@ def wait_for_service(path: str = "/docs", timeout: int = 30, interval: float = 0
     """Espera hasta que la ruta `http://localhost:8000{path}` responda 200 o hasta agotar `timeout`.
     Devuelve True si el servicio respondió 200 dentro del timeout, False en caso contrario.
     """
-    url = f"http://localhost:8000{path}"
+    url = f"{BASE_ROOT}{path}"
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:

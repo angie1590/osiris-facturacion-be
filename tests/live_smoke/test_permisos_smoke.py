@@ -2,10 +2,11 @@
 import pytest
 import httpx
 
+from tests.live_smoke.config import BASE_ROOT
 from tests.smoke.utils import is_port_open
 
 
-client = httpx.Client(base_url="http://localhost:8000", timeout=10.0)
+client = httpx.Client(base_url=BASE_ROOT, timeout=10.0)
 
 
 @pytest.mark.skipif(not is_port_open("localhost", 8000), reason="Server not listening on localhost:8000")

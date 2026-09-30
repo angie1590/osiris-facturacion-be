@@ -3,7 +3,7 @@ import pytest
 import httpx
 import socket
 
-BASE = "http://localhost:8000/api/v1"
+from tests.live_smoke.config import BASE
 TIMEOUT = 8.0
 
 

@@ -1,10 +1,17 @@
 import contextlib
 import socket
 import uuid
+import httpx
 import pytest
 
-BASE = "http://localhost:8000/api/v1"
+from tests.live_smoke.config import BASE
 TIMEOUT = 5.0
+
+
+@pytest.fixture
+def client():
+    with httpx.Client(timeout=TIMEOUT) as live_client:
+        yield live_client
 
 
 def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:

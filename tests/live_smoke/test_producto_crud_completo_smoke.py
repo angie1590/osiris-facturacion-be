@@ -3,10 +3,11 @@ Smoke tests para operaciones CRUD generales de Producto
 """
 import socket
 import uuid
+from decimal import Decimal
 import pytest
 import httpx
 
-BASE = "http://localhost:8000/api/v1"
+from tests.live_smoke.config import BASE
 TIMEOUT = 10.0
 
 
@@ -195,7 +196,7 @@ def test_producto_get_completo_con_impuestos():
         assert data["nombre"] == producto_data["nombre"]
         # Verificar campo cantidad (debe existir y ser 0 por defecto)
         assert "cantidad" in data, "Debe tener campo cantidad"
-        assert data["cantidad"] == 0, "Cantidad debe inicializarse en 0"
+        assert Decimal(str(data["cantidad"])) == Decimal("0"), "Cantidad debe inicializarse en 0"
 
         # Cleanup común
         from tests.smoke.utils import cleanup_product_scenario
@@ -266,12 +267,12 @@ def test_producto_tipos_bien_y_servicio():
         r = client.get(f"{BASE}/productos/{bien_id}")
         assert r.status_code == 200
         assert r.json()["tipo"] == "BIEN"
-        assert r.json()["cantidad"] == 0
+        assert Decimal(str(r.json()["cantidad"])) == Decimal("0")
 
         r = client.get(f"{BASE}/productos/{servicio_id}")
         assert r.status_code == 200
         assert r.json()["tipo"] == "SERVICIO"
-        assert r.json()["cantidad"] == 0
+        assert Decimal(str(r.json()["cantidad"])) == Decimal("0")
 
         # Cleanup
         from tests.smoke.utils import cleanup_product_scenario
