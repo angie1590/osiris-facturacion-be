@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from datetime import date
-from uuid import uuid4
+from datetime import date, datetime, timedelta
+from uuid import UUID, uuid4
 
 import httpx
 from unittest.mock import patch
 
 from tests.smoke.ruc_utils import generar_ruc_empresa
 from tests.smoke.utils import get_or_create_iva_for_tests
+from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.empresa.signature_service import EmpresaSignatureService
 
 
 def _code3() -> str:
@@ -57,6 +59,17 @@ def crear_empresa_general(client: httpx.Client) -> str:
 
     assert response.status_code == 201, response.text
     return response.json()["id"]
+
+
+def configurar_firma_empresa_prueba(session, empresa_id: str) -> None:
+    empresa = session.get(Empresa, UUID(empresa_id))
+    assert empresa is not None
+    cipher = EmpresaSignatureService._fernet()
+    empresa.firma_electronica_cifrada = cipher.encrypt(b"firma-p12-de-prueba")
+    empresa.firma_password_cifrada = cipher.encrypt(b"password-de-prueba")
+    empresa.firma_caduca_en = datetime.utcnow() + timedelta(days=365)
+    session.add(empresa)
+    session.commit()
 
 
 def crear_sucursal(client: httpx.Client, empresa_id: str) -> str:

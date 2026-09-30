@@ -21,6 +21,7 @@ from osiris.modules.sri.core_sri.models import (
 )
 from osiris.modules.sri.core_sri.all_schemas import ImpuestoAplicadoInput, VentaCompraDetalleCreate, VentaCreate, VentaUpdate
 from osiris.modules.ventas.services.venta_service import VentaService
+from osiris.modules.ventas.strategies.emision_rimpe_strategy import EmisionRimpeStrategy
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
@@ -65,7 +66,7 @@ def test_rimpe_np_fuerza_nota_venta():
             telefono="022345678",
             obligado_contabilidad=False,
             regimen=RegimenTributario.RIMPE_NEGOCIO_POPULAR,
-            modo_emision="ELECTRONICO",
+            modo_emision="NOTA_VENTA_FISICA",
             tipo_contribuyente_id="01",
             usuario_auditoria="seed",
             activo=True,
@@ -113,6 +114,64 @@ def test_rimpe_np_fuerza_nota_venta():
 
         assert exc.value.status_code == 400
         assert "0% de IVA" in exc.value.detail
+
+
+def test_artesano_calificado_fuerza_nota_venta_y_rechaza_electronica_explicita():
+    engine = _build_test_engine()
+    strategy = EmisionRimpeStrategy()
+
+    with Session(engine) as session:
+        session.add(TipoContribuyente(codigo="01", nombre="Persona natural", activo=True))
+        empresa = Empresa(
+            razon_social="Taller Artesanal",
+            ruc="1790012345001",
+            direccion_matriz="Av. Principal",
+            regimen=RegimenTributario.GENERAL,
+            modo_emision="NOTA_VENTA_FISICA",
+            artesano_calificado=True,
+            tipo_contribuyente_id="01",
+            usuario_auditoria="seed",
+            activo=True,
+        )
+        session.add(empresa)
+        session.commit()
+
+        payload = VentaCreate(
+            empresa_id=empresa.id,
+            tipo_identificacion_comprador="RUC",
+            identificacion_comprador="1790012345001",
+            forma_pago="EFECTIVO",
+            usuario_auditoria="tester",
+            detalles=[
+                VentaCompraDetalleCreate(
+                    producto_id=uuid4(),
+                    descripcion="Trabajo artesanal",
+                    cantidad=Decimal("1"),
+                    precio_unitario=Decimal("10.00"),
+                )
+            ],
+        )
+        _, _, tipo_emision = strategy.resolver_contexto_tributario(session, payload)
+        assert tipo_emision.value == "NOTA_VENTA_FISICA"
+
+        payload_electronico = VentaCreate(
+            empresa_id=empresa.id,
+            tipo_identificacion_comprador="RUC",
+            identificacion_comprador="1790012345001",
+            forma_pago="EFECTIVO",
+            tipo_emision="ELECTRONICA",
+            usuario_auditoria="tester",
+            detalles=[
+                VentaCompraDetalleCreate(
+                    producto_id=uuid4(),
+                    descripcion="Trabajo artesanal",
+                    cantidad=Decimal("1"),
+                    precio_unitario=Decimal("10.00"),
+                )
+            ],
+        )
+        with pytest.raises(HTTPException, match="artesanos calificados"):
+            strategy.resolver_contexto_tributario(session, payload_electronico)
 
 
 def test_actualizar_venta_emitida_bloquea():

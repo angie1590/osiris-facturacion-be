@@ -205,7 +205,7 @@ def test_load_settings_fails_fast_when_feec_tipo_emision_or_regimen_missing(
     assert "Variable requerida no definida" in message
 
 
-def test_load_settings_requires_cert_paths_when_sri_modo_emision_is_electronico(
+def test_load_settings_requires_xsd_when_sri_modo_emision_is_electronico(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -235,8 +235,33 @@ def test_load_settings_requires_cert_paths_when_sri_modo_emision_is_electronico(
         core_settings.load_settings()
 
     message = str(exc_info.value)
-    assert "FEEC_P12_PATH" in message
+    assert "FEEC_P12_PATH" not in message
     assert "FEEC_XSD_PATH" in message
+
+
+def test_load_settings_allows_empresa_signature_without_global_p12(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    xsd_path = tmp_path / "conf" / "sri_docs" / "factura_V1_1.xsd"
+    xsd_path.parent.mkdir(parents=True, exist_ok=True)
+    xsd_path.write_text("dummy", encoding="utf-8")
+    env_file = tmp_path / ".env.e0_empresa_signature"
+    lines = _base_env_lines("e0_empresa_signature") + [
+        "FEEC_XSD_PATH=conf/sri_docs/factura_V1_1.xsd",
+    ]
+    _write_env_file(env_file, "\n".join(lines))
+
+    monkeypatch.setattr(core_settings, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setenv("ENVIRONMENT", "e0_empresa_signature")
+    monkeypatch.delenv("FEEC_P12_PATH", raising=False)
+    monkeypatch.delenv("FEEC_P12_PASSWORD", raising=False)
+
+    loaded = core_settings.load_settings()
+
+    assert loaded.FEEC_P12_PATH is None
+    assert loaded.FEEC_P12_PASSWORD is None
+    assert loaded.FEEC_XSD_PATH == xsd_path.resolve()
 
 
 def test_load_settings_allows_non_electronic_mode_without_cert_files(

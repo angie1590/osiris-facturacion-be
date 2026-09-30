@@ -45,6 +45,7 @@ class EmisionRimpeStrategy:
     ) -> tuple[UUID | None, RegimenTributario, TipoEmisionVenta]:
         empresa_id = payload.empresa_id
         regimen_emisor = payload.regimen_emisor
+        empresa: Empresa | None = None
 
         if empresa_id is None and payload.punto_emision_id is not None:
             punto = session.get(PuntoEmision, payload.punto_emision_id)
@@ -62,19 +63,40 @@ class EmisionRimpeStrategy:
             regimen_emisor = empresa.regimen
 
         tipo_emision = payload.tipo_emision
-        if regimen_emisor == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
-            tiene_actividad_excluida = any(d.es_actividad_excluida for d in payload.detalles)
-            tipo_emision_explicito = "tipo_emision" in payload.model_fields_set
-            if not tipo_emision_explicito or tipo_emision is None:
-                tipo_emision = (
-                    TipoEmisionVenta.ELECTRONICA if tiene_actividad_excluida else TipoEmisionVenta.NOTA_VENTA_FISICA
-                )
-            self.validar_iva_rimpe_negocio_popular(payload, tipo_emision=tipo_emision)
+        tipo_emision_explicito = "tipo_emision" in payload.model_fields_set
+        es_nota_venta_obligatoria = bool(
+            empresa_id is not None
+            and empresa
+            and (
+                empresa.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+                or empresa.artesano_calificado
+            )
+        )
+        if es_nota_venta_obligatoria:
+            es_artesano = bool(empresa and empresa.artesano_calificado)
+            if es_artesano:
+                if tipo_emision_explicito and tipo_emision == TipoEmisionVenta.ELECTRONICA:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Los artesanos calificados deben emitir notas de venta físicas.",
+                    )
+                tipo_emision = TipoEmisionVenta.NOTA_VENTA_FISICA
+                if empresa and empresa.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
+                    self.validar_iva_rimpe_negocio_popular(payload, tipo_emision=tipo_emision)
+            elif empresa and empresa.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
+                tiene_actividad_excluida = any(d.es_actividad_excluida for d in payload.detalles)
+                if not tipo_emision_explicito or tipo_emision is None:
+                    tipo_emision = (
+                        TipoEmisionVenta.ELECTRONICA
+                        if tiene_actividad_excluida
+                        else TipoEmisionVenta.NOTA_VENTA_FISICA
+                    )
+                self.validar_iva_rimpe_negocio_popular(payload, tipo_emision=tipo_emision)
         else:
             if tipo_emision == TipoEmisionVenta.NOTA_VENTA_FISICA:
                 raise HTTPException(
                     status_code=400,
-                    detail="NOTA_VENTA_FISICA solo está permitido para régimen RIMPE_NEGOCIO_POPULAR.",
+                    detail="NOTA_VENTA_FISICA solo está permitido para RIMPE Negocio Popular o artesanos calificados.",
                 )
             tipo_emision = tipo_emision or TipoEmisionVenta.ELECTRONICA
 

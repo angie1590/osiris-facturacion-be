@@ -80,7 +80,27 @@ def test_parsea_certificado_ruc_sri_adjunto():
     assert len(preview.additional.actividades_economicas) == 3
     assert preview.additional.obligaciones_tributarias == ["2011 - DECLARACION DE IVA"]
     assert preview.additional.codigo_verificacion == "RCR1716479633455575"
+    assert preview.email is None
+    assert preview.telefono is None
+    assert preview.artesano_calificado is False
     assert preview.warnings == []
+
+
+def test_parsea_nombre_con_encabezado_concatenado_y_medios_de_contacto():
+    text = SRI_CERTIFICATE_TEXT.replace(
+        "Certificado\nRegistro Único de Contribuyentes",
+        "CERTIFICADOREGISTRO ÚNICO DE CONTRIBUYENTES",
+    ).replace(
+        "Medios de contacto\nNo registra",
+        "Medios de contacto\nCorreo electrónico: FACTURACION@EJEMPLO.EC Teléfono: 0991234567",
+    ).replace("Artesano\nNo registra", "Artesano\nCALIFICADO 12345")
+
+    preview = SriRucCertificateService.parse_text(text)
+
+    assert preview.razon_social == "PINEDA ALVAREZ DANIEL FERNANDO"
+    assert preview.email == "facturacion@ejemplo.ec"
+    assert preview.telefono == "0991234567"
+    assert preview.artesano_calificado is True
 
 
 @pytest.mark.parametrize(

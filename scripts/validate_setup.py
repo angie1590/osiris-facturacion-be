@@ -217,7 +217,7 @@ def check_env_file():
 
         # FE-EC electrónica requiere certificados.
         if env_vars.get("SRI_MODO_EMISION", "").upper() == "ELECTRONICO":
-            for var in ("FEEC_P12_PATH", "FEEC_P12_PASSWORD", "FEEC_XSD_PATH"):
+            for var in ("FEEC_XSD_PATH",):
                 if var not in env_vars:
                     missing_vars.append(var)
 

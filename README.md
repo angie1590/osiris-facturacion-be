@@ -80,8 +80,7 @@ DB_URL_ALEMBIC=postgresql+psycopg://postgres:dev_password@postgres/osiris_db
 
 # Facturación Electrónica Ecuador
 # Rutas relativas al directorio /app dentro del contenedor
-FEEC_P12_PATH=conf/firma.p12
-FEEC_P12_PASSWORD=clave123
+# La firma .p12 y su contraseña se configuran de forma cifrada por empresa en la aplicación.
 FEEC_XSD_PATH=conf/sri_docs/factura_V1_1.xsd
 FEEC_AMBIENTE=pruebas
 SRI_MODO_EMISION=ELECTRONICO

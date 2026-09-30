@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
@@ -61,7 +63,7 @@ def _build_test_engine():
     return engine
 
 
-def _crear_venta_electronica(session: Session) -> Venta:
+def _crear_venta_electronica(session: Session, *, firma_configurada: bool = True) -> Venta:
     tipo = TipoContribuyente(codigo="01", nombre="Sociedad", activo=True)
     session.add(tipo)
     session.flush()
@@ -75,6 +77,9 @@ def _crear_venta_electronica(session: Session) -> Venta:
         obligado_contabilidad=True,
         regimen=RegimenTributario.GENERAL,
         modo_emision="ELECTRONICO",
+        firma_electronica_cifrada=b"test-p12" if firma_configurada else None,
+        firma_password_cifrada=b"test-password" if firma_configurada else None,
+        firma_caduca_en=datetime.utcnow() + timedelta(days=365) if firma_configurada else None,
         tipo_contribuyente_id="01",
         usuario_auditoria="seed",
         activo=True,
@@ -147,6 +152,25 @@ def _crear_venta_electronica(session: Session) -> Venta:
     session.commit()
     session.refresh(venta)
     return venta
+
+
+def test_encolar_venta_requiere_firma_electronica():
+    engine = _build_test_engine()
+    service = VentaSriAsyncService(db_engine=engine)
+
+    with Session(engine) as session:
+        venta = _crear_venta_electronica(session, firma_configurada=False)
+
+        with pytest.raises(HTTPException) as exc:
+            service.encolar_venta(
+                session,
+                venta_id=venta.id,
+                usuario_id="sri-bot",
+                commit=True,
+            )
+
+        assert exc.value.status_code == 400
+        assert "firma electrónica vigente" in str(exc.value.detail)
 
 
 def test_worker_sri_rechazo_definitivo():

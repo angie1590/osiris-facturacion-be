@@ -3,10 +3,12 @@ from __future__ import annotations
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlmodel import Session, select
+from uuid import UUID
 
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.domain.service import BaseService
 from osiris.modules.common.sucursal.entity import Sucursal
+from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from .entity import ModoEmisionEmpresa, RegimenTributario, TipoContribuyenteJuridico
 from .models import EmpresaRegimenModoRules
 from .repository import EmpresaRepository
@@ -69,12 +71,36 @@ class EmpresaService(BaseService):
                 gran_contribuyente_resolucion=data.get("gran_contribuyente_resolucion"),
                 agente_retencion=data.get("agente_retencion", False),
                 agente_retencion_resolucion=data.get("agente_retencion_resolucion"),
+                artesano_calificado=data.get("artesano_calificado", False),
             )
         except ValidationError as exc:
             raise HTTPException(
                 status_code=400,
                 detail=exc.errors()[0]["msg"],
             ) from exc
+
+    @staticmethod
+    def _validate_company_taxes(session: Session, data: dict) -> None:
+        if "impuesto_catalogo_ids" not in data:
+            return
+        raw_ids = data.get("impuesto_catalogo_ids") or []
+        normalized = list(dict.fromkeys(str(value) for value in raw_ids))
+        if normalized:
+            try:
+                ids = [UUID(value) for value in normalized]
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Existe un impuesto empresarial inválido.") from exc
+            found = list(
+                session.exec(
+                    select(ImpuestoCatalogo.id).where(
+                        ImpuestoCatalogo.id.in_(ids),
+                        ImpuestoCatalogo.activo.is_(True),
+                    )
+                ).all()
+            )
+            if len(found) != len(ids):
+                raise HTTPException(status_code=400, detail="Uno o más impuestos no existen o están inactivos.")
+        data["impuesto_catalogo_ids"] = normalized
 
     def _build_validation_payload(self, db_obj, incoming: dict) -> dict:
         payload = {
@@ -111,6 +137,10 @@ class EmpresaService(BaseService):
                 "agente_retencion_resolucion",
                 getattr(db_obj, "agente_retencion_resolucion", None),
             ),
+            "artesano_calificado": incoming.get(
+                "artesano_calificado",
+                getattr(db_obj, "artesano_calificado", False),
+            ),
         }
         payload["contribuyente_especial_resolucion"] = self._normalize_resolution(
             payload.get("contribuyente_especial_resolucion")
@@ -138,6 +168,7 @@ class EmpresaService(BaseService):
             if inferred is not None:
                 data["tipo_contribuyente_juridico"] = inferred
         self._validate_regimen_modo(data)
+        self._validate_company_taxes(session, data)
 
     def update(self, session: Session, item_id, data):
         try:
@@ -146,6 +177,7 @@ class EmpresaService(BaseService):
                 return None
 
             self._normalize_tributary_fields(data)
+            self._validate_company_taxes(session, data)
             validation_payload = self._build_validation_payload(db_obj, data)
             if validation_payload.get("tipo_contribuyente_juridico") is None:
                 inferred = self._infer_tipo_juridico_from_legacy(

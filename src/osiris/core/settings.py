@@ -127,12 +127,8 @@ class Settings(BaseSettings):
     def _validate_feec_files(self):
         if self.SRI_MODO_EMISION == "ELECTRONICO":
             missing_fields = []
-            if not self.FEEC_P12_PATH:
-                missing_fields.append("FEEC_P12_PATH")
             if not self.FEEC_XSD_PATH:
                 missing_fields.append("FEEC_XSD_PATH")
-            if not self.FEEC_P12_PASSWORD:
-                missing_fields.append("FEEC_P12_PASSWORD")
 
             if missing_fields:
                 missing_list = ", ".join(missing_fields)

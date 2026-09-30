@@ -48,8 +48,8 @@ Este documento resume lo que el frontend necesita para integrar correctamente el
 | Variable | Requerida | Uso |
 |---|---|---|
 | `SRI_MODO_EMISION` | Sí | `ELECTRONICO` o `NO_ELECTRONICO` |
-| `FEEC_P12_PATH` | Condicional | Obligatoria si `SRI_MODO_EMISION=ELECTRONICO` |
-| `FEEC_P12_PASSWORD` | Condicional | Password del certificado `.p12` |
+| `FEEC_P12_PATH` | No | Compatibilidad con despliegues anteriores; ahora se configura por empresa |
+| `FEEC_P12_PASSWORD` | No | La contraseña cifrada se configura junto a la firma de cada empresa |
 | `FEEC_XSD_PATH` | Condicional | Ruta XSD para validación XML |
 | `FEEC_AMBIENTE` | Sí | `pruebas` o `produccion` |
 | `FEEC_TIPO_EMISION` | Sí | `1` normal, `2` contingencia |

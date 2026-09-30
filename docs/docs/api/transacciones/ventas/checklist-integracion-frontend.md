@@ -161,8 +161,8 @@ Campos clave por item: `cliente`, `numero_factura`, `fecha_emision`, `valor_tota
 | `FEEC_AMBIENTE` | `pruebas` o `produccion` para generación FE |
 | `FEEC_TIPO_EMISION` | Tipo de emisión FE (`1` normal, `2` contingencia) |
 | `FEEC_REGIMEN` | Régimen tributario para FE-EC |
-| `FEEC_P12_PATH` | Ruta certificado firma electrónica |
-| `FEEC_P12_PASSWORD` | Password del certificado |
+| `FEEC_P12_PATH` | Opcional para compatibilidad; cargar la firma desde la configuración de empresa |
+| `FEEC_P12_PASSWORD` | No requerida globalmente; almacenada cifrada por empresa |
 | `FEEC_XSD_PATH` | Ruta de XSD para validación XML |
 | `DATABASE_URL` | Conexión principal DB |
 | `FE_QUEUE_AUTO_PROCESS_ENABLED` | Habilita worker automático de cola FE |

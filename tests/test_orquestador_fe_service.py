@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.pool import StaticPool
@@ -83,6 +83,9 @@ def _seed_venta_borrador(session: Session) -> Venta:
         obligado_contabilidad=True,
         regimen="GENERAL",
         modo_emision="ELECTRONICO",
+        firma_electronica_cifrada=b"test-p12",
+        firma_password_cifrada=b"test-password",
+        firma_caduca_en=datetime.utcnow() + timedelta(days=365),
         tipo_contribuyente_id="01",
         usuario_auditoria="seed",
         activo=True,

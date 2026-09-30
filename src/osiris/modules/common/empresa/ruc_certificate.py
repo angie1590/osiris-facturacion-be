@@ -40,6 +40,9 @@ class SriRucCertificatePreview(BaseModel):
     agente_retencion: bool
     contribuyente_especial: bool
     direccion_matriz: str
+    email: str | None = None
+    telefono: str | None = None
+    artesano_calificado: bool = False
     additional: SriRucAdditionalData
     warnings: list[str] = Field(default_factory=list)
 
@@ -70,22 +73,25 @@ class SriRucCertificateService:
         )
         candidates: list[str] = []
         if label_index is not None:
-            candidates.extend(lines[max(0, label_index - 2) : label_index])
             candidates.extend(lines[label_index + 1 : label_index + 4])
+            candidates.extend(reversed(lines[max(0, label_index - 3) : label_index]))
 
         ruc_index = next((index for index, line in enumerate(lines) if ruc in line), None)
         if ruc_index is not None:
             candidates.extend(lines[max(0, ruc_index - 4) : ruc_index + 2])
 
-        excluded = {
+        excluded_tokens = (
             "CERTIFICADO",
-            "REGISTRO ÚNICO DE CONTRIBUYENTES",
+            "REGISTRO ÚNICO",
+            "CONTRIBUYENTES",
             "APELLIDOS Y NOMBRES",
             "NÚMERO RUC",
-        }
+            "ESTADO",
+            "RÉGIMEN",
+        )
         for candidate in candidates:
             normalized = candidate.strip().upper()
-            if normalized in excluded or ruc in normalized:
+            if any(token in normalized for token in excluded_tokens) or ruc in normalized:
                 continue
             if re.fullmatch(r"[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ\s.'-]{5,}", normalized) and len(
                 normalized.split()
@@ -163,6 +169,20 @@ class SriRucCertificateService:
         artisan_match = re.search(
             r"ARTESANO\s+(.*?)(?=\s+FECHA DE REGISTRO)", text, re.IGNORECASE
         )
+        artisan_value = cls._normalize(artisan_match.group(1)) if artisan_match else None
+        artesano_calificado = bool(
+            artisan_value
+            and "NO REGISTRA" not in artisan_value.upper()
+            and artisan_value.upper() not in {"NO", "NINGUNO"}
+        )
+        contact_match = re.search(
+            r"MEDIOS DE CONTACTO\s+(.*?)(?=\s+ACTIVIDADES ECON[ÓO]MICAS)",
+            text,
+            re.IGNORECASE,
+        )
+        contact_text = cls._normalize(contact_match.group(1)) if contact_match else ""
+        email_match = re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", contact_text, re.IGNORECASE)
+        phone_match = re.search(r"(?:\+593|0)?(?:9\d{8}|[2-7]\d{6,7})\b", contact_text)
         status_match = re.search(r"ESTADO\s+(ACTIVO|SUSPENDIDO|PASIVO)", text, re.IGNORECASE)
         jurisdiction_match = re.search(
             r"JURISDICCI[ÓO]N\s+(.*?)(?=\s+TIPO\b)", text, re.IGNORECASE
@@ -192,9 +212,12 @@ class SriRucCertificateService:
             agente_retencion=agent,
             contribuyente_especial=special,
             direccion_matriz=direccion,
+            email=email_match.group(0).lower() if email_match else None,
+            telefono=phone_match.group(0) if phone_match else None,
+            artesano_calificado=artesano_calificado,
             additional=SriRucAdditionalData(
                 estado=status_match.group(1).upper() if status_match else None,
-                artesano=cls._normalize(artisan_match.group(1)) if artisan_match else None,
+                artesano=artisan_value,
                 provincia=cls._normalize(geo_match.group(1)) if geo_match else None,
                 canton=cls._normalize(geo_match.group(2)) if geo_match else None,
                 parroquia=cls._normalize(geo_match.group(3)) if geo_match else None,

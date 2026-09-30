@@ -33,8 +33,10 @@ class Empresa(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     __table_args__ = (
         CheckConstraint(
             (
-                "NOT (modo_emision = 'NOTA_VENTA_FISICA' "
-                "AND regimen <> 'RIMPE_NEGOCIO_POPULAR')"
+                "(modo_emision = 'NOTA_VENTA_FISICA' AND "
+                "(regimen = 'RIMPE_NEGOCIO_POPULAR' OR artesano_calificado = true)) OR "
+                "(modo_emision = 'ELECTRONICO' AND "
+                "regimen <> 'RIMPE_NEGOCIO_POPULAR' AND artesano_calificado = false)"
             ),
             name="ck_tbl_empresa_regimen_modo_emision",
         ),
@@ -89,6 +91,28 @@ class Empresa(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     gran_contribuyente_resolucion: Optional[str] = Field(default=None, max_length=64)
     agente_retencion: bool = Field(default=False, nullable=False)
     agente_retencion_resolucion: Optional[str] = Field(default=None, max_length=64)
+    artesano_calificado: bool = Field(default=False, nullable=False)
+    impuesto_catalogo_ids: list[str] = Field(
+        default_factory=list,
+        sa_column=sa.Column(sa.JSON(), nullable=False, default=list),
+    )
+    firma_electronica_cifrada: Optional[bytes] = Field(
+        default=None, sa_column=sa.Column(sa.LargeBinary(), nullable=True)
+    )
+    firma_password_cifrada: Optional[bytes] = Field(
+        default=None, sa_column=sa.Column(sa.LargeBinary(), nullable=True)
+    )
+    firma_nombre_archivo: Optional[str] = Field(default=None, max_length=255)
+    firma_caduca_en: Optional[datetime] = Field(default=None)
+
+    @property
+    def firma_electronica_configurada(self) -> bool:
+        return bool(
+            self.firma_electronica_cifrada
+            and self.firma_password_cifrada
+            and self.firma_caduca_en
+            and self.firma_caduca_en > datetime.utcnow()
+        )
 
     # Legacy: se mantiene por compatibilidad mientras FE técnica se consolida.
     modo_emision: ModoEmisionEmpresa = Field(default=ModoEmisionEmpresa.ELECTRONICO, nullable=False)
@@ -131,6 +155,10 @@ def _registrar_auditoria_regimen_modo_after_update(_mapper, connection, target: 
         "gran_contribuyente_resolucion",
         "agente_retencion",
         "agente_retencion_resolucion",
+        "artesano_calificado",
+        "impuesto_catalogo_ids",
+        "firma_nombre_archivo",
+        "firma_caduca_en",
         "direccion_matriz",
         "email",
         "telefono",

@@ -211,5 +211,6 @@ Respuestas:
 - En producción, se usa:
   - firma XML (`ManejadorXML`)
   - envío recepción/autorización (`SRIService`)
+- El certificado `.p12` y su contraseña se cargan por empresa, se cifran en base de datos y se materializan temporalmente solo durante la firma. No se exponen en la API.
 - Se registra historial de cambios de estado en `DocumentoElectronicoHistorial`.
 

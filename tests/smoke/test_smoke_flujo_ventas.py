@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from time import sleep
 from unittest.mock import patch
 from uuid import UUID
@@ -23,6 +24,7 @@ from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from tests.smoke.flow_helpers import (
     crear_bodega,
     crear_empresa_general,
+    configurar_firma_empresa_prueba,
     seed_stock_por_movimiento,
 )
 
@@ -33,6 +35,7 @@ pytestmark = pytest.mark.smoke
 @pytest.mark.smoke
 def test_smoke_flujo_ventas(client, db_session):
     empresa_id = crear_empresa_general(client)
+    configurar_firma_empresa_prueba(db_session, empresa_id)
     bodega_id = crear_bodega(client, empresa_id)
     iva = db_session.exec(
         select(ImpuestoCatalogo).where(
@@ -113,7 +116,11 @@ def test_smoke_flujo_ventas(client, db_session):
         venta_router_service.orquestador_fe_service.venta_sri_service.db_engine = db_session.get_bind()
         fe_orquestador_router_service.db_engine = db_session.get_bind()
         fe_orquestador_router_service.venta_sri_service.db_engine = db_session.get_bind()
-        mock_xml.return_value.firmar_y_guardar_xml.return_value = b"<factura/>"
+        mock_xml.return_value.dict_a_xml_string.return_value = "<factura/>"
+        mock_xml.return_value.validar_estructura_xml.return_value = True
+        mock_xml.return_value.firmador.firmar_xml.side_effect = lambda **kwargs: Path(
+            kwargs["output_path"]
+        ).write_bytes(b"<factura/>")
         mock_sri.return_value.enviar_recepcion.return_value = {"estado": "RECIBIDA", "mensaje": "OK"}
         mock_sri.return_value.consultar_autorizacion.return_value = {
             "estado": "AUTORIZADO",

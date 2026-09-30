@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from tempfile import TemporaryDirectory
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Protocol
@@ -11,7 +12,9 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlmodel import Session, select
 
 from osiris.core.db import engine as default_engine
+from osiris.core.settings import get_settings
 from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.empresa.signature_service import EmpresaSignatureService
 from osiris.modules.common.punto_emision.entity import PuntoEmision
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.facturacion_electronica.services.correo_service import CorreoFacturaService
@@ -36,15 +39,22 @@ from osiris.modules.sri.core_sri.all_schemas import (
 )
 
 try:
-    from src.fe_ec.utils.manejador_xml import ManejadorXML
-    from src.fe_ec.utils.sri import SRIService
+    from fe_ec.utils.manejador_xml import ManejadorXML
+    from fe_ec.utils.sri import SRIService
 except Exception:  # pragma: no cover - fallback cuando la librería no está instalada.
     ManejadorXML = None
     SRIService = None
 
 
 class FEECVentaGateway(Protocol):
-    def enviar_documento(self, *, tipo_documento: str, payload: dict) -> dict:
+    def enviar_documento(
+        self,
+        *,
+        tipo_documento: str,
+        payload: dict,
+        signature_content: bytes | None = None,
+        signature_password: str | None = None,
+    ) -> dict:
         ...
 
 
@@ -80,7 +90,14 @@ class FEECVentaGatewayDefault:
             return estado, mensaje
         return "", ""
 
-    def enviar_documento(self, *, tipo_documento: str, payload: dict) -> dict:
+    def enviar_documento(
+        self,
+        *,
+        tipo_documento: str,
+        payload: dict,
+        signature_content: bytes | None = None,
+        signature_password: str | None = None,
+    ) -> dict:
         if tipo_documento != "VENTA":
             return {"estado": "RECHAZADO", "mensaje": "Tipo de documento no soportado por gateway de venta."}
 
@@ -88,20 +105,27 @@ class FEECVentaGatewayDefault:
             # Fallback local para tests/entornos sin librería FE-EC.
             return {"estado": "AUTORIZADO", "mensaje": "Autorizado (modo mock FE-EC)."}
 
-        manejador = ManejadorXML()
-        signed_output = manejador.firmar_y_guardar_xml(payload)
-        if not signed_output:
-            return {"estado": "RECHAZADO", "mensaje": "No se pudo generar/firmar el XML."}
+        if not signature_content or not signature_password:
+            return {"estado": "RECHAZADO", "mensaje": "La empresa no tiene firma electrónica configurada."}
 
-        xml_bytes: bytes
-        if isinstance(signed_output, (bytes, bytearray)):
-            xml_bytes = bytes(signed_output)
-        elif isinstance(signed_output, str) and Path(signed_output).exists():
-            xml_bytes = Path(signed_output).read_bytes()
-        elif Path("fact_firmado.xml").exists():
-            xml_bytes = Path("fact_firmado.xml").read_bytes()
-        else:
-            return {"estado": "RECHAZADO", "mensaje": "No se encontró XML firmado para transmisión."}
+        with TemporaryDirectory(prefix="osiris-fe-") as temp_dir:
+            temp_path = Path(temp_dir)
+            unsigned_path = temp_path / "factura.xml"
+            signed_path = temp_path / "factura_firmada.xml"
+            p12_path = temp_path / "firma.p12"
+            settings = get_settings()
+            manejador = ManejadorXML(str(settings.FEEC_XSD_PATH))
+            unsigned_path.write_text(manejador.dict_a_xml_string(payload), encoding="utf-8")
+            if not manejador.validar_estructura_xml(str(unsigned_path)):
+                return {"estado": "RECHAZADO", "mensaje": "El XML generado no cumple el esquema SRI."}
+            p12_path.write_bytes(signature_content)
+            manejador.firmador.firmar_xml(
+                xml_path=str(unsigned_path),
+                output_path=str(signed_path),
+                p12_path=str(p12_path),
+                p12_password=signature_password,
+            )
+            xml_bytes = signed_path.read_bytes()
 
         sri = SRIService()
         recepcion = sri.enviar_recepcion(xml_bytes)
@@ -275,6 +299,15 @@ class VentaSriAsyncService:
         if venta.tipo_emision != TipoEmisionVenta.ELECTRONICA:
             raise HTTPException(status_code=400, detail="Solo se encolan ventas con tipo de emisión ELECTRONICA.")
 
+        empresa = session.get(Empresa, venta.empresa_id) if venta.empresa_id else None
+        if not empresa:
+            raise HTTPException(status_code=400, detail="La venta electrónica requiere empresa emisora.")
+        if not empresa.firma_electronica_configurada:
+            raise HTTPException(
+                status_code=400,
+                detail="La venta electrónica requiere una firma electrónica vigente configurada.",
+            )
+
         existente = session.exec(
             select(DocumentoSriCola).where(
                 DocumentoSriCola.entidad_id == venta.id,
@@ -293,10 +326,6 @@ class VentaSriAsyncService:
             if background_tasks:
                 background_tasks.add_task(self.procesar_documento_sri, existente.id)
             return existente
-
-        empresa = session.get(Empresa, venta.empresa_id) if venta.empresa_id else None
-        if not empresa:
-            raise HTTPException(status_code=400, detail="La venta electrónica requiere empresa emisora.")
 
         punto = session.get(PuntoEmision, venta.punto_emision_id) if venta.punto_emision_id else None
         sucursal = session.get(Sucursal, punto.sucursal_id) if punto and punto.sucursal_id else None
@@ -428,10 +457,26 @@ class VentaSriAsyncService:
 
             payload = json.loads(tarea.payload_json)
             try:
-                respuesta = gateway_impl.enviar_documento(
-                    tipo_documento="VENTA",
-                    payload=payload,
-                )
+                if isinstance(gateway_impl, FEECVentaGatewayDefault):
+                    empresa = session.get(Empresa, venta.empresa_id) if venta.empresa_id else None
+                    if not empresa:
+                        raise HTTPException(status_code=400, detail="La venta electrónica requiere empresa emisora.")
+                    try:
+                        signature_content, signature_password = EmpresaSignatureService().credentials(empresa)
+                    except HTTPException as exc:
+                        respuesta = {"estado": "RECHAZADO", "mensaje": str(exc.detail)}
+                    else:
+                        respuesta = gateway_impl.enviar_documento(
+                            tipo_documento="VENTA",
+                            payload=payload,
+                            signature_content=signature_content,
+                            signature_password=signature_password,
+                        )
+                else:
+                    respuesta = gateway_impl.enviar_documento(
+                        tipo_documento="VENTA",
+                        payload=payload,
+                    )
             except (TimeoutError, ConnectionError, OSError) as exc:
                 error = str(exc) or "Timeout de red con SRI"
                 estado_anterior = documento.estado

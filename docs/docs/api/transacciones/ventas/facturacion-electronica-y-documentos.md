@@ -23,8 +23,8 @@ Cuando `SRI_MODO_EMISION=ELECTRONICO`, el backend exige:
 
 | Variable | Requerida | Descripción |
 |---|---|---|
-| `FEEC_P12_PATH` | Sí | Ruta del certificado `.p12` |
-| `FEEC_P12_PASSWORD` | Sí | Password del certificado |
+| `FEEC_P12_PATH` | No | Compatibilidad con despliegues previos; la firma vigente se configura por empresa |
+| `FEEC_P12_PASSWORD` | No | No se requiere globalmente; la contraseña se cifra junto a la firma de empresa |
 | `FEEC_XSD_PATH` | Sí | Ruta de esquemas XSD |
 | `FEEC_AMBIENTE` | Sí | `pruebas` o `produccion` |
 | `FEEC_TIPO_EMISION` | Sí | `1` (normal), `2` (contingencia) |
@@ -33,6 +33,8 @@ Cuando `SRI_MODO_EMISION=ELECTRONICO`, el backend exige:
 | `FE_QUEUE_POLL_INTERVAL_SECONDS` | No (default `60`) | Frecuencia del worker FE (mínimo 5) |
 
 Si faltan, la app falla al startup (fail-fast).
+
+Cada empresa que emite comprobantes electrónicos debe tener una firma `.p12` vigente cargada en su configuración. El certificado se cifra en base de datos y solo se escribe en un directorio temporal durante el proceso de firma.
 
 ## Estados FE (operativos)
 

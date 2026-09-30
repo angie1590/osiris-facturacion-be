@@ -12,6 +12,7 @@ from tests.smoke.flow_helpers import (
     crear_categoria_hoja,
     crear_empresa_general,
     crear_producto_minimo,
+    configurar_firma_empresa_prueba,
     registrar_venta_desde_productos,
     seed_stock_por_movimiento,
 )
@@ -20,8 +21,9 @@ from tests.smoke.flow_helpers import (
 pytestmark = pytest.mark.smoke
 
 
-def test_business_kardex_stock_change(client):
+def test_business_kardex_stock_change(client, db_session):
     empresa_id = crear_empresa_general(client)
+    configurar_firma_empresa_prueba(db_session, empresa_id)
     bodega_id = crear_bodega(client, empresa_id)
     categoria_hoja_id = crear_categoria_hoja(client)
     producto_id = crear_producto_minimo(client, categoria_hoja_id, pvp="25.00")
@@ -55,8 +57,9 @@ def test_business_kardex_stock_change(client):
     assert q2(Decimal(str(movimientos[-1]["saldo_cantidad"]))) == Decimal("3.00")
 
 
-def test_business_retencion_recibida_smoke(client):
+def test_business_retencion_recibida_smoke(client, db_session):
     empresa_id = crear_empresa_general(client)
+    configurar_firma_empresa_prueba(db_session, empresa_id)
     bodega_id = crear_bodega(client, empresa_id)
     categoria_hoja_id = crear_categoria_hoja(client)
     producto_id = crear_producto_minimo(client, categoria_hoja_id, pvp="30.00")

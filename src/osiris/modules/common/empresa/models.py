@@ -1,10 +1,11 @@
 # src/osiris/modules/common/empresa/models.py
 from __future__ import annotations
+from datetime import datetime
 from typing import Optional, Annotated
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator, model_validator
 from osiris.utils.validacion_identificacion import ValidacionCedulaRucService
 from .entity import RegimenTributario, ModoEmisionEmpresa, TipoContribuyenteJuridico
 
@@ -35,6 +36,8 @@ class EmpresaBase(BaseModel):
     gran_contribuyente_resolucion: Optional[NumeroResolucion] = None
     agente_retencion: bool = False
     agente_retencion_resolucion: Optional[NumeroResolucion] = None
+    artesano_calificado: bool = False
+    impuesto_catalogo_ids: list[UUID] = Field(default_factory=list)
     modo_emision: ModoEmisionEmpresa = ModoEmisionEmpresa.ELECTRONICO
     tipo_contribuyente_id: TipoContribuyenteID
     usuario_auditoria: str
@@ -72,6 +75,20 @@ class EmpresaBase(BaseModel):
                 status_code=400,
                 detail="El número de resolución es obligatorio para agente de retención.",
             )
+        puede_emitir_nota_venta = (
+            self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+            or self.artesano_calificado
+        )
+        if self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA and not puede_emitir_nota_venta:
+            raise HTTPException(
+                status_code=400,
+                detail="NOTA_VENTA_FISICA solo está permitido para RIMPE Negocio Popular o artesanos calificados.",
+            )
+        if puede_emitir_nota_venta and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO:
+            raise HTTPException(
+                status_code=400,
+                detail="RIMPE Negocio Popular y artesanos calificados deben emitir notas de venta físicas.",
+            )
         return self
 
 class EmpresaCreate(EmpresaBase):
@@ -95,6 +112,8 @@ class EmpresaUpdate(BaseModel):
     gran_contribuyente_resolucion: Optional[NumeroResolucion] = None
     agente_retencion: Optional[bool] = None
     agente_retencion_resolucion: Optional[NumeroResolucion] = None
+    artesano_calificado: Optional[bool] = None
+    impuesto_catalogo_ids: Optional[list[UUID]] = None
     modo_emision: Optional[ModoEmisionEmpresa] = None
     tipo_contribuyente_id: Optional[TipoContribuyenteID] = None
     usuario_auditoria: Optional[str] = None
@@ -108,18 +127,22 @@ class EmpresaUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _validar_modo_emision_por_regimen(self):
-        if (
-            self.regimen is not None
-            and self.modo_emision is not None
-            and self.regimen != RegimenTributario.RIMPE_NEGOCIO_POPULAR
-            and self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA
-        ):
+        puede_emitir_nota_venta = (
+            self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+            or self.artesano_calificado is True
+        )
+        if self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA and not puede_emitir_nota_venta:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "NOTA_VENTA_FISICA solo está permitido para régimen "
-                    "RIMPE_NEGOCIO_POPULAR."
+                    "NOTA_VENTA_FISICA solo está permitido para RIMPE Negocio Popular "
+                    "o artesanos calificados."
                 ),
+            )
+        if puede_emitir_nota_venta and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO:
+            raise HTTPException(
+                status_code=400,
+                detail="RIMPE Negocio Popular y artesanos calificados deben emitir notas de venta físicas.",
             )
         return self
 
@@ -145,6 +168,9 @@ class EmpresaUpdate(BaseModel):
 class EmpresaRead(EmpresaBase):
     id: UUID
     activo: bool
+    firma_electronica_configurada: bool = False
+    firma_nombre_archivo: Optional[str] = None
+    firma_caduca_en: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -158,15 +184,21 @@ class EmpresaRegimenModoRules(BaseModel):
     gran_contribuyente_resolucion: Optional[str] = None
     agente_retencion: bool = False
     agente_retencion_resolucion: Optional[str] = None
+    artesano_calificado: bool = False
 
     @model_validator(mode="after")
     def _validar_modo_emision_por_regimen(self):
-        if (
-            self.regimen != RegimenTributario.RIMPE_NEGOCIO_POPULAR
-            and self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA
-        ):
+        puede_emitir_nota_venta = (
+            self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+            or self.artesano_calificado
+        )
+        if self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA and not puede_emitir_nota_venta:
             raise ValueError(
-                "NOTA_VENTA_FISICA solo está permitido para régimen RIMPE_NEGOCIO_POPULAR."
+                "NOTA_VENTA_FISICA solo está permitido para RIMPE Negocio Popular o artesanos calificados."
+            )
+        if puede_emitir_nota_venta and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO:
+            raise ValueError(
+                "RIMPE Negocio Popular y artesanos calificados deben emitir notas de venta físicas."
             )
 
         if (

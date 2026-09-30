@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Path, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
 from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
 from osiris.modules.common.empresa.models import EmpresaCreate, EmpresaRead, EmpresaUpdate
 from osiris.modules.common.empresa.service import EmpresaService
+from osiris.modules.common.empresa.signature_service import MAX_P12_BYTES, EmpresaSignatureService
 from osiris.modules.common.empresa.ruc_certificate import (
     MAX_CERTIFICATE_BYTES,
     SriRucCertificatePreview,
@@ -19,6 +20,7 @@ from osiris.modules.common.empresa.ruc_certificate import (
 
 router = APIRouter(prefix="/api/v1/empresas", tags=["Empresas"])
 service = EmpresaService()
+signature_service = EmpresaSignatureService()
 
 
 @router.post(
@@ -35,6 +37,41 @@ async def importar_certificado_ruc(file: UploadFile = File(...)):
         return SriRucCertificateService.extract_pdf(content)
     except ValueError as exc:
         raise certificate_error(str(exc)) from exc
+
+
+@router.post(
+    "/{item_id}/firma-electronica",
+    response_model=EmpresaRead,
+    summary="Cargar y validar firma electrónica empresarial",
+)
+async def cargar_firma_electronica(
+    item_id: UUID,
+    file: UploadFile = File(...),
+    password: str = Form(..., min_length=1),
+    session: Session = Depends(get_session),
+):
+    content = await file.read(MAX_P12_BYTES + 1)
+    await file.close()
+    empresa = signature_service.save(
+        session,
+        item_id,
+        filename=file.filename or "firma.p12",
+        content=content,
+        password=password,
+    )
+    return EmpresaRead.model_validate(empresa)
+
+
+@router.delete(
+    "/{item_id}/firma-electronica",
+    response_model=EmpresaRead,
+    summary="Eliminar firma electrónica empresarial",
+)
+def eliminar_firma_electronica(
+    item_id: UUID,
+    session: Session = Depends(get_session),
+):
+    return EmpresaRead.model_validate(signature_service.delete(session, item_id))
 
 
 @router.get("", response_model=PaginatedResponse[EmpresaRead])
