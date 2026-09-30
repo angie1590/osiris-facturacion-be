@@ -27,6 +27,7 @@ from osiris.modules.sri.core_sri.types import (
     TipoIdentificacionSRI,
     TipoImpuestoMVP,
 )
+from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributario
 
 
 class VentaCreate(BaseModel):
@@ -88,6 +89,15 @@ class VentaCreate(BaseModel):
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_15_CODES:
+                total += detalle.subtotal_sin_impuesto
+        return q2(total)
+
+    @computed_field(return_type=Decimal)
+    def subtotal_8(self) -> Decimal:
+        total = Decimal("0.00")
+        for detalle in self.detalles:
+            iva = detalle.iva_impuesto()
+            if iva and q2(iva.tarifa) == Decimal("8.00"):
                 total += detalle.subtotal_sin_impuesto
         return q2(total)
 
@@ -321,6 +331,11 @@ class VentaDetalleImpuestoRead(BaseModel):
     tipo_impuesto: TipoImpuestoMVP
     codigo_impuesto_sri: str
     codigo_porcentaje_sri: str
+    componente: TipoComponenteTributario = TipoComponenteTributario.PORCENTUAL
+    unidad_gravable: str | None = None
+    cantidad_gravable: Decimal | None = None
+    medida_temporal_id: UUID | None = None
+    referencia_legal_temporal: str | None = None
     tarifa: Decimal
     base_imponible: Decimal
     valor_impuesto: Decimal
@@ -357,6 +372,7 @@ class VentaRead(BaseModel):
     subtotal_sin_impuestos: Decimal
     subtotal_12: Decimal
     subtotal_15: Decimal
+    subtotal_8: Decimal = Decimal("0.00")
     subtotal_0: Decimal
     subtotal_no_objeto: Decimal
     monto_iva: Decimal

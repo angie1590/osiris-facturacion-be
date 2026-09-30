@@ -8,6 +8,7 @@ import pytest
 
 from osiris.modules.common.empresa.entity import RegimenTributario
 from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import FEMapperService
+from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributario
 from osiris.modules.sri.core_sri.all_schemas import (
     VentaDetalleImpuestoSnapshotRead,
     VentaDetalleRead,
@@ -88,6 +89,57 @@ def test_fe_mapper_agrupa_total_con_impuestos_desde_snapshot():
     total_con_impuestos = payload["infoFactura"]["totalConImpuestos"]
     assert {"codigo": "2", "codigoPorcentaje": "2", "baseImponible": "112.50", "valor": "13.50"} in total_con_impuestos
     assert {"codigo": "3", "codigoPorcentaje": "305", "baseImponible": "100.00", "valor": "2.50"} in total_con_impuestos
+
+
+def test_fe_mapper_conserva_ice_especifico_por_litro_de_alcohol_puro():
+    venta = VentaRead(
+        id=uuid4(),
+        fecha_emision=date(2026, 10, 10),
+        tipo_identificacion_comprador="RUC",
+        identificacion_comprador="1790012345001",
+        forma_pago="EFECTIVO",
+        subtotal_sin_impuestos=Decimal("20.00"),
+        subtotal_12=Decimal("0.00"),
+        subtotal_15=Decimal("0.00"),
+        subtotal_8=Decimal("0.00"),
+        subtotal_0=Decimal("0.00"),
+        subtotal_no_objeto=Decimal("0.00"),
+        monto_iva=Decimal("0.00"),
+        monto_ice=Decimal("0.39"),
+        valor_total=Decimal("20.39"),
+        detalles=[
+            VentaDetalleRead(
+                producto_id=uuid4(),
+                descripcion="Cerveza artesanal",
+                cantidad=Decimal("10"),
+                precio_unitario=Decimal("2"),
+                descuento=Decimal("0"),
+                subtotal_sin_impuesto=Decimal("20.00"),
+                impuestos=[
+                    VentaDetalleImpuestoSnapshotRead(
+                        tipo_impuesto="ICE",
+                        codigo_impuesto_sri="3",
+                        codigo_porcentaje_sri="999",
+                        componente=TipoComponenteTributario.ESPECIFICO,
+                        unidad_gravable="LITRO_ALCOHOL_PURO",
+                        cantidad_gravable=Decimal("0.2500"),
+                        tarifa=Decimal("1.560000"),
+                        base_imponible=Decimal("0.25"),
+                        valor_impuesto=Decimal("0.39"),
+                    )
+                ],
+            )
+        ],
+    )
+
+    payload = FEMapperService().venta_to_fe_payload(venta)
+    ice = payload["detalles"][0]["impuestos"][0]
+
+    assert ice["codigo"] == "3"
+    assert ice["codigoPorcentaje"] == "999"
+    assert ice["tarifa"] == "1.5600"
+    assert ice["baseImponible"] == "0.2500"
+    assert ice["valor"] == "0.39"
 
 
 def test_fe_mapper_falla_si_impuestos_detalle_no_cuadran_con_cabecera():

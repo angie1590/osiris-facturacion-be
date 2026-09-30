@@ -19,6 +19,7 @@ from osiris.modules.sri.core_sri.types import (
     TipoIdentificacionSRI,
     TipoImpuestoMVP,
 )
+from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributario
 
 
 class Venta(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
@@ -38,6 +39,7 @@ class Venta(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     subtotal_sin_impuestos: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     subtotal_12: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")))
     subtotal_15: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")))
+    subtotal_8: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")))
     subtotal_0: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")))
     subtotal_no_objeto: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")))
     monto_iva: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")))
@@ -70,7 +72,24 @@ class VentaDetalleImpuesto(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     tipo_impuesto: TipoImpuestoMVP = Field(nullable=False, max_length=10)
     codigo_impuesto_sri: str = Field(nullable=False, max_length=10)
     codigo_porcentaje_sri: str = Field(nullable=False, max_length=10)
-    tarifa: Decimal = Field(sa_column=Column(Numeric(7, 4), nullable=False))
+    componente: TipoComponenteTributario = Field(
+        default=TipoComponenteTributario.PORCENTUAL,
+        nullable=False,
+        max_length=20,
+    )
+    unidad_gravable: str | None = Field(default=None, max_length=40)
+    cantidad_gravable: Decimal | None = Field(
+        default=None,
+        sa_column=Column(Numeric(14, 4), nullable=True),
+    )
+    medida_temporal_id: UUID | None = Field(
+        default=None,
+        foreign_key="tbl_medida_tributaria_temporal.id",
+        nullable=True,
+        index=True,
+    )
+    referencia_legal_temporal: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    tarifa: Decimal = Field(sa_column=Column(Numeric(12, 6), nullable=False))
     base_imponible: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     valor_impuesto: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
 

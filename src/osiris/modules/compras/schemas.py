@@ -25,6 +25,7 @@ from osiris.modules.sri.core_sri.types import (
     TipoIdentificacionSRI,
     TipoRetencionSRI,
 )
+from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributario
 
 
 class CompraCreate(BaseModel):
@@ -40,6 +41,16 @@ class CompraCreate(BaseModel):
     forma_pago: FormaPagoSRI
     usuario_auditoria: str
     detalles: list[VentaCompraDetalleCreate] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def rechazar_ice_especifico_fuera_de_alcance(self):
+        if any(
+            impuesto.componente == TipoComponenteTributario.ESPECIFICO
+            for detalle in self.detalles
+            for impuesto in detalle.impuestos
+        ):
+            raise ValueError("El cálculo ICE específico temporal solo está habilitado para ventas.")
+        return self
 
     @computed_field(return_type=Decimal)
     def subtotal_sin_impuestos(self) -> Decimal:

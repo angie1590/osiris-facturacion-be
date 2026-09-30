@@ -18,6 +18,7 @@ from osiris.modules.sri.core_sri.models import (
     TipoImpuestoMVP,
 )
 from osiris.modules.sri.core_sri.all_schemas import RetencionRead, VentaRead, q2
+from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributario
 
 try:
     from src.fe_ec.utils.generador_clave_acceso import GeneradorClaveAcceso
@@ -192,15 +193,21 @@ class FEMapperService:
                 key = (impuesto.codigo_impuesto_sri, impuesto.codigo_porcentaje_sri)
                 if key not in total_con_impuestos:
                     total_con_impuestos[key] = {"base": Decimal("0.00"), "valor": Decimal("0.00")}
-                total_con_impuestos[key]["base"] += impuesto.base_imponible
+                specific_base = impuesto.componente == TipoComponenteTributario.ESPECIFICO
+                base_imponible = (
+                    impuesto.cantidad_gravable or Decimal("0.00")
+                    if specific_base
+                    else impuesto.base_imponible
+                )
+                total_con_impuestos[key]["base"] += base_imponible
                 total_con_impuestos[key]["valor"] += impuesto.valor_impuesto
 
                 impuestos_payload.append(
                     {
                         "codigo": impuesto.codigo_impuesto_sri,
                         "codigoPorcentaje": impuesto.codigo_porcentaje_sri,
-                        "tarifa": _fmt(impuesto.tarifa),
-                        "baseImponible": _fmt(impuesto.base_imponible),
+                        "tarifa": f"{impuesto.tarifa:.4f}" if specific_base else _fmt(impuesto.tarifa),
+                        "baseImponible": f"{base_imponible:.4f}" if specific_base else _fmt(base_imponible),
                         "valor": _fmt(impuesto.valor_impuesto),
                     }
                 )

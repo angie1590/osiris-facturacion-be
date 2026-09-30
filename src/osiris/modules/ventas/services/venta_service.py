@@ -40,6 +40,7 @@ from osiris.modules.sri.core_sri.all_schemas import (
 )
 from osiris.modules.sri.facturacion_electronica.services.orquestador_fe_service import OrquestadorFEService
 from osiris.modules.sri.facturacion_electronica.services.venta_sri_async_service import VentaSriAsyncService
+from osiris.modules.sri.medidas_temporales.service import MedidaTributariaService
 from osiris.modules.common.audit_log.entity import AuditAction, AuditLog
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.modules.inventario.movimientos.models import (
@@ -63,6 +64,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         self.venta_sri_async_service = VentaSriAsyncService()
         self.orquestador_fe_service = OrquestadorFEService(venta_sri_service=self.venta_sri_async_service)
         self.emision_rimpe_strategy = emision_rimpe_strategy or EmisionRimpeStrategy()
+        self.medida_tributaria_service = MedidaTributariaService()
 
     @staticmethod
     def _es_session_real(session: Session) -> bool:
@@ -708,6 +710,19 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         _ = (context, kwargs)
         try:
             empresa_id, regimen_emisor, tipo_emision = self._resolver_contexto_tributario(session, payload)
+            payload = payload.model_copy(
+                update={
+                    "empresa_id": empresa_id,
+                    "regimen_emisor": regimen_emisor,
+                    "tipo_emision": tipo_emision,
+                }
+            )
+            if self._es_session_real(session):
+                payload = self.medida_tributaria_service.resolve_sale(
+                    session,
+                    payload,
+                    empresa_id=empresa_id,
+                )
             empresa_id, secuencial_formateado = self._resolver_secuencial_formateado(
                 session,
                 payload,
@@ -728,6 +743,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                 subtotal_sin_impuestos=payload.subtotal_sin_impuestos,
                 subtotal_12=payload.subtotal_12,
                 subtotal_15=payload.subtotal_15,
+                subtotal_8=payload.subtotal_8,
                 subtotal_0=payload.subtotal_0,
                 subtotal_no_objeto=payload.subtotal_no_objeto,
                 monto_iva=payload.monto_iva,
@@ -759,6 +775,15 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                         tipo_impuesto=impuesto.tipo_impuesto,
                         codigo_impuesto_sri=impuesto.codigo_impuesto_sri,
                         codigo_porcentaje_sri=impuesto.codigo_porcentaje_sri,
+                        componente=impuesto.componente,
+                        unidad_gravable=impuesto.unidad_gravable,
+                        cantidad_gravable=(
+                            detalle.base_imponible_impuesto(impuesto)
+                            if impuesto.componente.value == "ESPECIFICO"
+                            else None
+                        ),
+                        medida_temporal_id=impuesto.medida_temporal_id,
+                        referencia_legal_temporal=impuesto.referencia_legal_temporal,
                         tarifa=impuesto.tarifa,
                         base_imponible=detalle.base_imponible_impuesto(impuesto),
                         valor_impuesto=detalle.valor_impuesto(impuesto),
@@ -844,6 +869,11 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                     tipo_impuesto=imp.tipo_impuesto,
                     codigo_impuesto_sri=imp.codigo_impuesto_sri,
                     codigo_porcentaje_sri=imp.codigo_porcentaje_sri,
+                    componente=imp.componente,
+                    unidad_gravable=imp.unidad_gravable,
+                    cantidad_gravable=imp.cantidad_gravable,
+                    medida_temporal_id=imp.medida_temporal_id,
+                    referencia_legal_temporal=imp.referencia_legal_temporal,
                     tarifa=imp.tarifa,
                     base_imponible=imp.base_imponible,
                     valor_impuesto=imp.valor_impuesto,
@@ -883,6 +913,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             subtotal_sin_impuestos=venta.subtotal_sin_impuestos,
             subtotal_12=venta.subtotal_12,
             subtotal_15=venta.subtotal_15,
+            subtotal_8=venta.subtotal_8,
             subtotal_0=venta.subtotal_0,
             subtotal_no_objeto=venta.subtotal_no_objeto,
             monto_iva=venta.monto_iva,

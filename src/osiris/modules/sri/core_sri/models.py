@@ -49,6 +49,12 @@ from osiris.modules.sri.facturacion_electronica.models import (
     DocumentoElectronicoHistorial,
     DocumentoSriCola,
 )
+from osiris.modules.sri.medidas_temporales.entity import (
+    EstadoMedidaTemporal,
+    MedidaTributariaProducto,
+    MedidaTributariaTemporal,
+    TipoComponenteTributario,
+)
 
 __all__ = [
     "TipoIdentificacionSRI",
@@ -66,6 +72,10 @@ __all__ = [
     "TipoDocumentoElectronico",
     "EstadoSriDocumento",
     "EstadoColaSri",
+    "EstadoMedidaTemporal",
+    "MedidaTributariaProducto",
+    "MedidaTributariaTemporal",
+    "TipoComponenteTributario",
     "EstadoRetencionRecibida",
     "Venta",
     "VentaDetalle",
