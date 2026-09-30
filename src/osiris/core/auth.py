@@ -4,14 +4,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import func
 from sqlmodel import Session, select
 
 from osiris.core.db import get_session
-from osiris.core.errors import NotFoundError
 from osiris.core.security import verify_password
 from osiris.core.settings import get_settings
 from osiris.modules.common.persona.entity import Persona

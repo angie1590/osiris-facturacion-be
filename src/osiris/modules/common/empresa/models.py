@@ -4,17 +4,18 @@ from typing import Optional, Annotated
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints, field_validator, model_validator
 from osiris.utils.validacion_identificacion import ValidacionCedulaRucService
-from .entity import RegimenTributario, ModoEmisionEmpresa
+from .entity import RegimenTributario, ModoEmisionEmpresa, TipoContribuyenteJuridico
 
 
 # Atajos de tipos con restricciones
-RazonSocial = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r'^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$')]
+RazonSocial = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 NombreComercial = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r'^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s\.\,\-]+$')]
 RUC = Annotated[str, StringConstraints(min_length=13, max_length=13, pattern=r'^\d{13}$')]
 Telefono = Annotated[str, StringConstraints(pattern=r'^\d{7,10}$')]
 TipoContribuyenteID = Annotated[str, StringConstraints(min_length=2, max_length=2)]
+NumeroResolucion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
 
 
 class EmpresaBase(BaseModel):
@@ -22,10 +23,18 @@ class EmpresaBase(BaseModel):
     nombre_comercial: Optional[NombreComercial] = None
     ruc: RUC
     direccion_matriz: str
+    email: Optional[EmailStr] = None
     telefono: Optional[Telefono] = None
     logo: Optional[str] = None
+    tipo_contribuyente_juridico: Optional[TipoContribuyenteJuridico] = None
     obligado_contabilidad: bool = False
     regimen: RegimenTributario = RegimenTributario.GENERAL
+    contribuyente_especial: bool = False
+    contribuyente_especial_resolucion: Optional[NumeroResolucion] = None
+    gran_contribuyente: bool = False
+    gran_contribuyente_resolucion: Optional[NumeroResolucion] = None
+    agente_retencion: bool = False
+    agente_retencion_resolucion: Optional[NumeroResolucion] = None
     modo_emision: ModoEmisionEmpresa = ModoEmisionEmpresa.ELECTRONICO
     tipo_contribuyente_id: TipoContribuyenteID
     usuario_auditoria: str
@@ -37,6 +46,34 @@ class EmpresaBase(BaseModel):
             raise ValueError("El RUC ingresado no es válido.")
         return v
 
+    @model_validator(mode="after")
+    def _validar_reglas_tributarias(self):
+        if (
+            self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
+            and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida.",
+            )
+
+        if self.contribuyente_especial and not self.contribuyente_especial_resolucion:
+            raise HTTPException(
+                status_code=400,
+                detail="El número de resolución es obligatorio para contribuyente especial.",
+            )
+        if self.gran_contribuyente and not self.gran_contribuyente_resolucion:
+            raise HTTPException(
+                status_code=400,
+                detail="El número de resolución es obligatorio para gran contribuyente.",
+            )
+        if self.agente_retencion and not self.agente_retencion_resolucion:
+            raise HTTPException(
+                status_code=400,
+                detail="El número de resolución es obligatorio para agente de retención.",
+            )
+        return self
+
 class EmpresaCreate(EmpresaBase):
     """POST/PUT (reemplazo total)."""
 
@@ -46,10 +83,18 @@ class EmpresaUpdate(BaseModel):
     nombre_comercial: Optional[NombreComercial] = None
     ruc: Optional[RUC] = None
     direccion_matriz: Optional[str] = None
+    email: Optional[EmailStr] = None
     telefono: Optional[Telefono] = None
     logo: Optional[str] = None
+    tipo_contribuyente_juridico: Optional[TipoContribuyenteJuridico] = None
     obligado_contabilidad: Optional[bool] = None
     regimen: Optional[RegimenTributario] = None
+    contribuyente_especial: Optional[bool] = None
+    contribuyente_especial_resolucion: Optional[NumeroResolucion] = None
+    gran_contribuyente: Optional[bool] = None
+    gran_contribuyente_resolucion: Optional[NumeroResolucion] = None
+    agente_retencion: Optional[bool] = None
+    agente_retencion_resolucion: Optional[NumeroResolucion] = None
     modo_emision: Optional[ModoEmisionEmpresa] = None
     tipo_contribuyente_id: Optional[TipoContribuyenteID] = None
     usuario_auditoria: Optional[str] = None
@@ -78,6 +123,25 @@ class EmpresaUpdate(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validar_campos_tributarios_condicionales(self):
+        if (
+            self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
+            and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+        ):
+            raise ValueError("La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida.")
+
+        if self.contribuyente_especial is True and not (self.contribuyente_especial_resolucion or "").strip():
+            raise ValueError("El número de resolución es obligatorio para contribuyente especial.")
+
+        if self.gran_contribuyente is True and not (self.gran_contribuyente_resolucion or "").strip():
+            raise ValueError("El número de resolución es obligatorio para gran contribuyente.")
+
+        if self.agente_retencion is True and not (self.agente_retencion_resolucion or "").strip():
+            raise ValueError("El número de resolución es obligatorio para agente de retención.")
+
+        return self
+
 class EmpresaRead(EmpresaBase):
     id: UUID
     activo: bool
@@ -85,8 +149,15 @@ class EmpresaRead(EmpresaBase):
 
 
 class EmpresaRegimenModoRules(BaseModel):
+    tipo_contribuyente_juridico: Optional[TipoContribuyenteJuridico]
     regimen: RegimenTributario
     modo_emision: ModoEmisionEmpresa
+    contribuyente_especial: bool = False
+    contribuyente_especial_resolucion: Optional[str] = None
+    gran_contribuyente: bool = False
+    gran_contribuyente_resolucion: Optional[str] = None
+    agente_retencion: bool = False
+    agente_retencion_resolucion: Optional[str] = None
 
     @model_validator(mode="after")
     def _validar_modo_emision_por_regimen(self):
@@ -97,4 +168,20 @@ class EmpresaRegimenModoRules(BaseModel):
             raise ValueError(
                 "NOTA_VENTA_FISICA solo está permitido para régimen RIMPE_NEGOCIO_POPULAR."
             )
+
+        if (
+            self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
+            and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+        ):
+            raise ValueError("La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida.")
+
+        if self.contribuyente_especial and not (self.contribuyente_especial_resolucion or "").strip():
+            raise ValueError("El número de resolución es obligatorio para contribuyente especial.")
+
+        if self.gran_contribuyente and not (self.gran_contribuyente_resolucion or "").strip():
+            raise ValueError("El número de resolución es obligatorio para gran contribuyente.")
+
+        if self.agente_retencion and not (self.agente_retencion_resolucion or "").strip():
+            raise ValueError("El número de resolución es obligatorio para agente de retención.")
+
         return self

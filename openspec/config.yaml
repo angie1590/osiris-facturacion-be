@@ -1,0 +1,18 @@
+schema: spec-driven
+
+context: |
+  Stack: Python 3.10, FastAPI, SQLModel/SQLAlchemy, Alembic y PostgreSQL.
+  Dominio: inventario multiempresa y facturación electrónica para Ecuador.
+  Las sesiones son síncronas y el esquema cambia únicamente mediante Alembic.
+  FE-EC se distribuye como rueda local; producción no puede autorizar en modo mock.
+  Validación: poetry run pytest, poetry run ruff y poetry run mypy.
+
+rules:
+  proposal:
+    - Delimitar explícitamente impacto en inventario, cartera, SRI y multiempresa.
+    - Incluir no objetivos cuando el cambio pueda ampliar el MVP.
+  specs:
+    - Incluir escenarios de error, permisos y atomicidad para operaciones sensibles.
+  tasks:
+    - Incluir migración Alembic cuando cambien modelos persistidos.
+    - Terminar con pruebas y validaciones ejecutables.

@@ -136,6 +136,9 @@ class FEMapperService:
                 nombre="Contribuyente",
                 valor="Contribuyente Negocio Popular - Régimen RIMPE",
             )
+        # Pendiente controlado: mapear campos canónicos de Empresa para
+        # contribuyente especial, agente de retención y gran contribuyente con
+        # su resolución según Ficha Técnica SRI 2.34 (Anexos 21 y 24).
         if email_cliente:
             info_adicional = _append_unique_campo_adicional(info_adicional, nombre="email", valor=email_cliente)
 

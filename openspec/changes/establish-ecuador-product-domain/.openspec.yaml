@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-09-30
+goal: Consolidar el backend probado como núcleo de inventario y facturación
+  electrónica.
+initiative:
+  store: osiris-facturacion-context
+  id: ecuador-inventory-billing-mvp

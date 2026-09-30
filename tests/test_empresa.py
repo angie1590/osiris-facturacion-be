@@ -17,6 +17,7 @@ from osiris.modules.common.empresa.entity import (
     Empresa,
     ModoEmisionEmpresa,
     RegimenTributario,
+    TipoContribuyenteJuridico,
     _registrar_auditoria_regimen_modo_after_update,
 )
 from osiris.modules.common.audit_log.entity import AuditLog
@@ -47,6 +48,43 @@ def test_empresa_create_valida_usa_validador_ruc_ok():
         assert dto.tipo_contribuyente_id == "01"
         assert dto.regimen == RegimenTributario.GENERAL
         assert dto.modo_emision == ModoEmisionEmpresa.ELECTRONICO
+
+
+def test_empresa_create_email_opcional_valido():
+    with patch(
+        "osiris.modules.common.empresa.models.ValidacionCedulaRucService.es_identificacion_valida",
+        return_value=True,
+    ):
+        dto = EmpresaCreate(
+            razon_social="Comercial ABC",
+            nombre_comercial="ABC",
+            ruc="1104680138001",
+            direccion_matriz="Av. Principal 123",
+            email="contacto@empresa.ec",
+            telefono="0987654321",
+            tipo_contribuyente_juridico=TipoContribuyenteJuridico.PERSONA_NATURAL,
+            tipo_contribuyente_id="01",
+            usuario_auditoria="tester",
+        )
+        assert str(dto.email) == "contacto@empresa.ec"
+
+
+def test_empresa_create_rechaza_sociedad_rimpe_negocio_popular():
+    with patch(
+        "osiris.modules.common.empresa.models.ValidacionCedulaRucService.es_identificacion_valida",
+        return_value=True,
+    ):
+        with pytest.raises(HTTPException) as exc:
+            EmpresaCreate(
+                razon_social="Comercial ABC",
+                ruc="1104680138001",
+                direccion_matriz="Av. Principal 123",
+                tipo_contribuyente_juridico=TipoContribuyenteJuridico.SOCIEDAD,
+                regimen=RegimenTributario.RIMPE_NEGOCIO_POPULAR,
+                tipo_contribuyente_id="02",
+                usuario_auditoria="tester",
+            )
+        assert exc.value.status_code == 400
 
 
 def test_empresa_create_ruc_invalido_lanza_validationerror():
@@ -84,11 +122,85 @@ def test_empresa_update_regimen_modo_invalido_lanza_http_400():
     assert exc.value.status_code == 400
 
 
+def test_empresa_update_contribuyente_especial_requiere_resolucion():
+    with pytest.raises(ValidationError):
+        EmpresaUpdate(
+            contribuyente_especial=True,
+            contribuyente_especial_resolucion=None,
+        )
+
+
+def test_empresa_update_gran_contribuyente_requiere_resolucion():
+    with pytest.raises(ValidationError):
+        EmpresaUpdate(
+            gran_contribuyente=True,
+            gran_contribuyente_resolucion=None,
+        )
+
+
+def test_empresa_update_agente_retencion_requiere_resolucion():
+    with pytest.raises(ValidationError):
+        EmpresaUpdate(
+            agente_retencion=True,
+            agente_retencion_resolucion=None,
+        )
+
+
 def test_empresa_regimen_modo_rules_invalido_para_regimen_general():
     with pytest.raises(ValidationError):
         EmpresaRegimenModoRules(
             regimen=RegimenTributario.GENERAL,
             modo_emision=ModoEmisionEmpresa.NOTA_VENTA_FISICA,
+        )
+
+
+def test_empresa_regimen_modo_rules_valido_para_persona_natural_rimpe_np():
+    rules = EmpresaRegimenModoRules(
+        tipo_contribuyente_juridico=TipoContribuyenteJuridico.PERSONA_NATURAL,
+        regimen=RegimenTributario.RIMPE_NEGOCIO_POPULAR,
+        modo_emision=ModoEmisionEmpresa.NOTA_VENTA_FISICA,
+        contribuyente_especial=False,
+        gran_contribuyente=False,
+        agente_retencion=False,
+    )
+    assert rules.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+
+
+def test_empresa_regimen_modo_rules_invalido_para_sociedad_rimpe_np():
+    with pytest.raises(ValidationError):
+        EmpresaRegimenModoRules(
+            tipo_contribuyente_juridico=TipoContribuyenteJuridico.SOCIEDAD,
+            regimen=RegimenTributario.RIMPE_NEGOCIO_POPULAR,
+            modo_emision=ModoEmisionEmpresa.ELECTRONICO,
+        )
+
+
+def test_empresa_regimen_modo_rules_resoluciones_condicionales():
+    with pytest.raises(ValidationError):
+        EmpresaRegimenModoRules(
+            tipo_contribuyente_juridico=TipoContribuyenteJuridico.PERSONA_NATURAL,
+            regimen=RegimenTributario.GENERAL,
+            modo_emision=ModoEmisionEmpresa.ELECTRONICO,
+            contribuyente_especial=True,
+            contribuyente_especial_resolucion=None,
+        )
+
+    with pytest.raises(ValidationError):
+        EmpresaRegimenModoRules(
+            tipo_contribuyente_juridico=TipoContribuyenteJuridico.PERSONA_NATURAL,
+            regimen=RegimenTributario.GENERAL,
+            modo_emision=ModoEmisionEmpresa.ELECTRONICO,
+            gran_contribuyente=True,
+            gran_contribuyente_resolucion=None,
+        )
+
+    with pytest.raises(ValidationError):
+        EmpresaRegimenModoRules(
+            tipo_contribuyente_juridico=TipoContribuyenteJuridico.PERSONA_NATURAL,
+            regimen=RegimenTributario.GENERAL,
+            modo_emision=ModoEmisionEmpresa.ELECTRONICO,
+            agente_retencion=True,
+            agente_retencion_resolucion=None,
         )
 
 
@@ -273,6 +385,100 @@ def test_empresa_service_create_rechaza_nota_venta_fisica_para_regimen_general()
     assert exc.value.status_code == 400
 
 
+def test_empresa_service_infiere_tipo_juridico_desde_legacy_create_01():
+    session = MagicMock()
+    s = EmpresaService()
+
+    payload = {
+        "razon_social": "Empresa",
+        "ruc": "1104680138001",
+        "direccion_matriz": "Dir",
+        "tipo_contribuyente_id": "01",
+        "usuario_auditoria": "tester",
+    }
+    s.validate_create(payload, session)
+    assert payload["tipo_contribuyente_juridico"] == TipoContribuyenteJuridico.PERSONA_NATURAL
+
+
+def test_empresa_service_no_infiere_tipo_juridico_desde_legacy_03():
+    session = MagicMock()
+    s = EmpresaService()
+
+    payload = {
+        "razon_social": "Empresa",
+        "ruc": "1104680138001",
+        "direccion_matriz": "Dir",
+        "tipo_contribuyente_id": "03",
+        "usuario_auditoria": "tester",
+    }
+
+    with pytest.raises(HTTPException) as exc:
+        s.validate_create(payload, session)
+
+    assert exc.value.status_code == 400
+    assert "tipo de contribuyente jurídico es obligatorio" in str(exc.value.detail).lower()
+
+
+def test_empresa_service_update_normaliza_resolucion_cuando_flag_false():
+    repo = MagicMock()
+    db_obj = Empresa(
+        razon_social="Empresa",
+        nombre_comercial="Empresa",
+        ruc="1104680138001",
+        direccion_matriz="Dir",
+        regimen=RegimenTributario.GENERAL,
+        modo_emision=ModoEmisionEmpresa.ELECTRONICO,
+        tipo_contribuyente_id="01",
+        tipo_contribuyente_juridico=TipoContribuyenteJuridico.PERSONA_NATURAL,
+        contribuyente_especial=True,
+        contribuyente_especial_resolucion="123",
+        usuario_auditoria="tester",
+    )
+    repo.get.return_value = db_obj
+    repo.update.return_value = db_obj
+
+    s = EmpresaService()
+    s.repo = repo
+    session = MagicMock()
+    out = s.update(
+        session,
+        item_id=uuid4(),
+        data={
+            "contribuyente_especial": False,
+            "contribuyente_especial_resolucion": "   ",
+        },
+    )
+    assert out is db_obj
+    repo.update.assert_called_once()
+    call_data = repo.update.call_args.args[2]
+    assert call_data["contribuyente_especial_resolucion"] is None
+
+
+def test_empresa_service_update_rechaza_tipo_juridico_ausente_no_inferible():
+    repo = MagicMock()
+    db_obj = Empresa(
+        razon_social="Empresa",
+        nombre_comercial="Empresa",
+        ruc="1104680138001",
+        direccion_matriz="Dir",
+        regimen=RegimenTributario.RIMPE_EMPRENDEDOR,
+        modo_emision=ModoEmisionEmpresa.ELECTRONICO,
+        tipo_contribuyente_id="04",
+        tipo_contribuyente_juridico=None,
+        usuario_auditoria="tester",
+    )
+    repo.get.return_value = db_obj
+
+    s = EmpresaService()
+    s.repo = repo
+
+    with pytest.raises(HTTPException) as exc:
+        s.update(MagicMock(), item_id=uuid4(), data={"telefono": "0999999999"})
+
+    assert exc.value.status_code == 400
+    assert "tipo de contribuyente jurídico es obligatorio" in str(exc.value.detail).lower()
+
+
 def test_empresa_service_list_paginated_retorna_items_y_meta():
     repo = MagicMock()
     repo.list.return_value = (["e1", "e2"], 7)
@@ -385,6 +591,7 @@ def test_empresa_after_update_listener_registra_before_after_json():
 
     connection.execute.assert_called_once()
     payload = connection.execute.call_args.args[0].compile().params
+    assert payload["accion"] == "UPDATE_EMPRESA_TRIBUTARIA"
     assert payload["before_json"]["regimen"] == "GENERAL"
     assert payload["after_json"]["regimen"] == "RIMPE_NEGOCIO_POPULAR"
     assert payload["before_json"]["modo_emision"] == "ELECTRONICO"
