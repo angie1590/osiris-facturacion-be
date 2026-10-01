@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine, select
 
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
@@ -92,6 +92,13 @@ def test_firma_electronica_se_valida_y_almacena_cifrada():
         assert saved.firma_nombre_archivo == "firma.p12"
         assert saved.firma_caduca_en is not None
         assert service.credentials(saved) == (content, "secreto")
+        audit = session.exec(
+            select(AuditLog).where(
+                AuditLog.entidad_id == empresa.id,
+                AuditLog.accion == "UPDATE_EMPRESA_TRIBUTARIA",
+            )
+        ).one()
+        assert audit.accion == "UPDATE_EMPRESA_TRIBUTARIA"
 
 
 @pytest.mark.parametrize(

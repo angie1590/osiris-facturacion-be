@@ -26,7 +26,7 @@ class AuditLog(BaseTable, table=True):
     registro_id: str | None = Field(default=None, max_length=120, index=True)
     entidad: str = Field(nullable=False, max_length=100, index=True)
     entidad_id: UUID = Field(nullable=False, index=True)
-    accion: str = Field(nullable=False, max_length=20, default="UPDATE")
+    accion: str = Field(nullable=False, max_length=64, default="UPDATE")
     estado_anterior: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     estado_nuevo: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     before_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
