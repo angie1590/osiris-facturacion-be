@@ -121,6 +121,7 @@ class ProductoListadoRead(BaseOSModel):
     tipo: TipoProductoEnum
     pvp: Decimal
     cantidad: Decimal
+    categorias: List[CategoriaNested] = []
 
 
 class ProductoCompletoRead(BaseOSModel):

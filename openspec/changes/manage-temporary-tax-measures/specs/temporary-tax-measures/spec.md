@@ -71,3 +71,19 @@ The frontend SHALL provide authorized administrators a responsive shared-compone
 #### Scenario: Frontend mutation error
 - **WHEN** the API rejects activation due to invalid scope, code, or overlap
 - **THEN** the UI preserves entered data and displays the backend validation message without reporting success
+
+#### Scenario: Select products by category or all active products
+- **WHEN** an administrator adds a category or chooses all active products as a measure's scope
+- **THEN** all matching products are added to the explicit product list without individual checkbox selection
+
+#### Scenario: Paginate product selection
+- **WHEN** more than six products match the search/category filter and the administrator moves to another page
+- **THEN** the selector displays at most six products and retains selections made on previous pages
+
+#### Scenario: Add products by category or all active products
+- **WHEN** an administrator chooses a category or all active products while defining a measure
+- **THEN** all matching products are added to the explicit eligible-product scope without checking each product individually
+
+#### Scenario: Browse and select products across pages
+- **WHEN** more than six products match the category/search filter and the administrator changes product page
+- **THEN** only six products are rendered per page and previous selections remain selected

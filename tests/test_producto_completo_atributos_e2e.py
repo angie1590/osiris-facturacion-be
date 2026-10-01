@@ -329,7 +329,8 @@ def test_list_productos_retorna_metadata_basica_sin_detalle_de_atributos():
             assert len(payload["items"]) >= 1
             item = payload["items"][0]
 
-            assert set(item.keys()) == {"id", "nombre", "tipo", "pvp", "cantidad"}
+            assert set(item.keys()) == {"id", "nombre", "tipo", "pvp", "cantidad", "categorias"}
+            assert isinstance(item["categorias"], list)
     finally:
         app.dependency_overrides.pop(get_session, None)
 

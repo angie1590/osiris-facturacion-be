@@ -19,9 +19,9 @@
 
 ## 4. Administración frontend
 
-- [x] 4.1 Añadir tipos/API/hooks y una pantalla administrativa protegida para listar, buscar, crear y editar medidas, usando nombres de empresa/producto y componentes compartidos.
-- [x] 4.2 Implementar activación/desactivación con revisión de referencia/códigos/unidades, estados de carga/error/vacío y errores de solapamiento.
-- [x] 4.3 Añadir pruebas de recorridos clave, búsqueda y rechazo de activación, y validar build/lint.
+- [x] 4.1 Añadir tipos/API/hooks y una pantalla administrativa protegida para listar, buscar, crear y editar medidas, usando nombres de empresa/producto y componentes compartidos; incluir alcance por categoría y todos los productos.
+- [x] 4.2 Implementar activación/desactivación con revisión de referencia/códigos/unidades, estados de carga/error/vacío, errores de solapamiento y paginación del selector de productos.
+- [x] 4.3 Añadir pruebas de recorridos clave, búsqueda, selección masiva, paginación y rechazo de activación, y validar build/lint.
 
 ## 5. Documentación y verificación
 

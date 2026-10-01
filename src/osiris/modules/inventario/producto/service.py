@@ -485,6 +485,23 @@ class ProductoService(BaseService):
         meta = build_pagination_meta(total=total, limit=limit, offset=offset)
 
         productos = list(session.exec(stmt_base.offset(offset).limit(limit)).all())
+        product_ids = [producto.id for producto in productos]
+        categorias_por_producto: dict[UUID, list[dict[str, object]]] = {}
+        if product_ids:
+            categoria_rows = session.exec(
+                select(ProductoCategoria.producto_id, Categoria.id, Categoria.nombre)
+                .join(Categoria, Categoria.id == ProductoCategoria.categoria_id)
+                .where(
+                    ProductoCategoria.producto_id.in_(product_ids),
+                    Categoria.activo.is_(True),
+                )
+                .order_by(Categoria.nombre.asc())
+            ).all()
+            for producto_id, categoria_id, categoria_nombre in categoria_rows:
+                categorias_por_producto.setdefault(producto_id, []).append(
+                    {"id": categoria_id, "nombre": categoria_nombre}
+                )
+
         items = [
             {
                 "id": producto.id,
@@ -492,6 +509,7 @@ class ProductoService(BaseService):
                 "tipo": producto.tipo,
                 "pvp": producto.pvp,
                 "cantidad": producto.cantidad,
+                "categorias": categorias_por_producto.get(producto.id, []),
             }
             for producto in productos
         ]
