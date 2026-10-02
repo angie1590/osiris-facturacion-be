@@ -11,7 +11,11 @@ from sqlmodel import Session, select
 from osiris.core.company_scope import ensure_entity_belongs_to_selected_company, resolve_company_scope
 from osiris.modules.sri.core_sri.services.template_method import TemplateMethodService
 from osiris.modules.common.empresa.entity import RegimenTributario
-from osiris.modules.common.punto_emision.entity import PuntoEmision, TipoDocumentoSRI
+from osiris.modules.common.punto_emision.entity import (
+    ModalidadPuntoEmision,
+    PuntoEmision,
+    TipoDocumentoSRI,
+)
 from osiris.modules.common.punto_emision.service import PuntoEmisionService
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.ventas.strategies.emision_rimpe_strategy import EmisionRimpeStrategy
@@ -167,8 +171,10 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         payload: VentaCreate,
         empresa_id_actual: UUID | None,
     ) -> tuple[UUID | None, str | None]:
+        if payload.secuencial_formateado is not None:
+            raise HTTPException(status_code=400, detail="El secuencial se asigna únicamente al emitir la venta.")
         if payload.punto_emision_id is None:
-            return empresa_id_actual, payload.secuencial_formateado
+            return empresa_id_actual, None
 
         punto = session.get(PuntoEmision, payload.punto_emision_id)
         if not punto or not punto.activo:
@@ -184,21 +190,63 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                 detail="El punto de emisión no pertenece a la empresa indicada en la venta.",
             )
         empresa_id = empresa_id_actual or sucursal.empresa_id
+        expected_mode = (
+            ModalidadPuntoEmision.ELECTRONICA
+            if payload.tipo_emision == TipoEmisionVenta.ELECTRONICA
+            else ModalidadPuntoEmision.FISICA
+        )
+        if punto.modalidad_emision != expected_mode:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El punto de emisión es {punto.modalidad_emision.value}; la venta requiere {expected_mode.value}.",
+            )
+        if not sucursal.codigo.isdigit() or len(sucursal.codigo) != 3 or not punto.codigo.isdigit() or len(punto.codigo) != 3:
+            raise HTTPException(status_code=400, detail="Sucursal y punto de emisión deben usar códigos SRI de tres dígitos.")
+        return empresa_id, None
 
-        secuencial_row = self.punto_emision_service._get_or_create_locked_secuencial(
+    def _asignar_secuencial_venta(self, session: Session, venta: Venta, usuario_auditoria: str) -> None:
+        point_branch = self._validar_punto_venta(session, venta)
+        if point_branch is None:
+            return
+        punto, sucursal = point_branch
+        counter = self.punto_emision_service._get_or_create_locked_secuencial(
             session,
             punto_emision_id=punto.id,
             tipo_documento=TipoDocumentoSRI.FACTURA,
-            usuario_auditoria=payload.usuario_auditoria,
+            usuario_auditoria=usuario_auditoria,
         )
-        secuencial_row.secuencial_actual += 1
-        session.add(secuencial_row)
-        secuencial = str(secuencial_row.secuencial_actual).zfill(9)
+        next_number = counter.secuencial_actual + 1
+        if next_number > 999999999:
+            raise HTTPException(status_code=409, detail="La serie alcanzó el máximo secuencial SRI (999999999).")
+        counter.secuencial_actual = next_number
+        counter.usuario_auditoria = usuario_auditoria
+        venta.secuencial_formateado = f"{sucursal.codigo}-{punto.codigo}-{next_number:09d}"
+        session.add(counter)
+        session.add(venta)
 
-        establecimiento = sucursal.codigo or "001"
+    @staticmethod
+    def _validar_punto_venta(session: Session, venta: Venta) -> tuple[PuntoEmision, Sucursal] | None:
+        if venta.punto_emision_id is None:
+            if venta.tipo_emision == TipoEmisionVenta.ELECTRONICA:
+                raise HTTPException(status_code=409, detail="Seleccione un punto de emisión electrónico para emitir la factura.")
+            return None
 
-        secuencial_formateado = f"{establecimiento}-{punto.codigo}-{secuencial}"
-        return empresa_id, secuencial_formateado
+        punto = session.get(PuntoEmision, venta.punto_emision_id)
+        if not punto or not punto.activo:
+            raise HTTPException(status_code=404, detail="Punto de emisión no encontrado o inactivo.")
+        sucursal = session.get(Sucursal, punto.sucursal_id)
+        if not sucursal or not sucursal.activo or sucursal.empresa_id != venta.empresa_id:
+            raise HTTPException(status_code=409, detail="El punto de emisión no pertenece a la empresa de la venta.")
+        expected_mode = (
+            ModalidadPuntoEmision.ELECTRONICA
+            if venta.tipo_emision == TipoEmisionVenta.ELECTRONICA
+            else ModalidadPuntoEmision.FISICA
+        )
+        if punto.modalidad_emision != expected_mode:
+            raise HTTPException(status_code=409, detail="La modalidad del punto no corresponde al tipo de emisión.")
+        if not sucursal.codigo.isdigit() or len(sucursal.codigo) != 3 or not punto.codigo.isdigit() or len(punto.codigo) != 3:
+            raise HTTPException(status_code=400, detail="Sucursal y punto de emisión deben usar códigos SRI de tres dígitos.")
+        return punto, sucursal
 
     def _resolver_bodega_para_venta(self, session: Session, payload: VentaCreate):
         if payload.bodega_id is not None:
@@ -453,6 +501,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             if venta.estado != EstadoVenta.BORRADOR:
                 raise HTTPException(status_code=400, detail="Solo se puede emitir una venta en estado BORRADOR.")
 
+            self._validar_punto_venta(session, venta)
+
             detalles = list(
                 session.exec(
                     select(VentaDetalle).where(
@@ -498,6 +548,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             ).one_or_none()
             if cxc_existente is not None:
                 raise HTTPException(status_code=400, detail="La venta ya tiene una cuenta por cobrar activa.")
+
+            self._asignar_secuencial_venta(session, venta, usuario_auditoria)
 
             total_factura = q2(venta.valor_total)
             cxc = CuentaPorCobrar(

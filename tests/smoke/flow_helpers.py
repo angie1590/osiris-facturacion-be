@@ -87,11 +87,17 @@ def crear_sucursal(client: httpx.Client, empresa_id: str) -> str:
     return response.json()["id"]
 
 
-def crear_punto_emision(client: httpx.Client, sucursal_id: str) -> str:
+def crear_punto_emision(
+    client: httpx.Client,
+    sucursal_id: str,
+    *,
+    modalidad_emision: str = "ELECTRONICA",
+) -> str:
     payload = {
         "sucursal_id": sucursal_id,
         "codigo": _code3(),
         "descripcion": f"Punto {uuid4().hex[:6]}",
+        "modalidad_emision": modalidad_emision,
         "secuencial_actual": 1,
         "usuario_auditoria": "smoke",
     }
@@ -228,8 +234,42 @@ def registrar_venta_desde_productos(
         assert bodega_response.status_code == 200, bodega_response.text
         resolved_empresa_id = bodega_response.json().get("empresa_id")
 
+    puntos_response = client.get(
+        "/api/v1/puntos-emision",
+        params={"limit": 1000, "offset": 0, "only_active": True},
+    )
+    assert puntos_response.status_code == 200, puntos_response.text
+    puntos = puntos_response.json().get("items", [])
+    sucursal_response = client.get(
+        "/api/v1/sucursales",
+        params={"limit": 1000, "offset": 0, "only_active": True},
+    )
+    assert sucursal_response.status_code == 200, sucursal_response.text
+    sucursales_empresa = [
+        branch
+        for branch in sucursal_response.json().get("items", [])
+        if branch.get("empresa_id") == resolved_empresa_id
+    ]
+    sucursal_ids = {branch.get("id") for branch in sucursales_empresa}
+    punto = next(
+        (
+            item
+            for item in puntos
+            if item.get("modalidad_emision") == "ELECTRONICA"
+            and item.get("sucursal_id") in sucursal_ids
+        ),
+        None,
+    )
+    if punto is None:
+        sucursal = next(iter(sucursales_empresa), None)
+        assert sucursal is not None, "La empresa smoke debe tener una sucursal"
+        punto_id = crear_punto_emision(client, sucursal["id"])
+    else:
+        punto_id = punto["id"]
+
     payload = {
         "empresa_id": resolved_empresa_id,
+        "punto_emision_id": punto_id,
         "fecha_emision": date.today().isoformat(),
         "bodega_id": bodega_id,
         "tipo_identificacion_comprador": "RUC",

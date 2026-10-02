@@ -8,6 +8,7 @@ from sqlmodel import SQLModel, Session, create_engine, select
 
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.punto_emision.entity import PuntoEmision, PuntoEmisionSecuencial
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.core_sri.models import (
     CuentaPorCobrar,
@@ -50,6 +51,8 @@ def _build_test_engine():
             TipoContribuyente.__table__,
             Empresa.__table__,
             Sucursal.__table__,
+            PuntoEmision.__table__,
+            PuntoEmisionSecuencial.__table__,
             Bodega.__table__,
             CasaComercial.__table__,
             Producto.__table__,
@@ -93,6 +96,19 @@ def _seed_venta_borrador(session: Session) -> Venta:
     session.add(empresa)
     session.flush()
 
+    sucursal = Sucursal(
+        codigo="001", nombre="Matriz", direccion="Av. Principal", empresa_id=empresa.id,
+        es_matriz=True, usuario_auditoria="seed", activo=True,
+    )
+    session.add(sucursal)
+    session.flush()
+    punto = PuntoEmision(
+        codigo="001", descripcion="Punto electrónico", modalidad_emision="ELECTRONICA",
+        sucursal_id=sucursal.id, usuario_auditoria="seed", activo=True,
+    )
+    session.add(punto)
+    session.flush()
+
     bodega = Bodega(
         codigo_bodega="BOD-E7-001",
         nombre_bodega="Bodega E7",
@@ -127,6 +143,7 @@ def _seed_venta_borrador(session: Session) -> Venta:
     subtotal = q2(Decimal("5.0000") * Decimal("10.00"))
     venta = Venta(
         empresa_id=empresa.id,
+        punto_emision_id=punto.id,
         fecha_emision=date.today(),
         tipo_identificacion_comprador=TipoIdentificacionSRI.RUC,
         identificacion_comprador="1790012345001",

@@ -24,6 +24,7 @@ from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from tests.smoke.flow_helpers import (
     crear_bodega,
     crear_empresa_general,
+    crear_punto_emision,
     configurar_firma_empresa_prueba,
     seed_stock_por_movimiento,
 )
@@ -35,6 +36,9 @@ pytestmark = pytest.mark.smoke
 @pytest.mark.smoke
 def test_smoke_flujo_ventas(client, db_session):
     empresa_id = crear_empresa_general(client)
+    sucursales = client.get("/api/v1/sucursales", params={"limit": 1000, "offset": 0, "only_active": True}).json()["items"]
+    sucursal = next(item for item in sucursales if item["empresa_id"] == empresa_id)
+    punto_emision_id = crear_punto_emision(client, sucursal["id"])
     configurar_firma_empresa_prueba(db_session, empresa_id)
     bodega_id = crear_bodega(client, empresa_id)
     iva = db_session.exec(
@@ -80,6 +84,7 @@ def test_smoke_flujo_ventas(client, db_session):
 
     venta_payload = {
         "empresa_id": empresa_id,
+        "punto_emision_id": punto_emision_id,
         "fecha_emision": date.today().isoformat(),
         "bodega_id": bodega_id,
         "tipo_identificacion_comprador": "RUC",

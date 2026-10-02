@@ -10,6 +10,11 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.punto_emision.entity import (
+    ModalidadPuntoEmision,
+    PuntoEmision,
+    PuntoEmisionSecuencial,
+)
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.core_sri.models import (
     CuentaPorCobrar,
@@ -48,6 +53,8 @@ def _build_test_engine():
             TipoContribuyente.__table__,
             Empresa.__table__,
             Sucursal.__table__,
+            PuntoEmision.__table__,
+            PuntoEmisionSecuencial.__table__,
             Bodega.__table__,
             CasaComercial.__table__,
             Producto.__table__,
@@ -84,6 +91,29 @@ def _seed_data(session: Session, *, stock_inicial: Decimal, cantidad_venta: Deci
     session.add(empresa)
     session.flush()
 
+    sucursal = Sucursal(
+        codigo="001",
+        nombre="Matriz",
+        direccion="Av. Principal",
+        empresa_id=empresa.id,
+        es_matriz=True,
+        usuario_auditoria="seed",
+        activo=True,
+    )
+    session.add(sucursal)
+    session.flush()
+
+    punto = PuntoEmision(
+        codigo="001",
+        descripcion="Punto electrónico",
+        modalidad_emision="ELECTRONICA",
+        sucursal_id=sucursal.id,
+        usuario_auditoria="seed",
+        activo=True,
+    )
+    session.add(punto)
+    session.flush()
+
     bodega = Bodega(
         codigo_bodega="BOD-E6-001",
         nombre_bodega="Bodega E6",
@@ -116,6 +146,8 @@ def _seed_data(session: Session, *, stock_inicial: Decimal, cantidad_venta: Deci
 
     subtotal = q2(cantidad_venta * Decimal("10.00"))
     venta = Venta(
+        empresa_id=empresa.id,
+        punto_emision_id=punto.id,
         fecha_emision=date.today(),
         tipo_identificacion_comprador=TipoIdentificacionSRI.RUC,
         identificacion_comprador="1790012345001",
@@ -172,6 +204,7 @@ def test_emitir_venta_bloqueo_sin_stock():
             )
 
         assert "Stock insuficiente para el producto" in str(exc.value)
+        assert session.exec(select(PuntoEmisionSecuencial)).first() is None
         session.refresh(venta)
         assert venta.estado == EstadoVenta.BORRADOR
 
@@ -192,6 +225,8 @@ def test_emitir_venta_flujo_exitoso():
             stock_inicial=Decimal("15.0000"),
             cantidad_venta=Decimal("5.0000"),
         )
+        assert venta.secuencial_formateado is None
+        assert session.exec(select(PuntoEmisionSecuencial)).first() is None
 
         emitted = service.emitir_venta(
             session,
@@ -200,6 +235,9 @@ def test_emitir_venta_flujo_exitoso():
         )
 
         assert emitted.estado == EstadoVenta.EMITIDA
+        assert emitted.secuencial_formateado == "001-001-000000001"
+        counter = session.exec(select(PuntoEmisionSecuencial)).one()
+        assert counter.secuencial_actual == 1
 
         stock = session.exec(
             select(InventarioStock).where(
@@ -225,6 +263,62 @@ def test_emitir_venta_flujo_exitoso():
         assert cxc is not None
         assert cxc.estado == EstadoCuentaPorCobrar.PENDIENTE
         assert cxc.saldo_pendiente == Decimal("50.00")
+
+
+def test_emitir_venta_rechaza_modalidad_incorrecta_antes_de_efectos():
+    engine = _build_test_engine()
+    service = VentaService()
+
+    with Session(engine) as session:
+        venta, _, _ = _seed_data(
+            session,
+            stock_inicial=Decimal("10.0000"),
+            cantidad_venta=Decimal("2.0000"),
+        )
+        punto = session.get(PuntoEmision, venta.punto_emision_id)
+        assert punto is not None
+        punto.modalidad_emision = ModalidadPuntoEmision.FISICA
+        session.add(punto)
+        session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            service.emitir_venta(session, venta.id, usuario_auditoria="tester")
+
+        assert exc.value.status_code == 409
+        assert session.exec(select(PuntoEmisionSecuencial)).first() is None
+        assert session.exec(select(CuentaPorCobrar)).first() is None
+        assert session.exec(select(MovimientoInventario)).first() is None
+
+
+def test_fallo_al_encolar_sri_revierte_numero_y_efectos(monkeypatch):
+    engine = _build_test_engine()
+    service = VentaService()
+
+    with Session(engine) as session:
+        venta, _, _ = _seed_data(
+            session,
+            stock_inicial=Decimal("10.0000"),
+            cantidad_venta=Decimal("2.0000"),
+        )
+
+        def fail_queue(*args, **kwargs):
+            raise RuntimeError("Falla simulada de cola SRI")
+
+        monkeypatch.setattr(service.orquestador_fe_service, "encolar_documento", fail_queue)
+        with pytest.raises(RuntimeError, match="Falla simulada"):
+            service.emitir_venta(
+                session,
+                venta.id,
+                usuario_auditoria="tester",
+                encolar_sri=True,
+            )
+
+        session.refresh(venta)
+        assert venta.estado == EstadoVenta.BORRADOR
+        assert venta.secuencial_formateado is None
+        assert session.exec(select(PuntoEmisionSecuencial)).first() is None
+        assert session.exec(select(CuentaPorCobrar)).first() is None
+        assert session.exec(select(MovimientoInventario)).first() is None
 
 
 def test_emitir_venta_bloquea_stock_agregado_por_producto():
@@ -263,6 +357,8 @@ def test_emitir_venta_bloquea_stock_agregado_por_producto():
         assert "Stock insuficiente para el producto" in str(exc.value)
         session.refresh(venta)
         assert venta.estado == EstadoVenta.BORRADOR
+        assert venta.secuencial_formateado is None
+        assert session.exec(select(PuntoEmisionSecuencial)).first() is None
 
 
 def test_anulacion_fe_exige_confirmacion():

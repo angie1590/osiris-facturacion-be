@@ -4,7 +4,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Column, Numeric, Text, UniqueConstraint
+from sqlalchemy import Column, Index, Numeric, Text, UniqueConstraint
 from sqlmodel import Field
 
 from osiris.domain.base_models import AuditMixin, BaseTable, SoftDeleteMixin
@@ -24,6 +24,15 @@ from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributari
 
 class Venta(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     __tablename__ = "tbl_venta"
+    __table_args__ = (
+        Index(
+            "uq_venta_empresa_punto_secuencial",
+            "empresa_id",
+            "punto_emision_id",
+            "secuencial_formateado",
+            unique=True,
+        ),
+    )
 
     cliente_id: UUID | None = Field(default=None, nullable=True, index=True)
     empresa_id: UUID | None = Field(default=None, foreign_key="tbl_empresa.id", nullable=True, index=True)

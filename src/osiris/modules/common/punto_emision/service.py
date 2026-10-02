@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, select
 
 from osiris.core.permisos import verificar_permiso
@@ -110,7 +111,8 @@ class PuntoEmisionService(BaseService):
             )
             secuencial = session.exec(stmt).one()
         except NoResultFound:
-            inicial = punto_emision.secuencial_actual if tipo_documento == TipoDocumentoSRI.FACTURA else 0
+            # PuntoEmision stores the next number; the ledger stores the last issued number.
+            inicial = max(punto_emision.secuencial_actual - 1, 0) if tipo_documento == TipoDocumentoSRI.FACTURA else 0
             try:
                 with session.begin_nested():
                     secuencial_nuevo = PuntoEmisionSecuencial(
@@ -148,22 +150,26 @@ class PuntoEmisionService(BaseService):
         tipo_documento: TipoDocumentoSRI,
         usuario_auditoria: Optional[str] = None,
     ) -> str:
-        secuencial = self._get_or_create_locked_secuencial(
-            session,
-            punto_emision_id=punto_emision_id,
-            tipo_documento=tipo_documento,
-            usuario_auditoria=usuario_auditoria,
+        """Preview only: no counter reservation happens outside sale issue."""
+        punto = session.get(PuntoEmision, punto_emision_id)
+        if not punto or not punto.activo:
+            raise HTTPException(status_code=404, detail="Punto de emision no encontrado o inactivo")
+        row = session.exec(
+            select(PuntoEmisionSecuencial).where(
+                PuntoEmisionSecuencial.punto_emision_id == punto_emision_id,
+                PuntoEmisionSecuencial.tipo_documento == tipo_documento,
+            ).with_for_update()
+        ).first()
+        next_number = (
+            row.secuencial_actual + 1
+            if row
+            else punto.secuencial_actual
+            if tipo_documento == TipoDocumentoSRI.FACTURA
+            else 1
         )
-        secuencial.secuencial_actual += 1
-        if hasattr(secuencial, "actualizado_en"):
-            secuencial.actualizado_en = datetime.utcnow()
-        if usuario_auditoria:
-            secuencial.usuario_auditoria = usuario_auditoria
-
-        session.add(secuencial)
-        session.commit()
-        session.refresh(secuencial)
-        return self._sri_pad_9(secuencial.secuencial_actual)
+        if next_number > 999999999:
+            raise HTTPException(status_code=409, detail="La serie alcanzó el máximo secuencial SRI (999999999).")
+        return self._sri_pad_9(next_number)
 
     def ajustar_secuencial_manual(
         self,
@@ -180,6 +186,21 @@ class PuntoEmisionService(BaseService):
 
         self._require_admin(session, usuario_id)
         self._require_permiso_ajuste_secuencial(session, usuario_id)
+        from osiris.modules.ventas.models import Venta
+
+        used = session.exec(
+            select(Venta.id)
+            .where(
+                Venta.punto_emision_id == punto_emision_id,
+                cast(ColumnElement[str | None], Venta.secuencial_formateado).is_not(None),
+            )
+            .limit(1)
+        ).first()
+        if used:
+            raise HTTPException(
+                status_code=409,
+                detail="La serie ya contiene comprobantes; cree un nuevo punto para iniciar otra serie autorizada.",
+            )
         secuencial = self._get_or_create_locked_secuencial(
             session,
             punto_emision_id=punto_emision_id,
@@ -187,15 +208,21 @@ class PuntoEmisionService(BaseService):
             usuario_auditoria=str(usuario_id),
         )
 
-        secuencial_anterior = secuencial.secuencial_actual
+        secuencial_anterior = secuencial.secuencial_actual + 1
+        if not 1 <= nuevo_secuencial <= 999999999:
+            raise HTTPException(status_code=400, detail="El secuencial inicial debe estar entre 1 y 999999999.")
         estado_anterior = {
             "punto_emision_id": str(punto_emision_id),
             "tipo_documento": tipo_documento.value,
-            "secuencial_actual": secuencial_anterior,
+            "proximo_secuencial": secuencial_anterior,
             "secuencial_sri": self._sri_pad_9(secuencial_anterior),
         }
 
-        secuencial.secuencial_actual = nuevo_secuencial
+        secuencial.secuencial_actual = nuevo_secuencial - 1
+        punto = session.get(PuntoEmision, punto_emision_id)
+        if punto and tipo_documento == TipoDocumentoSRI.FACTURA:
+            punto.secuencial_actual = nuevo_secuencial
+            session.add(punto)
         secuencial.usuario_auditoria = str(usuario_id)
         if hasattr(secuencial, "actualizado_en"):
             secuencial.actualizado_en = datetime.utcnow()
@@ -203,7 +230,7 @@ class PuntoEmisionService(BaseService):
         estado_nuevo = {
             "punto_emision_id": str(punto_emision_id),
             "tipo_documento": tipo_documento.value,
-            "secuencial_actual": nuevo_secuencial,
+            "proximo_secuencial": nuevo_secuencial,
             "secuencial_sri": self._sri_pad_9(nuevo_secuencial),
             "justificacion": justificacion.strip(),
             "motivo_salto": justificacion.strip(),

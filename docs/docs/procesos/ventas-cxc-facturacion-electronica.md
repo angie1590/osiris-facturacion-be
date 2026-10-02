@@ -32,6 +32,7 @@ sidebar_position: 6
 
 - Stock insuficiente: rechazo y rollback total.
 - Regla tributaria RIMPE incumplida: rechazo.
+- Modalidad del punto incompatible o código de serie inválido: rechazo antes de afectar inventario.
 
 **Postcondiciones:**
 
@@ -72,6 +73,14 @@ sidebar_position: 6
 
 - `POST /api/v1/ventas?emitir_automaticamente=false` ([doc API](../api/transacciones/ventas/ventas-ciclo-comercial))
 - `POST /api/v1/ventas/{venta_id}/emitir` ([doc API](../api/transacciones/ventas/ventas-ciclo-comercial))
+
+## Series y secuenciales de facturación
+
+El número de factura se forma como `EEE-PPP-SSSSSSSSS`: establecimiento de tres dígitos, punto de emisión de tres dígitos y secuencial de nueve dígitos. El secuencial inicial configurado en un punto es el próximo número autorizado; por defecto es `000000001`.
+
+Guardar un borrador o consultar `POST /api/v1/puntos-emision/{id}/secuenciales/FACTURA/siguiente` no consume el número. El contador se bloquea y actualiza al emitir la venta, en la misma transacción del egreso, la CxC y la cola electrónica. Un error revierte la reserva, por lo que el siguiente intento puede usar el mismo número.
+
+Cada punto se crea con modalidad física o electrónica y no se puede cambiar después. Para migrar una operación de documentos físicos a facturación electrónica se debe crear otro punto/serie con el secuencial inicial autorizado para esa nueva serie. No se debe reutilizar el identificador del punto ni inferir autorización del portal SRI a partir de la configuración local. La migración conserva la modalidad de empresa existente y adelanta el contador legacy hasta el mayor folio guardado, incluidos borradores numerados.
 
 ---
 

@@ -46,6 +46,16 @@ def test_punto_emision_create_codigo_invalido_falla():
         )
 
 
+def test_punto_emision_create_codigo_debe_ser_numerico():
+    with pytest.raises(ValidationError):
+        PuntoEmisionCreate(
+            codigo="A01",
+            descripcion="PE",
+            sucursal_id=uuid4(),
+            usuario_auditoria="tester",
+        )
+
+
 # =======================
 # Service: create valida FK de sucursal
 # =======================
@@ -166,9 +176,7 @@ def test_punto_emision_service_obtener_siguiente_secuencial_for_update_y_padding
         usuario_auditoria="tester",
         activo=True,
     )
-    locked = MagicMock()
-    locked.one.return_value = secuencial
-    session.exec.return_value = locked
+    session.exec.return_value.first.return_value = secuencial
 
     siguiente = svc.obtener_siguiente_secuencial(
         session,
@@ -178,12 +186,114 @@ def test_punto_emision_service_obtener_siguiente_secuencial_for_update_y_padding
     )
 
     assert siguiente == "000000010"
-    assert secuencial.secuencial_actual == 10
-    assert secuencial.usuario_auditoria == "u-1"
-    stmt = session.exec.call_args.args[0]
-    assert getattr(stmt, "_for_update_arg", None) is not None
-    session.commit.assert_called_once()
-    session.refresh.assert_called_once_with(secuencial)
+    svc.obtener_siguiente_secuencial(
+        session,
+        punto_emision_id=pe_id,
+        tipo_documento=TipoDocumentoSRI.FACTURA,
+        usuario_auditoria="u-1",
+    )
+    assert secuencial.secuencial_actual == 9
+    session.commit.assert_not_called()
+    session.add.assert_not_called()
+
+
+def test_punto_emision_preview_usa_el_inicial_configurado_sin_contador():
+    session = MagicMock()
+    punto = PuntoEmision(
+        id=uuid4(), codigo="001", descripcion="Principal", sucursal_id=uuid4(),
+        usuario_auditoria="tester", activo=True, secuencial_actual=1,
+    )
+    session.get.return_value = punto
+    session.exec.return_value.first.return_value = None
+
+    siguiente = PuntoEmisionService().obtener_siguiente_secuencial(
+        session,
+        punto_emision_id=punto.id,
+        tipo_documento=TipoDocumentoSRI.FACTURA,
+    )
+
+    assert siguiente == "000000001"
+    session.commit.assert_not_called()
+
+
+def test_punto_emision_preview_respeta_inicial_personalizado():
+    session = MagicMock()
+    punto = PuntoEmision(
+        id=uuid4(), codigo="001", descripcion="Principal", sucursal_id=uuid4(),
+        usuario_auditoria="tester", activo=True, secuencial_actual=381,
+    )
+    session.get.return_value = punto
+    session.exec.return_value.first.return_value = None
+
+    siguiente = PuntoEmisionService().obtener_siguiente_secuencial(
+        session,
+        punto_emision_id=punto.id,
+        tipo_documento=TipoDocumentoSRI.FACTURA,
+    )
+
+    assert siguiente == "000000381"
+    session.commit.assert_not_called()
+
+
+def test_punto_emision_preview_rechaza_overflow():
+    session = MagicMock()
+    punto = PuntoEmision(
+        id=uuid4(), codigo="001", descripcion="Principal", sucursal_id=uuid4(),
+        usuario_auditoria="tester", activo=True,
+    )
+    session.get.return_value = punto
+    counter = PuntoEmisionSecuencial(
+        punto_emision_id=punto.id,
+        tipo_documento=TipoDocumentoSRI.FACTURA,
+        secuencial_actual=999999999,
+        usuario_auditoria="tester",
+        activo=True,
+    )
+    session.exec.return_value.first.return_value = counter
+
+    with pytest.raises(HTTPException) as exc:
+        PuntoEmisionService().obtener_siguiente_secuencial(
+            session,
+            punto_emision_id=punto.id,
+            tipo_documento=TipoDocumentoSRI.FACTURA,
+        )
+
+    assert exc.value.status_code == 409
+    session.commit.assert_not_called()
+
+
+def test_reserva_secuencial_bloquea_la_fila_para_emisiones_concurrentes():
+    session = MagicMock()
+    punto = PuntoEmision(
+        id=uuid4(), codigo="001", descripcion="Principal", sucursal_id=uuid4(),
+        usuario_auditoria="tester", activo=True,
+    )
+    session.get.return_value = punto
+    counter = PuntoEmisionSecuencial(
+        punto_emision_id=punto.id,
+        tipo_documento=TipoDocumentoSRI.FACTURA,
+        secuencial_actual=4,
+        usuario_auditoria="tester",
+        activo=True,
+    )
+    session.exec.return_value.one.return_value = counter
+
+    result = PuntoEmisionService()._get_or_create_locked_secuencial(
+        session,
+        punto_emision_id=punto.id,
+        tipo_documento=TipoDocumentoSRI.FACTURA,
+    )
+
+    assert result is counter
+    statement = session.exec.call_args.args[0]
+    assert getattr(statement, "_for_update_arg", None) is not None
+
+
+def test_punto_emision_update_no_expone_modalidad_ni_secuencial_inicial():
+    from osiris.modules.common.punto_emision.models import PuntoEmisionUpdate
+
+    assert "modalidad_emision" not in PuntoEmisionUpdate.model_fields
+    assert "secuencial_actual" not in PuntoEmisionUpdate.model_fields
 
 
 def test_punto_emision_service_ajuste_manual_registra_auditoria_detallada():
@@ -215,7 +325,8 @@ def test_punto_emision_service_ajuste_manual_registra_auditoria_detallada():
     rol = Rol(id=admin.rol_id, nombre="ADMIN", descripcion="Admin", usuario_auditoria="tester", activo=True)
     first = MagicMock()
     first.first.return_value = (admin, rol)
-    session.exec.side_effect = [first]
+    unused = MagicMock()
+    unused.first.return_value = None
 
     secuencial = PuntoEmisionSecuencial(
         punto_emision_id=pe_id,
@@ -226,7 +337,7 @@ def test_punto_emision_service_ajuste_manual_registra_auditoria_detallada():
     )
     second = MagicMock()
     second.one.return_value = secuencial
-    session.exec.side_effect = [first, second]
+    session.exec.side_effect = [first, unused, second]
 
     with patch("osiris.modules.common.punto_emision.service.verificar_permiso", return_value=True):
         updated = svc.ajustar_secuencial_manual(
@@ -238,7 +349,7 @@ def test_punto_emision_service_ajuste_manual_registra_auditoria_detallada():
             justificacion="Regularizacion por cierre contable",
         )
 
-    assert updated.secuencial_actual == 40
+    assert updated.secuencial_actual == 39
     assert updated.usuario_auditoria == str(user_id)
 
     add_calls = session.add.call_args_list
@@ -247,13 +358,13 @@ def test_punto_emision_service_ajuste_manual_registra_auditoria_detallada():
     assert len(audit_entries) == 1
     audit = audit_entries[0]
     assert audit.usuario_auditoria == str(user_id)
-    assert audit.estado_anterior["secuencial_actual"] == 22
-    assert audit.estado_anterior["secuencial_sri"] == "000000022"
-    assert audit.estado_nuevo["secuencial_actual"] == 40
+    assert audit.estado_anterior["proximo_secuencial"] == 23
+    assert audit.estado_anterior["secuencial_sri"] == "000000023"
+    assert audit.estado_nuevo["proximo_secuencial"] == 40
     assert audit.estado_nuevo["secuencial_sri"] == "000000040"
     assert audit.estado_nuevo["justificacion"] == "Regularizacion por cierre contable"
     assert audit.estado_nuevo["motivo_salto"] == "Regularizacion por cierre contable"
-    assert audit.after_json["delta"] == 18
+    assert audit.after_json["delta"] == 17
     session.commit.assert_called_once()
     session.refresh.assert_called_once_with(secuencial)
 
@@ -275,7 +386,7 @@ def test_punto_emision_service_ajuste_manual_rechaza_si_no_es_admin():
     rol = Rol(nombre="OPERADOR", descripcion="No admin", usuario_auditoria="tester", activo=True)
     first = MagicMock()
     first.first.return_value = (usuario, rol)
-    session.exec.side_effect = [first]
+    session.exec.return_value = first
 
     with pytest.raises(HTTPException) as exc:
         svc.ajustar_secuencial_manual(
@@ -382,7 +493,9 @@ def test_punto_emision_service_ajuste_manual_admin_ok():
     )
     second = MagicMock()
     second.one.return_value = seq
-    session.exec.side_effect = [first, second]
+    unused = MagicMock()
+    unused.first.return_value = None
+    session.exec.side_effect = [first, unused, second]
 
     with patch("osiris.modules.common.punto_emision.service.verificar_permiso", return_value=True):
         out = svc.ajustar_secuencial_manual(
@@ -394,4 +507,4 @@ def test_punto_emision_service_ajuste_manual_admin_ok():
             justificacion="Ajuste autorizado por cierre fiscal",
         )
 
-    assert out.secuencial_actual == 33
+    assert out.secuencial_actual == 32

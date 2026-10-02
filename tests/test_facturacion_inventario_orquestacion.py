@@ -9,6 +9,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.punto_emision.entity import PuntoEmision, PuntoEmisionSecuencial
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.core_sri.models import CuentaPorCobrar, Venta, VentaDetalle, VentaDetalleImpuesto
 from osiris.modules.sri.core_sri.types import EstadoVenta
@@ -43,6 +44,8 @@ def _build_test_engine():
             TipoContribuyente.__table__,
             Empresa.__table__,
             Sucursal.__table__,
+            PuntoEmision.__table__,
+            PuntoEmisionSecuencial.__table__,
             Bodega.__table__,
             CasaComercial.__table__,
             Producto.__table__,
@@ -79,6 +82,19 @@ def _seed_base(session: Session):
     session.add(empresa)
     session.flush()
 
+    sucursal = Sucursal(
+        codigo="001", nombre="Matriz", direccion="Av. Principal", empresa_id=empresa.id,
+        es_matriz=True, usuario_auditoria="seed", activo=True,
+    )
+    session.add(sucursal)
+    session.flush()
+    punto = PuntoEmision(
+        codigo="001", descripcion="Punto electrónico", modalidad_emision="ELECTRONICA",
+        sucursal_id=sucursal.id, usuario_auditoria="seed", activo=True,
+    )
+    session.add(punto)
+    session.flush()
+
     bodega = Bodega(
         codigo_bodega="BOD-VTA-001",
         nombre_bodega="Bodega Ventas",
@@ -98,13 +114,14 @@ def _seed_base(session: Session):
     )
     session.add(producto)
     session.flush()
-    return bodega, producto
+    return bodega, producto, punto.id
 
 
-def _payload_venta(bodega_id, producto_id, cantidad: Decimal) -> VentaCreate:
+def _payload_venta(bodega_id, producto_id, cantidad: Decimal, punto_emision_id) -> VentaCreate:
     return VentaCreate(
         fecha_emision=date.today(),
         bodega_id=bodega_id,
+        punto_emision_id=punto_emision_id,
         tipo_identificacion_comprador="RUC",
         identificacion_comprador="1790012345001",
         forma_pago="EFECTIVO",
@@ -134,7 +151,7 @@ def test_emitir_venta_genera_egreso_automatico():
     service = VentaService()
 
     with Session(engine) as session:
-        bodega, producto = _seed_base(session)
+        bodega, producto, punto_emision_id = _seed_base(session)
         stock = InventarioStock(
             bodega_id=bodega.id,
             producto_id=producto.id,
@@ -148,7 +165,7 @@ def test_emitir_venta_genera_egreso_automatico():
 
         venta = service.registrar_venta(
             session,
-            _payload_venta(bodega.id, producto.id, Decimal("3.0000")),
+            _payload_venta(bodega.id, producto.id, Decimal("3.0000"), punto_emision_id),
         )
         assert venta.estado == EstadoVenta.BORRADOR
 
@@ -193,7 +210,7 @@ def test_emitir_venta_rollback_sin_stock():
     service = VentaService()
 
     with Session(engine) as session:
-        bodega, producto = _seed_base(session)
+        bodega, producto, punto_emision_id = _seed_base(session)
         stock = InventarioStock(
             bodega_id=bodega.id,
             producto_id=producto.id,
@@ -207,7 +224,7 @@ def test_emitir_venta_rollback_sin_stock():
 
         venta = service.registrar_venta(
             session,
-            _payload_venta(bodega.id, producto.id, Decimal("5.0000")),
+            _payload_venta(bodega.id, producto.id, Decimal("5.0000"), punto_emision_id),
         )
         assert venta.estado == EstadoVenta.BORRADOR
 
