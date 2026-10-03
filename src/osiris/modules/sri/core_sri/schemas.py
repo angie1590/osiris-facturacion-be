@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID
+from typing_extensions import Self
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
@@ -34,7 +35,7 @@ class ImpuestoAplicadoInput(BaseModel):
     referencia_legal_temporal: str | None = None
 
     @model_validator(mode="after")
-    def validar_codigo_tipo(self):
+    def validar_codigo_tipo(self) -> Self:
         if self.tipo_impuesto == TipoImpuestoMVP.IVA and self.codigo_impuesto_sri != "2":
             raise ValueError("Para IVA, codigo_impuesto_sri debe ser '2'.")
         if self.tipo_impuesto == TipoImpuestoMVP.ICE and self.codigo_impuesto_sri != "3":
@@ -63,7 +64,7 @@ class VentaCompraDetalleCreate(BaseModel):
     impuestos: list[ImpuestoAplicadoInput] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validar_impuestos_por_detalle(self):
+    def validar_impuestos_por_detalle(self) -> Self:
         iva_count = sum(1 for i in self.impuestos if i.tipo_impuesto == TipoImpuestoMVP.IVA)
         if iva_count > 1:
             raise ValueError("Un detalle no puede tener mas de un IVA.")
@@ -89,7 +90,7 @@ class VentaCompraDetalleCreate(BaseModel):
     def base_imponible_impuesto(self, impuesto: ImpuestoAplicadoInput) -> Decimal:
         if impuesto.componente == TipoComponenteTributario.ESPECIFICO:
             return (self.cantidad * impuesto.factor_cantidad).quantize(TEN_THOUSANDTH, rounding=ROUND_HALF_UP)
-        base = self.subtotal_sin_impuesto
+        base = q2(str(self.model_dump()["subtotal_sin_impuesto"]))
         if impuesto.tipo_impuesto == TipoImpuestoMVP.IVA:
             base = q2(base + self.monto_ice_detalle())
         return q2(base)

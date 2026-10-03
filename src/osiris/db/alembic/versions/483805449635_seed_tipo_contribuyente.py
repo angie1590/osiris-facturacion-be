@@ -53,20 +53,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Insert seed rows without querying the database in offline mode."""
-    values = ", ".join(
-        "('{codigo}', '{nombre}', '{descripcion}', TRUE)".format(**row).replace("'", "''")
-        for row in ROWS
-    )
-    op.execute(
+    bind = op.get_bind()
+    bind.execute(
         sa.text(
             "INSERT INTO aux_tipo_contribuyente "
-            "(codigo, nombre, descripcion, activo) VALUES "
-            f"{values} ON CONFLICT (codigo) DO NOTHING"
-        )
+            "(codigo, nombre, descripcion, activo) "
+            "VALUES (:codigo, :nombre, :descripcion, :activo) "
+            "ON CONFLICT (codigo) DO NOTHING"
+        ),
+        ROWS,
     )
 
 
 def downgrade() -> None:
     """Remove seeded rows (only those we added)."""
-    codes = ", ".join(f"'{row['codigo']}'" for row in ROWS)
-    op.execute(sa.text(f"DELETE FROM aux_tipo_contribuyente WHERE codigo IN ({codes})"))
+    contributors = sa.table(
+        "aux_tipo_contribuyente",
+        sa.column("codigo", sa.String()),
+    )
+    op.get_bind().execute(
+        sa.delete(contributors).where(
+            contributors.c.codigo.in_([row["codigo"] for row in ROWS])
+        )
+    )

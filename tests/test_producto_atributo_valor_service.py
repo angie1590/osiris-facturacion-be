@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -10,7 +11,10 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.core.db import get_session
+from osiris.core.auth import get_current_usuario
 from osiris.main import app
+from osiris.modules.common.catalogo.entity import Catalogo, CatalogoValor
+from osiris.modules.common.rol.entity import Rol
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.categoria.entity import Categoria
@@ -34,12 +38,15 @@ def _build_test_engine():
         engine,
         tables=[
             AuditLog.__table__,
+            Rol.__table__,
             CasaComercial.__table__,
             Producto.__table__,
             Categoria.__table__,
             CategoriaAtributo.__table__,
             ProductoCategoria.__table__,
             Atributo.__table__,
+            Catalogo.__table__,
+            CatalogoValor.__table__,
             ProductoAtributoValor.__table__,
         ],
     )
@@ -116,8 +123,178 @@ def test_upsert_valores_producto_asigna_columna_sql_correcta():
         assert row.valor_date is None
 
 
+def test_upsert_select_normalizes_option_and_rejects_unknown_value():
+    engine = _build_test_engine()
+    service = ProductoAtributoValorService()
+
+    with Session(engine) as session:
+        product, attribute = _seed_producto_y_atributo(session, TipoDato.SELECT)
+        attribute.select_options = ["Rojo", "Azul"]
+        session.add(attribute)
+        session.commit()
+
+        service.upsert_valores_producto(
+            session,
+            product.id,
+            [ProductoAtributoValorUpsert(atributo_id=attribute.id, valor="ROJO")],
+        )
+        row = session.exec(
+            select(ProductoAtributoValor).where(
+                ProductoAtributoValor.producto_id == product.id,
+                ProductoAtributoValor.atributo_id == attribute.id,
+            )
+        ).one()
+        assert row.valor_string == "Rojo"
+
+        with pytest.raises(HTTPException, match="tipo select"):
+            service.upsert_valores_producto(
+                session,
+                product.id,
+                [ProductoAtributoValorUpsert(atributo_id=attribute.id, valor="Verde")],
+            )
+
+
+def test_upsert_catalog_requires_active_catalog_value():
+    engine = _build_test_engine()
+    service = ProductoAtributoValorService()
+
+    with Session(engine) as session:
+        product, attribute = _seed_producto_y_atributo(session, TipoDato.CATALOG)
+        catalog = Catalogo(nombre=f"Marcas-{uuid4().hex[:6]}", usuario_auditoria="tester", activo=True)
+        session.add(catalog)
+        session.flush()
+        catalog_value = CatalogoValor(
+            catalogo_id=catalog.id,
+            valor="Acme",
+            usuario_auditoria="tester",
+            activo=True,
+        )
+        session.add(catalog_value)
+        attribute.catalog_id = catalog.id
+        session.add(attribute)
+        session.commit()
+
+        service.upsert_valores_producto(
+            session,
+            product.id,
+            [ProductoAtributoValorUpsert(atributo_id=attribute.id, valor="Acme")],
+        )
+        with pytest.raises(HTTPException, match="tipo catalog"):
+            service.upsert_valores_producto(
+                session,
+                product.id,
+                [ProductoAtributoValorUpsert(atributo_id=attribute.id, valor="Unknown")],
+            )
+
+
+def test_upsert_numeric_attribute_respects_allow_negative():
+    engine = _build_test_engine()
+    service = ProductoAtributoValorService()
+
+    with Session(engine) as session:
+        product, attribute = _seed_producto_y_atributo(session, TipoDato.INTEGER)
+        with pytest.raises(HTTPException, match="tipo integer"):
+            service.upsert_valores_producto(
+                session,
+                product.id,
+                [ProductoAtributoValorUpsert(atributo_id=attribute.id, valor=-1)],
+            )
+
+        attribute.allow_negative = True
+        attribute.min_value = Decimal("-5")
+        session.add(attribute)
+        session.commit()
+        service.upsert_valores_producto(
+            session,
+            product.id,
+            [ProductoAtributoValorUpsert(atributo_id=attribute.id, valor=-1)],
+        )
+        row = session.exec(
+            select(ProductoAtributoValor).where(ProductoAtributoValor.atributo_id == attribute.id)
+        ).one()
+        assert row.valor_integer == -1
+
+
+def test_required_attribute_default_is_saved_when_upsert_omits_value():
+    engine = _build_test_engine()
+    service = ProductoAtributoValorService()
+
+    with Session(engine) as session:
+        product, attribute = _seed_producto_y_atributo(session, TipoDato.STRING)
+        category = Categoria(
+            nombre=f"Categoria-{uuid4().hex[:8]}",
+            es_padre=False,
+            usuario_auditoria="tester",
+            activo=True,
+        )
+        session.add(category)
+        session.flush()
+        session.add_all(
+            [
+                ProductoCategoria(producto_id=product.id, categoria_id=category.id),
+                CategoriaAtributo(
+                    categoria_id=category.id,
+                    atributo_id=attribute.id,
+                    obligatorio=True,
+                    valor_default="N/A",
+                    usuario_auditoria="tester",
+                    activo=True,
+                ),
+            ]
+        )
+        session.commit()
+
+        service.upsert_valores_producto_validando_aplicabilidad(session, product.id, [])
+
+        row = session.exec(
+            select(ProductoAtributoValor).where(
+                ProductoAtributoValor.producto_id == product.id,
+                ProductoAtributoValor.atributo_id == attribute.id,
+            )
+        ).one()
+        assert row.valor_string == "N/A"
+
+
+def test_required_attribute_without_default_rejects_missing_value():
+    engine = _build_test_engine()
+    service = ProductoAtributoValorService()
+
+    with Session(engine) as session:
+        product, attribute = _seed_producto_y_atributo(session, TipoDato.STRING)
+        category = Categoria(
+            nombre=f"Categoria-{uuid4().hex[:8]}",
+            es_padre=False,
+            usuario_auditoria="tester",
+            activo=True,
+        )
+        session.add(category)
+        session.flush()
+        session.add_all(
+            [
+                ProductoCategoria(producto_id=product.id, categoria_id=category.id),
+                CategoriaAtributo(
+                    categoria_id=category.id,
+                    atributo_id=attribute.id,
+                    obligatorio=True,
+                    valor_default=None,
+                    usuario_auditoria="tester",
+                    activo=True,
+                ),
+            ]
+        )
+        session.commit()
+
+        with pytest.raises(HTTPException, match="obligatorio y no tiene valor por defecto"):
+            service.upsert_valores_producto_validando_aplicabilidad(session, product.id, [])
+
+
 def test_endpoint_upsert_producto_atributos_e2e_ok():
     engine = _build_test_engine()
+    with Session(engine) as session:
+        admin_role = Rol(nombre="admin", usuario_auditoria="tester", activo=True)
+        session.add(admin_role)
+        session.commit()
+        admin_role_id = admin_role.id
 
     with Session(engine) as session:
         producto, atributo_integer = _seed_producto_y_atributo(session, TipoDato.INTEGER)
@@ -154,6 +331,7 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=admin_role_id)
     try:
         with TestClient(app) as client:
             response = client.put(
@@ -167,6 +345,7 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
             assert body[0]["valor_integer"] == 77
     finally:
         app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)
 
 
 def test_upsert_valores_producto_rechaza_atributo_no_aplicable():

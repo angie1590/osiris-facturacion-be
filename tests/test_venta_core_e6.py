@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from osiris.modules.common.audit_log.entity import AuditLog
+from osiris.core.audit_context import reset_current_company_id, set_current_company_id
 from osiris.modules.common.empresa.entity import Empresa, RegimenTributario
 from osiris.modules.sri.core_sri.models import (
     EstadoVenta,
@@ -109,8 +110,12 @@ def test_rimpe_np_fuerza_nota_venta():
             ],
         )
 
-        with pytest.raises(HTTPException) as exc:
-            service.registrar_venta(session, payload)
+        token = set_current_company_id(str(empresa.id))
+        try:
+            with pytest.raises(HTTPException) as exc:
+                service.registrar_venta(session, payload)
+        finally:
+            reset_current_company_id(token)
 
         assert exc.value.status_code == 400
         assert "0% de IVA" in exc.value.detail

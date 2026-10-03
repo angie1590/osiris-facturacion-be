@@ -26,6 +26,24 @@ Este documento cubre operaciones especializadas de inventario sobre producto:
 
 ## Atributos EAV de Producto
 
+Los tipos admitidos son `string`, `integer`, `decimal`, `boolean`, `date`, `select` y `catalog`. `select` guarda la opción configurada en `valor_string`; `catalog` referencia un catálogo común y solo admite valores activos. Los atributos numéricos pueden declarar `allow_negative`, `min_value` y `max_value`. Al omitir un valor requerido, el backend persiste el default tipado de la asignación de categoría.
+
+Los cambios de tipo convierten automáticamente los valores compatibles. Los no convertibles conservan el valor original y generan remapeos pendientes auditables:
+
+- `GET /api/v1/atributos/remapeos/pendientes`
+- `POST /api/v1/atributos/remapeos/resolver` con `assignments: [{"id": "<remapeo UUID>", "valor": "<valor válido>"}]`
+
+Catálogos configurables:
+
+- `GET /api/v1/catalogos`
+- `GET /api/v1/catalogos/{catalog_id}/valores?include_inactive=false`
+- `POST /api/v1/catalogos` crea un catálogo y `PATCH /api/v1/catalogos/{catalog_id}` cambia nombre/descripción.
+- `DELETE /api/v1/catalogos/{catalog_id}` da de baja el catálogo; se rechaza si algún atributo activo lo referencia.
+- `POST /api/v1/catalogos/{catalog_id}/valores` agrega/reactiva un valor y `PATCH /api/v1/catalogos/{catalog_id}/valores/{value_id}` lo renombra.
+- `POST /api/v1/catalogos/{catalog_id}/valores/{value_id}/deactivate` y `POST /api/v1/catalogos/{catalog_id}/valores/{value_id}/reactivate` controlan el estado del valor.
+
+Todas las escrituras de catálogo requieren rol `admin` o `supervisor`.
+
 ### PUT `/api/v1/productos/{producto_id}/atributos`
 
 Actualiza/crea en bloque valores EAV del producto (upsert).  
@@ -90,13 +108,29 @@ Valida aplicabilidad del atributo según categorías actuales del producto y tip
 - No asumir actualización parcial: el batch completo se valida como unidad.
 - Mostrar `detail` inline por atributo cuando sea posible.
 
+## Categorías temporales y recategorización
+
+La categoría B3 `Sin clasificar` es una hija temporal marcada con `is_default`; no admite asignación directa de productos y se desactiva al quedar vacía.
+
+- `GET /api/v1/categorias/sin-clasificar/conteo` devuelve `{ "count": N }` en el scope empresarial autenticado.
+- `GET /api/v1/categorias/sin-clasificar/productos` lista productos pendientes solo de la empresa activa.
+- `POST /api/v1/categorias/recategorizar` acepta `assignments: [{"producto_id": "UUID", "categoria_id": "UUID"}]`; el destino debe ser hoja activa en la misma rama y empresa.
+- `DELETE /api/v1/categorias/{id}?confirmar_baja_productos=true` solo permite cascada de productos sin stock y exige confirmación.
+- Al mover una categoría con colisión de atributos, el backend responde `CATEGORY_ATTRIBUTE_COLLISION_REQUIRES_CONFIRMATION`; repetir con `confirmar_limpieza_colision=true` limpia solo los valores heredados desplazados y audita el antes/después.
+
 ---
 
 ## Impuestos por Producto
 
+Las asignaciones pertenecen a un perfil `(empresa, producto)`. La empresa se obtiene de la sesión autenticada; un `empresa_id` del cliente no define el alcance. El perfil admite exactamente un IVA y un ICE opcional, ambos activos, vigentes, configurados en `Empresa.impuesto_catalogo_ids` y compatibles con `BIEN/SERVICIO`.
+
+`GET /api/v1/productos/impuestos-disponibles?tipo_producto=BIEN|SERVICIO` devuelve solo los impuestos seleccionables de la empresa activa. Para reemplazar el perfil, `PUT /api/v1/productos/{producto_id}` incluye `impuesto_catalogo_ids` con el conjunto completo; lista vacía, duplicados o IRBPNR se rechazan. Compras y ventas copian este perfil a snapshots; esos documentos históricos no se recalculan.
+
+Antes de aplicar la revisión Alembic `a73f2c9d1e60`, ejecutar `scripts/audit_product_tax_company_scope.py` y conciliar manualmente toda asignación **activa** marcada para revisión. La migración bloquea con IDs si encuentra asignaciones activas sin empresa o con impuesto no configurado; no reasigna perfiles ni agrega los impuestos legacy a la whitelist. En development, las 24 relaciones legacy fuera de whitelist pertenecían a productos de prueba y se inactivaron junto con los 19 productos; las filas se conservan como historial sin empresa. La migración añadió el IVA 0% canónico vigente requerido por 2.2 y la preflight ignora relaciones inactivas.
+
 ### GET `/api/v1/productos/{producto_id}/impuestos`
 
-Lista impuestos activos del catálogo SRI asignados al producto.
+Lista los impuestos activos asignados al producto dentro de la empresa autenticada. No utiliza un fallback global.
 
 ### POST `/api/v1/productos/{producto_id}/impuestos`
 
@@ -145,6 +179,13 @@ Errores relevantes:
 - `404`: asignación inexistente o inactiva.
 
 ---
+
+## Proveedores de Producto
+
+- `PUT /api/v1/productos/{producto_id}/proveedores-persona` reemplaza la lista de proveedores persona usando `{"proveedor_ids": ["UUID", ...]}`.
+- `PUT /api/v1/productos/{producto_id}/proveedores-sociedad` reemplaza la lista de proveedores sociedad con el mismo contrato.
+
+Ambas operaciones requieren un rol de producto (`admin`, `operator` o `supervisor`) y validan que cada proveedor exista y esté activo.
 
 ## Asignación Producto-Bodega
 

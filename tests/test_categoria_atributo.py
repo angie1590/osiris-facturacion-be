@@ -7,6 +7,8 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -309,3 +311,49 @@ def test_categoria_atributo_backfill_idempotente_respeta_valor_existente():
         rows_por_producto = {row.producto_id: row for row in rows}
         assert rows_por_producto[producto_1.id].valor_string == "Rojo"
         assert rows_por_producto[producto_2.id].valor_string == "Negro"
+
+
+def test_atributos_duplicados_se_rechazan_solo_dentro_de_la_rama():
+    engine = _build_test_engine()
+    service = CategoriaAtributoService()
+
+    with Session(engine) as session:
+        root_a = Categoria(nombre="Rama A", es_padre=True, activo=True, usuario_auditoria="test")
+        child_a = Categoria(nombre="Hija A", es_padre=False, activo=True, usuario_auditoria="test")
+        root_b = Categoria(nombre="Rama B", es_padre=True, activo=True, usuario_auditoria="test")
+        session.add_all([root_a, child_a, root_b])
+        session.flush()
+        child_a.parent_id = root_a.id
+        attribute_root = Atributo(nombre="Color", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
+        attribute_conflict = Atributo(nombre=" color ", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
+        attribute_other_branch = Atributo(nombre="Color", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
+        session.add_all([attribute_root, attribute_conflict, attribute_other_branch])
+        session.commit()
+
+        service.create(
+            session,
+            CategoriaAtributoCreate(categoria_id=root_a.id, atributo_id=attribute_root.id),
+            usuario_auditoria="test",
+        )
+
+        with pytest.raises(HTTPException, match="rama efectiva") as exc_info:
+            service.create(
+                session,
+                CategoriaAtributoCreate(categoria_id=child_a.id, atributo_id=attribute_conflict.id),
+                usuario_auditoria="test",
+            )
+        assert exc_info.value.status_code == 409
+
+        independent = service.create(
+            session,
+            CategoriaAtributoCreate(categoria_id=root_b.id, atributo_id=attribute_other_branch.id),
+            usuario_auditoria="test",
+        )
+        override = service.create(
+            session,
+            CategoriaAtributoCreate(categoria_id=child_a.id, atributo_id=attribute_root.id),
+            usuario_auditoria="test",
+        )
+
+        assert independent.atributo_id == attribute_other_branch.id
+        assert override.atributo_id == attribute_root.id

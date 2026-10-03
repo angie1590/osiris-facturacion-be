@@ -19,16 +19,16 @@ class BaseRepository:
     - Hooks para Strategy: apply_filters / apply_order
     """
 
-    model = None  # Sobrescribir en subclases
+    model: Any = None  # Sobrescribir en subclases
 
     # --------- Hooks (Strategy) ----------
     def apply_filters(
         self,
-        stmt: Select,
+        stmt: Select[Any],
         *,
         only_active: Optional[bool] = None,
         **filters: Any,
-    ) -> Select:
+    ) -> Select[Any]:
         """
         Punto de extensión para filtros.
         - Por defecto, si el modelo tiene 'activo' y llega only_active, filtra por ello.
@@ -42,7 +42,12 @@ class BaseRepository:
         #         stmt = stmt.where(getattr(self.model, field) == value)
         return stmt
 
-    def apply_order(self, stmt: Select, *, order_by: Optional[Iterable] = None) -> Select:
+    def apply_order(
+        self,
+        stmt: Select[Any],
+        *,
+        order_by: Optional[Iterable[Any]] = None,
+    ) -> Select[Any]:
         """
         Punto de extensión para ordenamiento.
         - order_by puede ser una lista de columnas del modelo, e.g. [self.model.id.desc()]
@@ -59,7 +64,7 @@ class BaseRepository:
         only_active: Optional[bool] = True,
         limit: int = 50,
         offset: int = 0,
-        order_by: Optional[Iterable] = None,
+        order_by: Optional[Iterable[Any]] = None,
         **filters: Any,
     ) -> Tuple[List[Any], int]:
         """
@@ -90,12 +95,12 @@ class BaseRepository:
         # ---- TOTAL (seguro) ----
         # Contamos sobre un subquery que ya incluye todos los filtros (y joins si los hubiere)
         count_stmt = select(func.count()).select_from(ordered_stmt.subquery())
-        total: int = session.exec(count_stmt).one()
+        total = int(session.execute(count_stmt).scalar_one())
 
         # ---- ITEMS (paginados) ----
-        items = session.exec(
-            ordered_stmt.offset(offset).limit(limit)
-        ).all()
+        items = list(
+            session.execute(ordered_stmt.offset(offset).limit(limit)).scalars().all()
+        )
 
         return items, total
 
@@ -174,7 +179,7 @@ class BaseRepository:
             self._raise_integrity(e)
         return obj
 
-    def update(self, session: Session, db_obj: Any, data: dict) -> Any:
+    def update(self, session: Session, db_obj: Any, data: dict[str, Any]) -> Any:
         """
         Actualiza un objeto existente.
         - `db_obj` debe ser una instancia ya cargada del modelo (ej: session.get()).

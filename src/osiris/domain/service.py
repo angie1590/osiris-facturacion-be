@@ -1,5 +1,5 @@
 # src/domain/service.py
-from typing import Any, Dict, Generic, Type, TypeVar, Union, Tuple
+from typing import Any, Dict, Generic, NoReturn, Type, TypeVar, Union, Tuple
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, SQLModel
 from fastapi import HTTPException
@@ -18,7 +18,7 @@ FkSpec = Union[
     Dict[str, Any],
 ]
 class BaseService(Generic[ModelT]):
-    repo = None  # cada subclase la setea
+    repo: Any = None  # cada subclase la setea
 
     fk_models: Dict[str, FkSpec] = {}
 
@@ -94,7 +94,7 @@ class BaseService(Generic[ModelT]):
         meta = build_pagination_meta(total=total, limit=limit, offset=offset)
         return items, meta
 
-    def _handle_transaction_error(self, session: Session, exc: Exception) -> None:
+    def _handle_transaction_error(self, session: Session, exc: Exception) -> NoReturn:
         session.rollback()
         if isinstance(exc, IntegrityError) and hasattr(self.repo, "_raise_integrity"):
             self.repo._raise_integrity(exc)

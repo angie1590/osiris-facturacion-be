@@ -3,12 +3,14 @@ from __future__ import annotations
 import pytest
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from osiris.core.db import get_session
+from osiris.core.auth import get_current_usuario
 from osiris.main import app
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.cliente.entity import Cliente
@@ -138,7 +140,12 @@ def test_engine():
         iva = session.exec(
             select(ImpuestoCatalogo).where(
                 ImpuestoCatalogo.tipo_impuesto == TipoImpuesto.IVA,
-                ImpuestoCatalogo.codigo_sri == "2",
+                ImpuestoCatalogo.codigo_sri == "0",
+                ImpuestoCatalogo.descripcion == "IVA 0%",
+                ImpuestoCatalogo.porcentaje_iva == Decimal("0.00"),
+                ImpuestoCatalogo.clasificacion_iva.is_(None),
+                ImpuestoCatalogo.aplica_a == AplicaA.AMBOS,
+                ImpuestoCatalogo.vigente_desde <= date.today(),
                 ImpuestoCatalogo.activo.is_(True),
             )
         ).first()
@@ -147,11 +154,32 @@ def test_engine():
                 ImpuestoCatalogo(
                     tipo_impuesto=TipoImpuesto.IVA,
                     codigo_tipo_impuesto="2",
-                    codigo_sri="2",
+                    codigo_sri="0",
                     descripcion="IVA 0%",
                     vigente_desde=date.today(),
                     aplica_a=AplicaA.AMBOS,
                     porcentaje_iva=Decimal("0.00"),
+                    usuario_auditoria="smoke",
+                    activo=True,
+                )
+            )
+        iva_12 = session.exec(
+            select(ImpuestoCatalogo).where(
+                ImpuestoCatalogo.tipo_impuesto == TipoImpuesto.IVA,
+                ImpuestoCatalogo.codigo_sri == "2",
+                ImpuestoCatalogo.activo.is_(True),
+            )
+        ).first()
+        if iva_12 is None:
+            session.add(
+                ImpuestoCatalogo(
+                    tipo_impuesto=TipoImpuesto.IVA,
+                    codigo_tipo_impuesto="2",
+                    codigo_sri="2",
+                    descripcion="IVA 12% smoke",
+                    vigente_desde=date.today(),
+                    aplica_a=AplicaA.AMBOS,
+                    porcentaje_iva=Decimal("12.00"),
                     usuario_auditoria="smoke",
                     activo=True,
                 )
@@ -167,10 +195,20 @@ def client(test_engine):
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    with Session(test_engine) as session:
+        admin_role = session.exec(select(Rol).where(Rol.nombre == "admin")).first()
+        if admin_role is None:
+            admin_role = Rol(nombre="admin", descripcion="Smoke administrator", usuario_auditoria="smoke", activo=True)
+            session.add(admin_role)
+            session.commit()
+            session.refresh(admin_role)
+        role_id = admin_role.id
+    app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
     app.state.security_audit_engine = test_engine
     with TestClient(app, base_url="http://localhost:8000") as test_client:
         yield test_client
     app.dependency_overrides.pop(get_session, None)
+    app.dependency_overrides.pop(get_current_usuario, None)
 
 
 @pytest.fixture

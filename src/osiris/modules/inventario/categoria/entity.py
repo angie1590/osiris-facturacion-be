@@ -12,6 +12,7 @@ class Categoria(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     nombre: str = Field(nullable=False, index=True)
 
     es_padre: bool = Field(default=False, nullable=False, index=True)
+    is_default: bool = Field(default=False, nullable=False, index=True)
 
     parent_id: Optional[UUID] = Field(
         foreign_key="tbl_categoria.id",

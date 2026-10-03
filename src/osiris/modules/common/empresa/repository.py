@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from enum import Enum
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import BaseModel
+from sqlmodel import Session
 
 from osiris.domain.repository import BaseRepository
 from osiris.modules.common.audit_log.entity import AuditLog
@@ -13,12 +15,12 @@ from .entity import Empresa
 
 
 class EmpresaRepository(BaseRepository):
-    model = Empresa
+    model: type[Empresa] = Empresa
 
     @staticmethod
-    def _snapshot(model_obj: Empresa) -> dict:
+    def _snapshot(model_obj: Empresa) -> dict[str, Any]:
         fields = model_obj.__class__.model_fields.keys()
-        snapshot = {}
+        snapshot: dict[str, Any] = {}
         for field in fields:
             value = getattr(model_obj, field)
             if isinstance(value, Enum):
@@ -27,9 +29,14 @@ class EmpresaRepository(BaseRepository):
                 snapshot[field] = str(value)
             else:
                 snapshot[field] = value
-        return json.loads(json.dumps(snapshot, default=str))
+        return cast(dict[str, Any], json.loads(json.dumps(snapshot, default=str)))
 
-    def update(self, session, db_obj, data):
+    def update(
+        self,
+        session: Session,
+        db_obj: Empresa,
+        data: dict[str, Any] | BaseModel,
+    ) -> Empresa:
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude_unset=True)
         elif not isinstance(data, dict):

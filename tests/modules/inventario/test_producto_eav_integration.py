@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -10,19 +11,28 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from osiris.core.db import get_session
+from osiris.core.auth import get_current_usuario
 from osiris.main import app
 from osiris.modules.common.audit_log.entity import AuditLog
+from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.rol.entity import Rol
+from osiris.modules.common.sucursal.entity import Sucursal
+from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import (
     Producto,
+    ProductoBodega,
     ProductoCategoria,
+    ProductoImpuesto,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
     TipoProducto,
 )
+from osiris.modules.inventario.bodega.entity import Bodega
+from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 
 
@@ -52,11 +62,19 @@ def _build_test_engine():
         engine,
         tables=[
             AuditLog.__table__,
+            TipoContribuyente.__table__,
+            Rol.__table__,
+            Empresa.__table__,
+            Sucursal.__table__,
+            Bodega.__table__,
             CasaComercial.__table__,
             Categoria.__table__,
             Atributo.__table__,
             CategoriaAtributo.__table__,
             Producto.__table__,
+            ProductoBodega.__table__,
+            ImpuestoCatalogo.__table__,
+            ProductoImpuesto.__table__,
             ProductoCategoria.__table__,
             ProductoProveedorPersona.__table__,
             ProductoProveedorSociedad.__table__,
@@ -168,12 +186,35 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
     engine = _build_test_engine()
     with Session(engine) as session:
         producto_id, garantia_id, color_id, pulgadas_id = _seed_flujo_exito(session)
+        session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
+        company = Empresa(
+            razon_social="Empresa Test",
+            ruc="1790012345001",
+            direccion_matriz="Direccion",
+            tipo_contribuyente_id="01",
+            usuario_auditoria="test",
+            activo=True,
+        )
+        role = Rol(nombre="admin", usuario_auditoria="test", activo=True)
+        session.add_all([company, role])
+        session.flush()
+        branch = Sucursal(codigo="001", nombre="Matriz", direccion="Direccion", es_matriz=True, empresa_id=company.id, usuario_auditoria="test", activo=True)
+        session.add(branch)
+        session.flush()
+        warehouse = Bodega(codigo_bodega="B1", nombre_bodega="Bodega", empresa_id=company.id, sucursal_id=branch.id, usuario_auditoria="test", activo=True)
+        session.add(warehouse)
+        session.flush()
+        session.add(ProductoBodega(producto_id=producto_id, bodega_id=warehouse.id, cantidad=Decimal("0"), usuario_auditoria="test", activo=True))
+        session.commit()
+        company_id = str(company.id)
+        role_id = role.id
 
     def override_get_session():
         with Session(engine) as session:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
     try:
         with TestClient(app) as client:
             put_resp = client.put(
@@ -183,12 +224,13 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
                     {"atributo_id": str(color_id), "valor": "Negro"},
                     {"atributo_id": str(pulgadas_id), "valor": "55"},
                 ],
+                headers={"X-Empresa-Id": company_id},
             )
             assert put_resp.status_code == 200
             saved = put_resp.json()
             assert len(saved) == 3
 
-            get_resp = client.get(f"/api/v1/productos/{producto_id}")
+            get_resp = client.get(f"/api/v1/productos/{producto_id}", headers={"X-Empresa-Id": company_id})
             assert get_resp.status_code == 200
             body = get_resp.json()
             atributos = body.get("atributos", [])
@@ -210,23 +252,48 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
             assert sum(1 for item in atributos if item["atributo"]["id"] == str(garantia_id)) == 1
     finally:
         app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)
 
 
 def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
     engine = _build_test_engine()
     with Session(engine) as session:
         producto_id, cilindrada_id, cilindrada_nombre = _seed_flujo_rechazo(session)
+        session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
+        company = Empresa(
+            razon_social="Empresa Test",
+            ruc="1790012345001",
+            direccion_matriz="Direccion",
+            tipo_contribuyente_id="01",
+            usuario_auditoria="test",
+            activo=True,
+        )
+        role = Rol(nombre="admin", usuario_auditoria="test", activo=True)
+        session.add_all([company, role])
+        session.flush()
+        branch = Sucursal(codigo="001", nombre="Matriz", direccion="Direccion", es_matriz=True, empresa_id=company.id, usuario_auditoria="test", activo=True)
+        session.add(branch)
+        session.flush()
+        warehouse = Bodega(codigo_bodega="B1", nombre_bodega="Bodega", empresa_id=company.id, sucursal_id=branch.id, usuario_auditoria="test", activo=True)
+        session.add(warehouse)
+        session.flush()
+        session.add(ProductoBodega(producto_id=producto_id, bodega_id=warehouse.id, cantidad=Decimal("0"), usuario_auditoria="test", activo=True))
+        session.commit()
+        company_id = str(company.id)
+        role_id = role.id
 
     def override_get_session():
         with Session(engine) as session:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
     try:
         with TestClient(app) as client:
             resp = client.put(
                 f"/api/v1/productos/{producto_id}/atributos",
                 json=[{"atributo_id": str(cilindrada_id), "valor": "150"}],
+                headers={"X-Empresa-Id": company_id},
             )
             assert resp.status_code == 400
             detail = resp.json().get("detail", "")
@@ -235,3 +302,4 @@ def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
             assert "no aplica a las categorias actuales del producto" in detail
     finally:
         app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)

@@ -19,8 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('tbl_empleado', sa.Column('foto', sa.String(), nullable=True))
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("tbl_empleado")}
+    if "foto" not in columns:
+        op.add_column('tbl_empleado', sa.Column('foto', sa.String(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column('tbl_empleado', 'foto')
+    pass

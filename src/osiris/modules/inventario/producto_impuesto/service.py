@@ -4,17 +4,19 @@ from typing import List
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
-from sqlmodel import Session
+from sqlmodel import Session, col, select
 from fastapi import HTTPException
+from osiris.core.audit import record_domain_change
 
 from osiris.domain.service import BaseService
 from osiris.modules.inventario.producto_impuesto.repository import ProductoImpuestoRepository
 from osiris.modules.inventario.producto.entity import ProductoImpuesto, Producto, TipoProducto
-from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo, AplicaA
+from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo, AplicaA, TipoImpuesto
 from osiris.modules.sri.impuesto_catalogo.repository import ImpuestoCatalogoRepository
+from osiris.modules.inventario.producto_impuesto.scope import resolve_product_tax_company
 
 
-class ProductoImpuestoService(BaseService):
+class ProductoImpuestoService(BaseService[ProductoImpuesto]):
     repo = ProductoImpuestoRepository()
     impuesto_repo = ImpuestoCatalogoRepository()
 
@@ -25,6 +27,54 @@ class ProductoImpuestoService(BaseService):
         if impuesto.tipo_impuesto.value == "ICE":
             return Decimal(str(impuesto.tarifa_ad_valorem or 0))
         return Decimal("0")
+
+    def listar_impuestos_permitidos(
+        self,
+        session: Session,
+        tipo_producto: TipoProducto,
+    ) -> List[ImpuestoCatalogo]:
+        empresa = resolve_product_tax_company(session)
+        try:
+            impuesto_ids = [UUID(str(item)) for item in (empresa.impuesto_catalogo_ids or [])]
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=409,
+                detail="La configuración tributaria empresarial es inválida.",
+            ) from None
+        if not impuesto_ids:
+            return []
+
+        impuestos = session.exec(
+            select(ImpuestoCatalogo).where(
+                col(ImpuestoCatalogo.id).in_(impuesto_ids),
+                col(ImpuestoCatalogo.tipo_impuesto).in_([TipoImpuesto.IVA, TipoImpuesto.ICE]),
+                col(ImpuestoCatalogo.activo).is_(True),
+                col(ImpuestoCatalogo.vigente_desde) <= date.today(),
+                col(ImpuestoCatalogo.vigente_hasta).is_(None)
+                | (col(ImpuestoCatalogo.vigente_hasta) >= date.today()),
+            )
+        ).all()
+        allowed_ids = set(impuesto_ids)
+        compatibles = [
+            impuesto
+            for impuesto in impuestos
+            if impuesto.id in allowed_ids
+            and impuesto.tipo_impuesto in {TipoImpuesto.IVA, TipoImpuesto.ICE}
+            and self.impuesto_repo.es_vigente(impuesto)
+            and impuesto.aplica_a in {AplicaA.AMBOS, AplicaA(tipo_producto.value)}
+        ]
+        compatibles.sort(
+            key=lambda impuesto: (
+                0
+                if impuesto.tipo_impuesto == TipoImpuesto.IVA
+                and impuesto.porcentaje_iva == 0
+                and impuesto.clasificacion_iva is None
+                and impuesto.aplica_a == AplicaA.AMBOS
+                else 1,
+                impuesto.descripcion.lower(),
+            )
+        )
+        return compatibles
 
     def asignar_impuesto(
         self,
@@ -47,6 +97,18 @@ class ProductoImpuestoService(BaseService):
             if not impuesto or not impuesto.activo:
                 raise HTTPException(status_code=404, detail="Impuesto no encontrado o inactivo")
 
+            empresa = resolve_product_tax_company(session, producto_id)
+            if str(impuesto.id) not in {str(item) for item in (empresa.impuesto_catalogo_ids or [])}:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El impuesto no está configurado para la empresa seleccionada.",
+                )
+            if impuesto.tipo_impuesto not in {TipoImpuesto.IVA, TipoImpuesto.ICE}:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Solo se permiten impuestos IVA e ICE en productos.",
+                )
+
             # 3. Validar que el impuesto está vigente
             if not self.impuesto_repo.es_vigente(impuesto, date.today()):
                 raise HTTPException(
@@ -58,11 +120,11 @@ class ProductoImpuestoService(BaseService):
             self._validar_compatibilidad_tipo(producto.tipo, impuesto.aplica_a)
 
             # 5. Validar que no se duplique la asignación exacta (mismo impuesto)
-            self.repo.validar_duplicado(session, producto_id, impuesto_catalogo_id)
+            self.repo.validar_duplicado(session, producto_id, impuesto_catalogo_id, empresa.id)
 
             # 6. Si ya existe un impuesto del mismo tipo, eliminarlo primero (actualización)
             # Esto permite cambiar IVA 0% -> IVA 15%, o actualizar ICE, etc.
-            impuestos_existentes = self.list_by_producto(session, producto_id)
+            impuestos_existentes = self.list_by_producto(session, producto_id, empresa.id)
             for pi in impuestos_existentes:
                 imp_existente = session.get(ImpuestoCatalogo, pi.impuesto_catalogo_id)
                 if imp_existente and imp_existente.tipo_impuesto == impuesto.tipo_impuesto:
@@ -73,6 +135,7 @@ class ProductoImpuestoService(BaseService):
             # 7. Crear la nueva asignación
             producto_impuesto = ProductoImpuesto(
                 producto_id=producto_id,
+                empresa_id=empresa.id,
                 impuesto_catalogo_id=impuesto_catalogo_id,
                 codigo_impuesto_sri=impuesto.codigo_tipo_impuesto,
                 codigo_porcentaje_sri=impuesto.codigo_sri,
@@ -80,7 +143,27 @@ class ProductoImpuestoService(BaseService):
                 usuario_auditoria=usuario_auditoria
             )
 
-            creado = self.repo.create(session, producto_impuesto)
+            creado: ProductoImpuesto = self.repo.create(session, producto_impuesto)
+            if isinstance(session, Session):
+                remaining_tax_ids = []
+                for row in impuestos_existentes:
+                    existing_tax = session.get(ImpuestoCatalogo, row.impuesto_catalogo_id)
+                    if existing_tax is not None and existing_tax.tipo_impuesto != impuesto.tipo_impuesto:
+                        remaining_tax_ids.append(str(row.impuesto_catalogo_id))
+                record_domain_change(
+                    session,
+                    entity="tbl_producto_impuesto",
+                    entity_id=producto_id,
+                    action="ASSIGN_PRODUCT_TAX",
+                    before={
+                        "empresa_id": str(empresa.id),
+                        "impuesto_catalogo_ids": [str(row.impuesto_catalogo_id) for row in impuestos_existentes],
+                    },
+                    after={
+                        "empresa_id": str(empresa.id),
+                        "impuesto_catalogo_ids": remaining_tax_ids + [str(impuesto_catalogo_id)],
+                    },
+                )
             session.commit()
             session.refresh(creado)
             return creado
@@ -106,9 +189,16 @@ class ProductoImpuestoService(BaseService):
                 detail="Este impuesto no aplica para productos de tipo SERVICIO"
             )
 
-    def list_by_producto(self, session: Session, producto_id: UUID) -> List[ProductoImpuesto]:
+    def list_by_producto(
+        self,
+        session: Session,
+        producto_id: UUID,
+        empresa_id: UUID | None = None,
+    ) -> List[ProductoImpuesto]:
         """Lista todos los impuestos activos de un producto."""
-        return self.repo.list_by_producto(session, producto_id)
+        if empresa_id is None:
+            empresa_id = resolve_product_tax_company(session, producto_id).id
+        return self.repo.list_by_producto(session, producto_id, empresa_id)
 
     def eliminar_impuesto(self, session: Session, producto_impuesto_id: UUID) -> bool:
         """
@@ -123,6 +213,10 @@ class ProductoImpuestoService(BaseService):
         if not producto_impuesto or not producto_impuesto.activo:
             raise HTTPException(status_code=404, detail="Asignación de impuesto no encontrada")
 
+        empresa = resolve_product_tax_company(session, producto_impuesto.producto_id)
+        if producto_impuesto.empresa_id != empresa.id:
+            raise HTTPException(status_code=404, detail="Asignación de impuesto no encontrada")
+
         # Obtener el impuesto para verificar si es IVA
         impuesto = session.get(ImpuestoCatalogo, producto_impuesto.impuesto_catalogo_id)
 
@@ -134,7 +228,21 @@ class ProductoImpuestoService(BaseService):
             )
 
         try:
+            before = {
+                "empresa_id": str(empresa.id),
+                "producto_id": str(producto_impuesto.producto_id),
+                "impuesto_catalogo_id": str(producto_impuesto.impuesto_catalogo_id),
+            }
             deleted = self.repo.delete_by_id(session, producto_impuesto_id)
+            if deleted and isinstance(session, Session):
+                record_domain_change(
+                    session,
+                    entity="tbl_producto_impuesto",
+                    entity_id=producto_impuesto.producto_id,
+                    action="DELETE_PRODUCT_TAX",
+                    before=before,
+                    after={"empresa_id": str(empresa.id), "activo": False},
+                )
             session.commit()
             return deleted
         except Exception as exc:
@@ -145,7 +253,8 @@ class ProductoImpuestoService(BaseService):
         Obtiene la lista completa de impuestos (con toda su información del catálogo)
         asignados a un producto.
         """
-        producto_impuestos = self.list_by_producto(session, producto_id)
+        empresa = resolve_product_tax_company(session, producto_id)
+        producto_impuestos = self.list_by_producto(session, producto_id, empresa.id)
 
         impuestos = []
         for pi in producto_impuestos:

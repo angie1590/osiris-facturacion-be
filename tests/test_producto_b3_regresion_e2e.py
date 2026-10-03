@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -10,17 +11,26 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.core.db import get_session
+from osiris.core.auth import get_current_usuario
 from osiris.main import app
 from osiris.modules.common.audit_log.entity import AuditLog
+from osiris.modules.common.empresa.entity import Empresa
+from osiris.modules.common.rol.entity import Rol
+from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
+from osiris.modules.inventario.atributo.entity import Atributo
 from osiris.modules.inventario.categoria.entity import Categoria
+from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.producto.entity import (
     Producto,
+    ProductoBodega,
     ProductoCategoria,
     ProductoImpuesto,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
 )
+from osiris.modules.inventario.bodega.entity import Bodega
+from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.sri.impuesto_catalogo.entity import AplicaA, ImpuestoCatalogo, TipoImpuesto
 
 
@@ -50,12 +60,20 @@ def _build_test_engine():
         engine,
         tables=[
             AuditLog.__table__,
+            TipoContribuyente.__table__,
+            Empresa.__table__,
+            Rol.__table__,
+            Bodega.__table__,
             CasaComercial.__table__,
+            Atributo.__table__,
             Categoria.__table__,
+            CategoriaAtributo.__table__,
             ImpuestoCatalogo.__table__,
             Producto.__table__,
             ProductoCategoria.__table__,
+            ProductoBodega.__table__,
             ProductoImpuesto.__table__,
+            ProductoAtributoValor.__table__,
             ProductoProveedorPersona.__table__,
             ProductoProveedorSociedad.__table__,
         ],
@@ -81,18 +99,37 @@ def _seed_iva(session: Session) -> str:
     return str(iva.id)
 
 
+def _seed_company_and_admin(session: Session, iva_id: str):
+    session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
+    company = Empresa(
+        razon_social="Empresa B3",
+        ruc="1790012345001",
+        direccion_matriz="Direccion",
+        tipo_contribuyente_id="01",
+        impuesto_catalogo_ids=[iva_id],
+        usuario_auditoria="test",
+        activo=True,
+    )
+    role = Rol(nombre="admin", usuario_auditoria="test", activo=True)
+    session.add_all([company, role])
+    session.commit()
+    return str(company.id), role.id
+
+
 def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
     engine = _build_test_engine()
     with Session(engine) as session:
         iva_id = _seed_iva(session)
+        company_id, role_id = _seed_company_and_admin(session, iva_id)
 
     def override_get_session():
         with Session(engine) as session:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
     try:
-        with TestClient(app) as client:
+        with TestClient(app, headers={"X-Empresa-Id": company_id}) as client:
             r = client.post(
                 "/api/v1/categorias",
                 json={"nombre": f"A-{uuid4().hex[:6]}", "es_padre": True, "usuario_auditoria": "test"},
@@ -126,20 +163,23 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
             assert "Solo se permiten categorías hoja" in r.text
     finally:
         app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)
 
 
 def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
     engine = _build_test_engine()
     with Session(engine) as session:
         iva_id = _seed_iva(session)
+        company_id, role_id = _seed_company_and_admin(session, iva_id)
 
     def override_get_session():
         with Session(engine) as session:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
     try:
-        with TestClient(app) as client:
+        with TestClient(app, headers={"X-Empresa-Id": company_id}) as client:
             r = client.post(
                 "/api/v1/categorias",
                 json={"nombre": f"X-{uuid4().hex[:6]}", "es_padre": False, "usuario_auditoria": "test"},
@@ -177,9 +217,10 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
                 general = session.exec(
                     select(Categoria)
                     .where(Categoria.parent_id == categoria_x_uuid)
-                    .where(sa.func.lower(Categoria.nombre) == "general")
+                    .where(Categoria.is_default.is_(True))
                 ).first()
             assert general is not None
+            assert general.nombre == "Sin clasificar"
             general_id = str(general.id)
 
             r = client.get(f"/api/v1/productos/{producto_id}")
@@ -198,3 +239,4 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
             assert r.status_code == 200, r.text
     finally:
         app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)

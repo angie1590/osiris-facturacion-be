@@ -7,13 +7,17 @@ import pytest
 
 from osiris.modules.inventario.producto.service import ProductoService
 from osiris.modules.inventario.producto.entity import Producto
+from osiris.modules.inventario.categoria.entity import Categoria
 
 
 def _mock_exec_with_child_exists(exists: bool):
-    # session.exec(select(...)).first() -> obj or None
     exec_mock = MagicMock()
     exec_mock.first.return_value = object() if exists else None
     return exec_mock
+
+
+def _active_leaf_category():
+    return Categoria(nombre="Leaf", es_padre=False, activo=True, is_default=False)
 
 
 def test_producto_service_create_falla_si_categoria_no_es_hoja():
@@ -22,7 +26,9 @@ def test_producto_service_create_falla_si_categoria_no_es_hoja():
     service.repo = MagicMock()
 
     # Simular que la categoría tiene hijos -> no es hoja
-    session.exec.return_value = _mock_exec_with_child_exists(True)
+    category_query = MagicMock()
+    category_query.first.return_value = _active_leaf_category()
+    session.exec.side_effect = [category_query, _mock_exec_with_child_exists(True)]
 
     data = {
         "nombre": f"Prod-{uuid4().hex[:8]}",
@@ -35,6 +41,24 @@ def test_producto_service_create_falla_si_categoria_no_es_hoja():
     service.repo.create.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("categoria", "expected_message"),
+    [
+        (Categoria(nombre="Temporal", es_padre=False, is_default=True, activo=True), "categoría temporal"),
+        (Categoria(nombre="Inactiva", es_padre=False, is_default=False, activo=False), "inactiva"),
+    ],
+)
+def test_producto_service_rechaza_categoria_temporal_o_inactiva(categoria, expected_message):
+    service = ProductoService()
+    session = MagicMock()
+    query = MagicMock()
+    query.first.return_value = categoria
+    session.exec.return_value = query
+
+    with pytest.raises(Exception, match=expected_message):
+        service._validate_leaf_categories(session, [uuid4()])
+
+
 def test_producto_service_create_ok_y_asocia_multiples():
     session = MagicMock()
     service = ProductoService()
@@ -42,7 +66,12 @@ def test_producto_service_create_ok_y_asocia_multiples():
     service.repo = repo
 
     # Categorías hojas (sin hijos)
-    session.exec.return_value = _mock_exec_with_child_exists(False)
+    category_queries = []
+    for _ in range(2):
+        category_query = MagicMock()
+        category_query.first.return_value = _active_leaf_category()
+        category_queries.extend([category_query, _mock_exec_with_child_exists(False)])
+    session.exec.side_effect = category_queries
 
     created_obj = Producto(nombre="X", usuario_auditoria="tester")
     created_obj.id = uuid4()
@@ -75,13 +104,20 @@ def test_producto_service_update_valida_hoja():
     repo.get.return_value = db_obj
 
     # Caso inválido: categoría no hoja
-    session.exec.return_value = _mock_exec_with_child_exists(True)
+    category_query = MagicMock()
+    category_query.first.return_value = _active_leaf_category()
+    session.exec.side_effect = [category_query, _mock_exec_with_child_exists(True)]
 
     with pytest.raises(Exception):
         service.update(session, db_obj.id, {"categoria_ids": [uuid4()]})
 
     # Caso válido: hoja
-    session.exec.return_value = _mock_exec_with_child_exists(False)
+    category_query = MagicMock()
+    category_query.first.return_value = _active_leaf_category()
+    empty_children = _mock_exec_with_child_exists(False)
+    previous_categories = MagicMock()
+    previous_categories.all.return_value = []
+    session.exec.side_effect = [category_query, empty_children, previous_categories]
     service.update(session, db_obj.id, {"categoria_ids": [uuid4()]})
     repo.set_categorias.assert_called()
 

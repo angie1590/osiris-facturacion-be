@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 import pytest
 from cryptography import x509
@@ -166,4 +167,103 @@ def test_impuestos_empresariales_requieren_catalogo_activo():
             EmpresaService._validate_company_taxes(
                 session,
                 {"impuesto_catalogo_ids": [inactive_tax.id]},
+            )
+
+
+def _iva_cero(*, vigente_desde: date = date(2023, 2, 1)) -> ImpuestoCatalogo:
+    return ImpuestoCatalogo(
+        tipo_impuesto=TipoImpuesto.IVA,
+        codigo_tipo_impuesto="2",
+        codigo_sri="0",
+        descripcion="IVA 0%",
+        vigente_desde=vigente_desde,
+        aplica_a=AplicaA.AMBOS,
+        porcentaje_iva=Decimal("0.00"),
+        clasificacion_iva=None,
+        usuario_auditoria="tester",
+        activo=True,
+    )
+
+
+def test_empresa_usa_iva_cero_si_create_omite_impuestos():
+    engine = _engine()
+
+    with Session(engine) as session:
+        iva_cero = _iva_cero()
+        session.add(iva_cero)
+        session.commit()
+
+        payload = {
+            "tipo_contribuyente_juridico": "SOCIEDAD",
+            "tipo_contribuyente_id": "01",
+            "usuario_auditoria": "tester",
+        }
+        EmpresaService().validate_create(payload, session)
+
+        assert payload["impuesto_catalogo_ids"] == [str(iva_cero.id)]
+
+
+def test_empresa_con_ice_y_sin_iva_agrega_iva_cero():
+    engine = _engine()
+
+    with Session(engine) as session:
+        iva_cero = _iva_cero()
+        ice = ImpuestoCatalogo(
+            tipo_impuesto=TipoImpuesto.ICE,
+            codigo_tipo_impuesto="3",
+            codigo_sri="3011",
+            descripcion="ICE de prueba",
+            vigente_desde=date(2023, 2, 1),
+            aplica_a=AplicaA.BIEN,
+            tarifa_especifica=Decimal("0.16"),
+            usuario_auditoria="tester",
+            activo=True,
+        )
+        session.add(iva_cero)
+        session.add(ice)
+        session.commit()
+
+        payload = {"impuesto_catalogo_ids": [ice.id]}
+        EmpresaService._validate_company_taxes(session, payload)
+
+        assert payload["impuesto_catalogo_ids"] == [str(ice.id), str(iva_cero.id)]
+
+
+def test_empresa_preserva_iva_elegido_sin_agregar_iva_cero():
+    engine = _engine()
+
+    with Session(engine) as session:
+        iva_cero = _iva_cero()
+        iva_quince = ImpuestoCatalogo(
+            tipo_impuesto=TipoImpuesto.IVA,
+            codigo_tipo_impuesto="2",
+            codigo_sri="4",
+            descripcion="IVA 15%",
+            vigente_desde=date(2024, 4, 1),
+            aplica_a=AplicaA.AMBOS,
+            porcentaje_iva=Decimal("15.00"),
+            usuario_auditoria="tester",
+            activo=True,
+        )
+        session.add(iva_cero)
+        session.add(iva_quince)
+        session.commit()
+
+        payload = {"impuesto_catalogo_ids": [iva_quince.id]}
+        EmpresaService._validate_company_taxes(session, payload)
+
+        assert payload["impuesto_catalogo_ids"] == [str(iva_quince.id)]
+
+
+def test_empresa_rechaza_catalogo_sin_iva_cero_vigente():
+    engine = _engine()
+
+    with Session(engine) as session:
+        session.add(_iva_cero(vigente_desde=date(2030, 1, 1)))
+        session.commit()
+
+        with pytest.raises(HTTPException, match="IVA 0%"):
+            EmpresaService._validate_company_taxes(
+                session,
+                {"impuesto_catalogo_ids": []},
             )

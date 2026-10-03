@@ -43,6 +43,18 @@ Este documento audita la cobertura de `docs/docs/api` contra los endpoints reale
 - `POST /api/v1/usuarios/{usuario_id}/reset-password`
 - `POST /api/v1/usuarios/{usuario_id}/verify-password`
 - `GET /api/v1/audit-logs`
+- `POST /api/v1/empresas/importar-certificado-ruc`
+- `POST /api/v1/empresas/{empresa_id}/firma-electronica`
+- `DELETE /api/v1/empresas/{empresa_id}/firma-electronica`
+- `GET /api/v1/catalogos`
+- `POST /api/v1/catalogos`
+- `PATCH /api/v1/catalogos/{catalog_id}`
+- `DELETE /api/v1/catalogos/{catalog_id}`
+- `GET /api/v1/catalogos/{catalog_id}/valores`
+- `POST /api/v1/catalogos/{catalog_id}/valores`
+- `PATCH /api/v1/catalogos/{catalog_id}/valores/{value_id}`
+- `POST /api/v1/catalogos/{catalog_id}/valores/{value_id}/deactivate`
+- `POST /api/v1/catalogos/{catalog_id}/valores/{value_id}/reactivate`
 
 ### Inventario
 
@@ -61,6 +73,7 @@ Este documento audita la cobertura de `docs/docs/api` contra los endpoints reale
   - `GET /api/v1/cxp/{compra_id}`
   - `POST /api/v1/cxp/{compra_id}/pagos`
   - `POST /api/v1/compras/{compra_id}/retenciones`
+  - `GET /api/v1/retenciones`
   - `POST /api/v1/retenciones/{retencion_id}/emitir`
   - `GET /api/v1/retenciones/{retencion_id}/fe-payload`
 - Ventas:
@@ -69,6 +82,7 @@ Este documento audita la cobertura de `docs/docs/api` contra los endpoints reale
   - `GET /api/v1/cxc`
   - `POST /api/v1/cxc/{venta_id}/pagos`
 - SRI FE:
+  - `GET /api/v1/tipos-contribuyente`
   - `GET /api/v1/fe/cola`
   - `POST /api/v1/fe/procesar/{documento_id}`
   - `POST /api/v1/fe/procesar-manual`

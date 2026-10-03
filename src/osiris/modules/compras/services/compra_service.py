@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
 from fastapi import HTTPException
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
-
-from decimal import Decimal
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.sri.core_sri.services.template_method import TemplateMethodService
@@ -26,14 +28,18 @@ from osiris.modules.sri.core_sri.all_schemas import (
     VentaCompraDetalleCreate,
     q2,
 )
-from osiris.utils.pagination import build_pagination_meta
+from osiris.modules.sri.core_sri.types import TipoImpuestoMVP
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.movimientos.models import (
     EstadoMovimientoInventario,
     MovimientoInventario,
     TipoMovimientoInventario,
 )
-from osiris.modules.inventario.movimientos.schemas import MovimientoInventarioCreate
+from osiris.modules.inventario.movimientos.schemas import (
+    MovimientoInventarioCreate,
+    MovimientoInventarioDetalleCreate,
+)
 from osiris.modules.inventario.movimientos.services.movimiento_inventario_service import MovimientoInventarioService
 from osiris.modules.inventario.producto.entity import Producto, ProductoImpuesto
 from osiris.modules.common.sucursal.entity import Sucursal
@@ -49,10 +55,15 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         return isinstance(session, Session)
 
     @staticmethod
-    def _snapshot_impuestos_producto(session: Session, producto_id) -> list[ImpuestoAplicadoInput]:
+    def _snapshot_impuestos_producto(
+        session: Session,
+        producto_id: UUID,
+        empresa_id: UUID,
+    ) -> list[ImpuestoAplicadoInput]:
         stmt = select(ProductoImpuesto).where(
-            ProductoImpuesto.producto_id == producto_id,
-            ProductoImpuesto.activo.is_(True),
+            col(ProductoImpuesto.producto_id) == producto_id,
+            col(ProductoImpuesto.empresa_id) == empresa_id,
+            col(ProductoImpuesto.activo).is_(True),
         )
         impuestos = list(session.exec(stmt).all())
         if not impuestos:
@@ -64,9 +75,9 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         snapshots: list[ImpuestoAplicadoInput] = []
         for impuesto in impuestos:
             if impuesto.codigo_impuesto_sri == "2":
-                tipo = "IVA"
+                tipo = TipoImpuestoMVP.IVA
             elif impuesto.codigo_impuesto_sri == "3":
-                tipo = "ICE"
+                tipo = TipoImpuestoMVP.ICE
             else:
                 raise HTTPException(
                     status_code=400,
@@ -87,6 +98,15 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         return snapshots
 
     def hidratar_compra_desde_productos(self, session: Session, payload: CompraRegistroCreate) -> CompraCreate:
+        bodega_id = self._resolver_bodega_para_compra(session, payload)
+        bodega = session.get(Bodega, bodega_id)
+        if not bodega or not bodega.activo:
+            raise HTTPException(status_code=404, detail="Bodega no encontrada o inactiva.")
+        empresa_id = resolve_company_scope()
+        if empresa_id is not None and empresa_id != bodega.empresa_id:
+            raise HTTPException(status_code=403, detail="La bodega no pertenece a la empresa seleccionada.")
+        empresa_id = bodega.empresa_id
+
         detalles: list[VentaCompraDetalleCreate] = []
         for detalle in payload.detalles:
             producto = session.get(Producto, detalle.producto_id)
@@ -96,7 +116,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
                     detail=f"Producto {detalle.producto_id} no encontrado o inactivo.",
                 )
 
-            impuestos = self._snapshot_impuestos_producto(session, detalle.producto_id)
+            impuestos = self._snapshot_impuestos_producto(session, detalle.producto_id, empresa_id)
             detalles.append(
                 VentaCompraDetalleCreate(
                     producto_id=detalle.producto_id,
@@ -114,7 +134,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
             secuencial_factura=payload.secuencial_factura,
             autorizacion_sri=payload.autorizacion_sri,
             fecha_emision=payload.fecha_emision,
-            bodega_id=payload.bodega_id,
+            bodega_id=bodega_id,
             sustento_tributario=payload.sustento_tributario,
             tipo_identificacion_proveedor=payload.tipo_identificacion_proveedor,
             identificacion_proveedor=payload.identificacion_proveedor,
@@ -123,7 +143,11 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
             detalles=detalles,
         )
 
-    def _resolver_bodega_para_compra(self, session: Session, payload: CompraCreate):
+    def _resolver_bodega_para_compra(
+        self,
+        session: Session,
+        payload: CompraCreate | CompraRegistroCreate,
+    ) -> UUID:
         empresa_scope = resolve_company_scope()
         if payload.bodega_id is not None:
             bodega = session.get(Bodega, payload.bodega_id)
@@ -133,9 +157,9 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
                 raise HTTPException(status_code=403, detail="La bodega no pertenece a la empresa seleccionada.")
             return payload.bodega_id
 
-        stmt_bodegas = select(Bodega.id).where(Bodega.activo.is_(True))
+        stmt_bodegas = select(col(Bodega.id)).where(col(Bodega.activo).is_(True))
         if empresa_scope is not None:
-            stmt_bodegas = stmt_bodegas.where(Bodega.empresa_id == empresa_scope)
+            stmt_bodegas = stmt_bodegas.where(col(Bodega.empresa_id) == empresa_scope)
         bodegas = list(session.exec(stmt_bodegas).all())
         if len(bodegas) == 1:
             return bodegas[0]
@@ -155,11 +179,11 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
             referencia_documento=f"COMPRA:{compra.id}",
             usuario_auditoria=payload.usuario_auditoria,
             detalles=[
-                {
-                    "producto_id": detalle.producto_id,
-                    "cantidad": detalle.cantidad,
-                    "costo_unitario": detalle.precio_unitario,
-                }
+                MovimientoInventarioDetalleCreate(
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=detalle.precio_unitario,
+                )
                 for detalle in payload.detalles
             ],
         )
@@ -190,7 +214,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
                 MovimientoInventario.referencia_documento == f"COMPRA:{compra.id}",
                 MovimientoInventario.tipo_movimiento == TipoMovimientoInventario.INGRESO,
                 MovimientoInventario.estado == EstadoMovimientoInventario.CONFIRMADO,
-                MovimientoInventario.activo.is_(True),
+                col(MovimientoInventario.activo).is_(True),
             )
         ).first()
         if movimiento_compra is None:
@@ -202,8 +226,8 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         detalles = list(
             session.exec(
                 select(CompraDetalle).where(
-                    CompraDetalle.compra_id == compra.id,
-                    CompraDetalle.activo.is_(True),
+                    col(CompraDetalle.compra_id) == compra.id,
+                    col(CompraDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -216,11 +240,11 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
             referencia_documento=f"ANULACION_COMPRA:{compra.id}",
             usuario_auditoria=usuario_auditoria,
             detalles=[
-                {
-                    "producto_id": detalle.producto_id,
-                    "cantidad": detalle.cantidad,
-                    "costo_unitario": detalle.precio_unitario,
-                }
+                MovimientoInventarioDetalleCreate(
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=detalle.precio_unitario,
+                )
                 for detalle in detalles
             ],
         )
@@ -239,18 +263,39 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
     def registrar_compra(self, session: Session, payload: CompraCreate) -> Compra:
         return self.execute_create(session, payload)
 
-    def listar_compras(self, session: Session, *, limit: int, offset: int, only_active: bool = True, texto: str | None = None):
+    def listar_compras(
+        self,
+        session: Session,
+        *,
+        limit: int,
+        offset: int,
+        only_active: bool = True,
+        texto: str | None = None,
+    ) -> tuple[list[Compra], PaginationMeta]:
         stmt = select(Compra)
         empresa_scope = resolve_company_scope()
         if empresa_scope is not None:
-            stmt = stmt.where(Compra.empresa_id == empresa_scope)
+            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                col(Sucursal.empresa_id) == empresa_scope
+            )
         if only_active:
-            stmt = stmt.where(Compra.activo.is_(True))
+            stmt = stmt.where(col(Compra.activo).is_(True))
         if texto:
             pattern = f"%{texto.strip()}%"
-            stmt = stmt.where(or_(Compra.identificacion_proveedor.ilike(pattern), Compra.secuencial_factura.ilike(pattern)))
+            stmt = stmt.where(
+                or_(
+                    col(Compra.identificacion_proveedor).ilike(pattern),
+                    col(Compra.secuencial_factura).ilike(pattern),
+                )
+            )
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
-        compras = list(session.exec(stmt.order_by(Compra.fecha_emision.desc(), Compra.creado_en.desc()).offset(offset).limit(limit)).all())
+        compras = list(
+            session.exec(
+                stmt.order_by(col(Compra.fecha_emision).desc(), col(Compra.creado_en).desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
+        )
         return compras, build_pagination_meta(total=total, limit=limit, offset=offset)
 
     def _execute_create(
@@ -258,8 +303,8 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         session: Session,
         payload: CompraCreate,
         *,
-        context: dict,
-        **kwargs,
+        context: dict[str, Any],
+        **kwargs: Any,
     ) -> Compra:
         _ = (context, kwargs)
         try:
@@ -297,7 +342,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
                     cantidad=detalle.cantidad,
                     precio_unitario=detalle.precio_unitario,
                     descuento=detalle.descuento,
-                    subtotal_sin_impuesto=q2(detalle.subtotal_sin_impuesto),
+                    subtotal_sin_impuesto=q2(str(detalle.model_dump()["subtotal_sin_impuesto"])),
                     usuario_auditoria=payload.usuario_auditoria,
                 )
                 session.add(detalle_db)
@@ -345,7 +390,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         )
         session.add(cuenta)
 
-    def obtener_compra(self, session: Session, compra_id) -> Compra:
+    def obtener_compra(self, session: Session, compra_id: UUID) -> Compra:
         compra = session.get(Compra, compra_id)
         if not compra or not compra.activo:
             raise HTTPException(status_code=404, detail="Compra no encontrada")
@@ -358,7 +403,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
                 raise HTTPException(status_code=403, detail="No autorizado para acceder a compras de otra empresa.")
         return compra
 
-    def actualizar_compra(self, session: Session, compra_id, payload: CompraUpdate) -> Compra:
+    def actualizar_compra(self, session: Session, compra_id: UUID, payload: CompraUpdate) -> Compra:
         compra = self.obtener_compra(session, compra_id)
         if compra.estado == EstadoCompra.REGISTRADA:
             raise HTTPException(
@@ -379,7 +424,7 @@ class CompraService(TemplateMethodService[CompraCreate, Compra]):
         session.refresh(compra)
         return compra
 
-    def anular_compra(self, session: Session, compra_id, payload: CompraAnularRequest) -> Compra:
+    def anular_compra(self, session: Session, compra_id: UUID, payload: CompraAnularRequest) -> Compra:
         compra = self.obtener_compra(session, compra_id)
         if compra.estado == EstadoCompra.ANULADA:
             return compra

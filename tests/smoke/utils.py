@@ -202,7 +202,7 @@ def cleanup_product_scenario(
 
 
 def get_or_create_iva_for_tests(client: httpx.Client) -> str:
-    """Busca un IVA activo (código '2') via API HTTP.
+    """Busca el IVA 0% canónico activo (código '0') via API HTTP.
     Retorna el ID del impuesto IVA para usar en tests.
     Si no encuentra ninguno, asume que hay uno con ID conocido del seed.
     """
@@ -212,13 +212,10 @@ def get_or_create_iva_for_tests(client: httpx.Client) -> str:
         if r.status_code == 200:
             data = r.json()
             items = data.get("items", [])
-            # Buscar uno con codigo_sri '2' (IVA)
+            # Los productos smoke usan el perfil empresarial predeterminado.
             for item in items:
-                if item.get("codigo_sri") == "2":
+                if item.get("codigo_sri") == "0" and item.get("descripcion") == "IVA 0%":
                     return str(item["id"])
-            # Si no hay con código '2', tomar el primero disponible
-            if items:
-                return str(items[0]["id"])
     except Exception as exc:
         logging.warning(f"Error buscando IVA via API: {exc}")
 

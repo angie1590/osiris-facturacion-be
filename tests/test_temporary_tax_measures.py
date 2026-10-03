@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
+from osiris.core.audit_context import reset_current_company_id, set_current_company_id
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.punto_emision.entity import PuntoEmision
@@ -66,6 +67,16 @@ def _engine():
         ],
     )
     return engine
+
+
+def _registrar_venta_con_scope(session: Session, empresa: Empresa, payload: VentaCreate):
+    token = set_current_company_id(str(empresa.id))
+    service = VentaService()
+    service._orquestar_egreso_inventario = lambda _session, _venta, _payload: None  # type: ignore[method-assign]
+    try:
+        return service.registrar_venta(session, payload)
+    finally:
+        reset_current_company_id(token)
 
 
 def _seed_empresa_producto(session: Session) -> tuple[Empresa, Producto]:
@@ -323,8 +334,9 @@ def test_venta_guarda_snapshot_tarifa_legal_y_subtotal_iva_ocho():
         session.add(measure)
         session.commit()
 
-        sale = VentaService().registrar_venta(
+        sale = _registrar_venta_con_scope(
             session,
+            empresa,
             VentaCreate(
                 empresa_id=empresa.id,
                 fecha_emision=date(2026, 10, 10),
@@ -384,8 +396,9 @@ def test_venta_congela_ice_especifico_y_factor_de_alcohol_en_snapshot():
         session.add(measure)
         session.commit()
 
-        sale = VentaService().registrar_venta(
+        sale = _registrar_venta_con_scope(
             session,
+            empresa,
             VentaCreate(
                 empresa_id=empresa.id,
                 fecha_emision=date(2026, 10, 10),

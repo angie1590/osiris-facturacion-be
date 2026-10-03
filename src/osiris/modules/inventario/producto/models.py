@@ -39,6 +39,11 @@ class AtributoNested(BaseOSModel):
     id: Optional[UUID] = None
     nombre: str
     tipo_dato: Optional[str] = None
+    select_options: Optional[List[str]] = None
+    catalog_id: Optional[UUID] = None
+    allow_negative: bool = False
+    min_value: Optional[Decimal] = None
+    max_value: Optional[Decimal] = None
 
 
 class AtributoValorNested(BaseOSModel):
@@ -48,6 +53,8 @@ class AtributoValorNested(BaseOSModel):
     orden: Optional[int] = None
 
 class ImpuestoNested(BaseOSModel):
+    id: UUID
+    tipo_impuesto: str
     nombre: str
     codigo: str
     porcentaje: Decimal
@@ -70,6 +77,13 @@ class ProductoCreate(BaseOSModel):
     impuesto_catalogo_ids: List[UUID]  # OBLIGATORIO: al menos un impuesto IVA
     usuario_auditoria: Optional[str] = None
 
+    @field_validator("impuesto_catalogo_ids")
+    @classmethod
+    def require_product_tax(cls, values: List[UUID]) -> List[UUID]:
+        if not values:
+            raise ValueError("Debe seleccionar al menos un impuesto IVA para el producto.")
+        return values
+
     @field_validator("pvp")
     @classmethod
     def validate_pvp_positivo(cls, v: Decimal) -> Decimal:
@@ -88,7 +102,15 @@ class ProductoUpdate(BaseOSModel):
     permite_fracciones: Optional[bool] = None
     casa_comercial_id: Optional[UUID] = None
     categoria_ids: Optional[List[UUID]] = None
+    impuesto_catalogo_ids: Optional[List[UUID]] = None
     usuario_auditoria: Optional[str] = None
+
+    @field_validator("impuesto_catalogo_ids")
+    @classmethod
+    def require_nonempty_product_tax_update(cls, values: Optional[List[UUID]]) -> Optional[List[UUID]]:
+        if values is not None and not values:
+            raise ValueError("El perfil fiscal no puede quedar vacío; seleccione un IVA.")
+        return values
 
     @field_validator("pvp")
     @classmethod

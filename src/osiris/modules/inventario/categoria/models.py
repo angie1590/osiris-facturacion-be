@@ -20,6 +20,7 @@ class CategoriaUpdate(BaseOSModel):
     nombre: Optional[str] = None
     es_padre: Optional[bool] = None
     parent_id: Optional[UUID] = None
+    confirmar_limpieza_colision: bool = False
     usuario_auditoria: Optional[str] = None
 
 
@@ -27,8 +28,18 @@ class CategoriaRead(BaseOSModel):
     id: UUID
     nombre: str
     es_padre: bool
+    is_default: bool = False
     parent_id: Optional[UUID] = None
     activo: bool
     creado_en: datetime
     actualizado_en: datetime
     usuario_auditoria: Optional[str] = None
+
+
+class RecategorizarProducto(BaseOSModel):
+    producto_id: UUID
+    categoria_id: UUID
+
+
+class RecategorizarProductosRequest(BaseOSModel):
+    assignments: list[RecategorizarProducto]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
@@ -62,6 +64,22 @@ def test_categoria_update_cleans_parent_and_prevents_self_ref():
     with pytest.raises(HTTPException) as exc2:
         service.update(session, item_id, data)
     assert exc2.value.status_code == 400
+
+
+def test_categoria_no_puede_marcarse_hoja_con_hijos_activos():
+    service = CategoriaService()
+    service.repo = MagicMock(spec=CategoriaRepository)
+    service.repo.get.return_value = Categoria(nombre="Padre", es_padre=True, activo=True)
+    session = MagicMock()
+    child_query = MagicMock()
+    child_query.first.return_value = uuid4()
+    session.exec.return_value = child_query
+
+    with pytest.raises(HTTPException, match="hijos activos") as exc_info:
+        service.update(session, uuid4(), {"es_padre": False})
+
+    assert exc_info.value.status_code == 409
+    service.repo.update.assert_not_called()
 
 
 def test_categoria_repository_delete_logico():

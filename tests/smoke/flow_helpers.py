@@ -33,6 +33,7 @@ def crear_empresa_general(client: httpx.Client) -> str:
         response = client.post("/api/v1/empresas", json=payload)
         if response.status_code == 201:
             empresa_id = response.json()["id"]
+            client.headers["X-Empresa-Id"] = empresa_id
             sucursales_response = client.get("/api/v1/sucursales", params={"limit": 200, "offset": 0, "only_active": True})
             assert sucursales_response.status_code == 200, sucursales_response.text
             ya_existe_matriz = any(

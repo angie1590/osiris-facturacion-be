@@ -1,0 +1,1 @@
+"""Catálogos configurables compartidos por los dominios de la aplicación."""

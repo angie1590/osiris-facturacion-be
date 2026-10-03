@@ -130,7 +130,12 @@ Obtiene el detalle completo del producto. Este endpoint sí trae composición co
       "atributo": {
         "id": "2a2bf5b8-e95e-4f6b-850d-c3ec4ce7c38f",
         "nombre": "Color",
-        "tipo_dato": "string"
+        "tipo_dato": "select",
+        "select_options": ["Negro", "Rojo"],
+        "catalog_id": null,
+        "allow_negative": false,
+        "min_value": null,
+        "max_value": null
       },
       "valor": "Negro",
       "obligatorio": true,
@@ -139,6 +144,8 @@ Obtiene el detalle completo del producto. Este endpoint sí trae composición co
   ],
   "impuestos": [
     {
+      "id": "41b846bf-6c0a-42a1-9f38-b47e0c937f61",
+      "tipo_impuesto": "IVA",
       "nombre": "IVA 15%",
       "codigo": "2",
       "porcentaje": "15.00"
@@ -270,7 +277,7 @@ Crea un producto nuevo y retorna el contrato completo.
 | `permite_fracciones` | bool | No | default `false` |
 | `casa_comercial_id` | UUID/null | No | FK válida y activa |
 | `categoria_ids` | UUID[]/null | No | si se envía, categorías hoja |
-| `impuesto_catalogo_ids` | UUID[] | Sí | obligatorio; impuestos activos; IVA obligatorio; sin duplicar tipo de impuesto |
+| `impuesto_catalogo_ids` | UUID[] | Sí | perfil de la empresa autenticada: exactamente un IVA y un ICE opcional, ambos configurados, activos, vigentes y compatibles con `tipo` |
 | `usuario_auditoria` | string/null | No | auditoría |
 
 ### Validaciones de negocio (POST)
@@ -279,13 +286,15 @@ Crea un producto nuevo y retorna el contrato completo.
 - `pvp`: validación positiva y normalización a 2 decimales.
 - `casa_comercial_id`: validación FK por servicio base.
 - `categoria_ids`: solo categorías hoja (sin hijos).
-- `impuesto_catalogo_ids`: al menos un IVA, impuestos existentes/activos, y sin repetir tipo de impuesto.
+- `impuesto_catalogo_ids`: exactamente un IVA, ICE opcional, catálogo permitido por empresa, vigencia/aplicabilidad verificadas; lista vacía, duplicados e IRBPNR se rechazan.
 
 ---
 
 ## PUT `/api/v1/productos/{producto_id}`
 
 Actualiza parcialmente un producto y retorna el contrato completo.
+
+Si `impuesto_catalogo_ids` aparece en el body, reemplaza atómicamente el set completo del perfil fiscal de la empresa autenticada; si se omite, conserva el perfil. La empresa no se acepta desde el body. Los errores de validación dejan el producto y las asignaciones previas intactos.
 
 <Tabs>
   <TabItem value="request" label="Request" default>

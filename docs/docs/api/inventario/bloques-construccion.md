@@ -242,6 +242,12 @@ Catálogo de atributos reutilizables que pueden ser asignados a múltiples categ
 - `decimal` - Números decimales (ej: 2.5 kg)
 - `boolean` - Valor booleano (ej: "Tiene garantía": true/false)
 - `date` - Fecha ISO (ej: "2024-12-31")
+- `select` - opción de una lista fija almacenada en `select_options`
+- `catalog` - valor activo de `catalog_id` en `/api/v1/catalogos`
+
+Los atributos numéricos admiten `allow_negative`, `min_value` y `max_value`. Los nombres se comparan sin distinguir mayúsculas/espacios dentro de la rama efectiva; se permiten nombres iguales en ramas independientes y asignar el mismo atributo a un ancestro e hijo constituye un override.
+
+Cuando cambia el tipo, los valores convertibles se mueven a la columna tipada nueva. Los valores incompatibles se conservan en su columna anterior y generan elementos auditables en `/api/v1/atributos/remapeos/pendientes`; se resuelven mediante `POST /api/v1/atributos/remapeos/resolver`.
 
 ### Endpoints
 
@@ -321,7 +327,8 @@ Crea un nuevo atributo reutilizable. El nombre debe ser único.
 ```json
 {
   "nombre": "Color",
-  "tipo_dato": "string",
+  "tipo_dato": "select",
+  "select_options": ["Rojo", "Azul", "Negro"],
   "usuario_auditoria": "admin"
 }
 ```

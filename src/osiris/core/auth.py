@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable, cast
 from uuid import UUID
 
 from fastapi import Depends
@@ -28,12 +28,15 @@ def create_token(subject: UUID, token_type: str, expires: timedelta) -> str:
         "iat": datetime.now(timezone.utc).timestamp(),
         "exp": datetime.now(timezone.utc) + expires,
     }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return cast(str, jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM))
 
 
 def decode_token(token: str) -> dict[str, Any]:
     settings = get_settings()
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    return cast(
+        dict[str, Any],
+        jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]),
+    )
 
 
 def is_token_invalidated(payload: dict[str, Any], usuario: Usuario) -> bool:
@@ -68,6 +71,31 @@ def get_current_usuario(
 
         raise HTTPException(status_code=401, detail="Sesión invalidada")
     return usuario
+
+
+def require_roles(*allowed_roles: str) -> Callable[..., Usuario]:
+    allowed = {role.strip().lower() for role in allowed_roles}
+
+    def _guard(
+        usuario: Usuario = Depends(get_current_usuario),
+        session: Session = Depends(get_session),
+    ) -> Usuario:
+        rol = session.get(Rol, usuario.rol_id)
+        role_name = (rol.nombre if rol else "").strip().lower()
+        normalized = {
+            "administrador": "admin",
+            "jefe de almacén": "supervisor",
+            "jefe de almacen": "supervisor",
+            "vendedor": "operator",
+            "operador": "operator",
+        }.get(role_name, role_name)
+        if normalized not in allowed:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=403, detail="No tiene permiso para realizar esta operación.")
+        return usuario
+
+    return _guard
 
 
 def authenticate(session: Session, username: str, password: str) -> Usuario | None:

@@ -37,10 +37,10 @@ class Producto(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     casa_comercial_id: UUID | None = Field(default=None, foreign_key="tbl_casa_comercial.id")
 
     # Relaciones de lectura para evitar N+1 en listados completos.
-    producto_categorias: list = Relationship(
+    producto_categorias: list[ProductoCategoria] = Relationship(
         sa_relationship=relationship("ProductoCategoria", back_populates="producto")
     )
-    producto_impuestos: list = Relationship(
+    producto_impuestos: list[ProductoImpuesto] = Relationship(
         sa_relationship=relationship("ProductoImpuesto", back_populates="producto")
     )
 
@@ -76,6 +76,7 @@ class ProductoImpuesto(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     __tablename__ = "tbl_producto_impuesto"
 
     producto_id: UUID = Field(foreign_key="tbl_producto.id", index=True, nullable=False)
+    empresa_id: UUID | None = Field(default=None, foreign_key="tbl_empresa.id", index=True)
     impuesto_catalogo_id: UUID = Field(foreign_key="aux_impuesto_catalogo.id", index=True, nullable=False)
     codigo_impuesto_sri: str = Field(nullable=False, max_length=10, default="2")
     codigo_porcentaje_sri: str = Field(nullable=False, max_length=10, default="0")

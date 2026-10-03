@@ -1,13 +1,18 @@
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 from sqlmodel import Session
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.types import Message
 from osiris.core.audit_context import (
     extract_auth_context_from_request_headers,
     extract_user_id_from_request_headers,
@@ -43,6 +48,7 @@ from osiris.core.observability import (
 from osiris.core.errors import NotFoundError
 from osiris.core.openapi_docs import build_gold_standard_openapi
 from osiris.core.security_audit import (
+    SensitiveEndpointRule,
     is_user_authorized_for_rule,
     log_unauthorized_access,
     match_sensitive_rule,
@@ -51,6 +57,7 @@ from osiris.core.security_audit import (
 from osiris.modules.common.audit_log.router import router as audit_log_router
 from osiris.modules.common.auth_router import router as auth_router
 from osiris.modules.common.cliente.router import router as cliente_router
+from osiris.modules.common.catalogo.router import router as catalogo_router
 from osiris.modules.common.empleado.router import router as empleado_router
 from osiris.modules.common.empresa.router import router as empresa_router
 from osiris.modules.common.modulo.router import router as modulo_router
@@ -98,7 +105,7 @@ def _procesar_cola_fe_once() -> int:
 
 def _check_db_ready_sync() -> bool:
     with Session(engine) as session:
-        session.exec(text("SELECT 1"))
+        session.execute(text("SELECT 1"))
     return True
 
 
@@ -116,7 +123,7 @@ async def _run_fe_queue_worker(poll_interval_seconds: int) -> None:
 
 
 @asynccontextmanager
-async def lifespan(app_instance: FastAPI):
+async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     # Fuerza validacion de settings al arranque para fail-fast con mensaje claro.
     app_settings = get_settings()
     worker_task = None
@@ -150,21 +157,21 @@ if app_settings.OBSERVABILITY_METRICS_ENABLED:
     initialize_metrics()
 
 
-def custom_openapi():
+def custom_openapi() -> dict[str, Any]:
     return build_gold_standard_openapi(app)
 
 
-app.openapi = custom_openapi  # type: ignore[method-assign]
+setattr(app, "openapi", custom_openapi)
 
 
 def _log_unauthorized_access_sync(
     *,
-    security_engine,
+    security_engine: Engine,
     request: Request,
     user_id: str | None,
-    payload,
+    payload: dict[str, Any] | str | None,
     reason: str,
-    rule,
+    rule: SensitiveEndpointRule,
 ) -> None:
     with Session(security_engine) as security_session:
         log_unauthorized_access(
@@ -179,9 +186,9 @@ def _log_unauthorized_access_sync(
 
 def _is_user_authorized_for_rule_sync(
     *,
-    security_engine,
+    security_engine: Engine,
     user_id: str,
-    rule,
+    rule: SensitiveEndpointRule,
 ) -> bool:
     with Session(security_engine) as security_session:
         return is_user_authorized_for_rule(
@@ -193,12 +200,12 @@ def _is_user_authorized_for_rule_sync(
 
 async def _safe_log_unauthorized_access(
     *,
-    security_engine,
+    security_engine: Engine,
     request: Request,
     user_id: str | None,
-    payload,
+    payload: dict[str, Any] | str | None,
     reason: str,
-    rule,
+    rule: SensitiveEndpointRule,
 ) -> None:
     try:
         await run_in_threadpool(
@@ -218,12 +225,15 @@ async def _safe_log_unauthorized_access(
 
 
 @app.middleware("http")
-async def observability_http_middleware(request: Request, call_next):
+async def observability_http_middleware(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
     request_id = request.headers.get("X-Request-ID") or new_request_id()
     request_token = set_current_request_id(request_id)
     max_in_flight = app_settings.SCALABILITY_MAX_IN_FLIGHT_REQUESTS
     if max_in_flight > 0 and get_http_in_flight() >= max_in_flight:
-        response = JSONResponse(
+        response: Response = JSONResponse(
             status_code=503,
             content={"detail": "Servidor temporalmente saturado. Reintente en breve."},
         )
@@ -308,7 +318,10 @@ async def observability_http_middleware(request: Request, call_next):
 
 
 @app.middleware("http")
-async def inject_audit_user_context(request: Request, call_next):
+async def inject_audit_user_context(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
     user_id, company_id = extract_auth_context_from_request_headers(
         authorization=request.headers.get("Authorization"),
         x_user_id=request.headers.get("X-User-Id"),
@@ -324,7 +337,10 @@ async def inject_audit_user_context(request: Request, call_next):
 
 
 @app.middleware("http")
-async def enforce_sensitive_access_control(request: Request, call_next):
+async def enforce_sensitive_access_control(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
     rule = match_sensitive_rule(request.method, request.url.path)
     if not rule:
         return await call_next(request)
@@ -332,16 +348,16 @@ async def enforce_sensitive_access_control(request: Request, call_next):
     raw_body = await request.body()
     payload = parse_attempted_payload(raw_body)
 
-    async def receive() -> dict:
+    async def receive() -> Message:
         return {"type": "http.request", "body": raw_body, "more_body": False}
 
-    request._receive = receive  # type: ignore[attr-defined]
+    request._receive = receive
 
     user_id = extract_user_id_from_request_headers(
         authorization=request.headers.get("Authorization"),
         x_user_id=request.headers.get("X-User-Id"),
     )
-    security_engine = getattr(request.app.state, "security_audit_engine", engine)
+    security_engine: Engine = getattr(request.app.state, "security_audit_engine", engine)
 
     if not user_id:
         record_unauthorized_access("missing_user")
@@ -395,7 +411,7 @@ async def enforce_sensitive_access_control(request: Request, call_next):
 
 
 @app.exception_handler(NotFoundError)
-async def not_found_handler(_req: Request, exc: NotFoundError):
+async def not_found_handler(_req: Request, exc: NotFoundError) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
@@ -448,6 +464,7 @@ app.include_router(atributo_router)
 app.include_router(categoria_router)
 app.include_router(casa_comercial_router)
 app.include_router(categoria_atributo_router)
+app.include_router(catalogo_router)
 app.include_router(bodega_router)
 app.include_router(producto_router)
 app.include_router(producto_bodega_router)

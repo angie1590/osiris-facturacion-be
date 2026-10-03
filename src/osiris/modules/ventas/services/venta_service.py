@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import BackgroundTasks
 from fastapi import HTTPException
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import ensure_entity_belongs_to_selected_company, resolve_company_scope
 from osiris.modules.sri.core_sri.services.template_method import TemplateMethodService
 from osiris.modules.common.empresa.entity import RegimenTributario
+from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.punto_emision.entity import (
     ModalidadPuntoEmision,
     PuntoEmision,
@@ -31,6 +34,7 @@ from osiris.modules.sri.core_sri.models import (
     VentaDetalleImpuesto,
     VentaEstadoHistorial,
 )
+from osiris.modules.sri.core_sri.types import TipoImpuestoMVP
 from osiris.modules.sri.core_sri.all_schemas import (
     ImpuestoAplicadoInput,
     VentaCompraDetalleCreate,
@@ -54,11 +58,15 @@ from osiris.modules.inventario.movimientos.models import (
     MovimientoInventarioDetalle,
     TipoMovimientoInventario,
 )
-from osiris.modules.inventario.movimientos.schemas import MovimientoInventarioCreate
+from osiris.modules.inventario.movimientos.schemas import (
+    MovimientoInventarioCreate,
+    MovimientoInventarioDetalleCreate,
+)
 from osiris.modules.inventario.movimientos.services.movimiento_inventario_service import MovimientoInventarioService, q4
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.producto.entity import Producto, ProductoImpuesto
-from osiris.utils.pagination import build_pagination_meta
+from osiris.modules.inventario.producto_impuesto.scope import resolve_product_tax_company
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 
 
 class VentaService(TemplateMethodService[VentaCreate, Venta]):
@@ -79,10 +87,15 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         return resolve_company_scope(requested_company_id=empresa_id)
 
     @staticmethod
-    def _snapshot_impuestos_producto(session: Session, producto_id) -> list[ImpuestoAplicadoInput]:
+    def _snapshot_impuestos_producto(
+        session: Session,
+        producto_id: UUID,
+        empresa_id: UUID,
+    ) -> list[ImpuestoAplicadoInput]:
         stmt = select(ProductoImpuesto).where(
-            ProductoImpuesto.producto_id == producto_id,
-            ProductoImpuesto.activo.is_(True),
+            col(ProductoImpuesto.producto_id) == producto_id,
+            col(ProductoImpuesto.empresa_id) == empresa_id,
+            col(ProductoImpuesto.activo).is_(True),
         )
         impuestos = list(session.exec(stmt).all())
         if not impuestos:
@@ -94,9 +107,9 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         snapshots: list[ImpuestoAplicadoInput] = []
         for impuesto in impuestos:
             if impuesto.codigo_impuesto_sri == "2":
-                tipo = "IVA"
+                tipo = TipoImpuestoMVP.IVA
             elif impuesto.codigo_impuesto_sri == "3":
-                tipo = "ICE"
+                tipo = TipoImpuestoMVP.ICE
             else:
                 raise HTTPException(
                     status_code=400,
@@ -116,7 +129,61 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             )
         return snapshots
 
+    def _resolver_empresa_para_snapshot(self, session: Session, payload: VentaRegistroCreate) -> UUID:
+        empresa_id = resolve_company_scope()
+        if empresa_id is not None:
+            resolve_company_scope(requested_company_id=payload.empresa_id)
+            if payload.bodega_id is not None:
+                bodega = session.get(Bodega, payload.bodega_id)
+                if not bodega or not bodega.activo:
+                    raise HTTPException(status_code=404, detail="Bodega no encontrada o inactiva.")
+                if bodega.empresa_id != empresa_id:
+                    raise HTTPException(status_code=403, detail="La bodega no pertenece a la empresa autenticada.")
+            if payload.punto_emision_id is not None:
+                punto = session.get(PuntoEmision, payload.punto_emision_id)
+                if not punto or not punto.activo:
+                    raise HTTPException(status_code=404, detail="Punto de emisión no encontrado o inactivo.")
+                sucursal = session.get(Sucursal, punto.sucursal_id)
+                if not sucursal or not sucursal.activo or sucursal.empresa_id != empresa_id:
+                    raise HTTPException(status_code=403, detail="El punto de emisión no pertenece a la empresa autenticada.")
+        else:
+            if payload.bodega_id is not None:
+                bodega = session.get(Bodega, payload.bodega_id)
+                if not bodega or not bodega.activo:
+                    raise HTTPException(status_code=404, detail="Bodega no encontrada o inactiva.")
+                empresa_id = bodega.empresa_id
+            if payload.punto_emision_id is not None:
+                punto = session.get(PuntoEmision, payload.punto_emision_id)
+                if not punto or not punto.activo:
+                    raise HTTPException(status_code=404, detail="Punto de emisión no encontrado o inactivo.")
+                sucursal = session.get(Sucursal, punto.sucursal_id)
+                if not sucursal or not sucursal.activo:
+                    raise HTTPException(status_code=404, detail="Sucursal del punto de emisión no encontrada o inactiva.")
+                if empresa_id is not None and empresa_id != sucursal.empresa_id:
+                    raise HTTPException(status_code=403, detail="Bodega y punto de emisión pertenecen a empresas distintas.")
+                empresa_id = sucursal.empresa_id
+            if empresa_id is None:
+                inferred_companies = {
+                    resolve_product_tax_company(session, detalle.producto_id).id
+                    for detalle in payload.detalles
+                }
+                if len(inferred_companies) == 1:
+                    empresa_id = next(iter(inferred_companies))
+                else:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="No se puede resolver una empresa única para los impuestos de la venta.",
+                    )
+            if payload.empresa_id is not None and payload.empresa_id != empresa_id:
+                raise HTTPException(status_code=403, detail="La empresa del request no coincide con el contexto resuelto.")
+
+        empresa = session.get(Empresa, empresa_id)
+        if not empresa or not empresa.activo:
+            raise HTTPException(status_code=403, detail="La empresa seleccionada no existe o está inactiva.")
+        return empresa_id
+
     def hidratar_venta_desde_productos(self, session: Session, payload: VentaRegistroCreate) -> VentaCreate:
+        empresa_id = self._resolver_empresa_para_snapshot(session, payload)
         detalles: list[VentaCompraDetalleCreate] = []
         for detalle in payload.detalles:
             producto = session.get(Producto, detalle.producto_id)
@@ -126,7 +193,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                     detail=f"Producto {detalle.producto_id} no encontrado o inactivo.",
                 )
 
-            impuestos = self._snapshot_impuestos_producto(session, detalle.producto_id)
+            impuestos = self._snapshot_impuestos_producto(session, detalle.producto_id, empresa_id)
             detalles.append(
                 VentaCompraDetalleCreate(
                     producto_id=detalle.producto_id,
@@ -141,7 +208,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
 
         return VentaCreate(
             cliente_id=payload.cliente_id,
-            empresa_id=payload.empresa_id,
+            empresa_id=empresa_id,
             punto_emision_id=payload.punto_emision_id,
             fecha_emision=payload.fecha_emision,
             bodega_id=payload.bodega_id,
@@ -163,7 +230,58 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         EmisionRimpeStrategy.validar_iva_rimpe_negocio_popular(payload, tipo_emision=tipo_emision)
 
     def _resolver_contexto_tributario(self, session: Session, payload: VentaCreate) -> tuple[UUID | None, RegimenTributario, TipoEmisionVenta]:
-        return self.emision_rimpe_strategy.resolver_contexto_tributario(session, payload)
+        empresa_id = resolve_company_scope()
+        if empresa_id is not None:
+            resolve_company_scope(requested_company_id=payload.empresa_id)
+            if payload.bodega_id is not None:
+                bodega = session.get(Bodega, payload.bodega_id)
+                if not bodega or not bodega.activo:
+                    raise HTTPException(status_code=404, detail="Bodega no encontrada o inactiva.")
+                if bodega.empresa_id != empresa_id:
+                    raise HTTPException(status_code=403, detail="La bodega no pertenece a la empresa autenticada.")
+            if payload.punto_emision_id is not None:
+                punto = session.get(PuntoEmision, payload.punto_emision_id)
+                if not punto or not punto.activo:
+                    raise HTTPException(status_code=404, detail="Punto de emisión no encontrado o inactivo.")
+                sucursal = session.get(Sucursal, punto.sucursal_id)
+                if not sucursal or not sucursal.activo or sucursal.empresa_id != empresa_id:
+                    raise HTTPException(status_code=403, detail="El punto de emisión no pertenece a la empresa autenticada.")
+        else:
+            if payload.bodega_id is not None:
+                bodega = session.get(Bodega, payload.bodega_id)
+                if not bodega or not bodega.activo:
+                    raise HTTPException(status_code=404, detail="Bodega no encontrada o inactiva.")
+                empresa_id = bodega.empresa_id
+            if payload.punto_emision_id is not None:
+                punto = session.get(PuntoEmision, payload.punto_emision_id)
+                if not punto or not punto.activo:
+                    raise HTTPException(status_code=404, detail="Punto de emisión no encontrado o inactivo.")
+                sucursal = session.get(Sucursal, punto.sucursal_id)
+                if not sucursal or not sucursal.activo:
+                    raise HTTPException(status_code=404, detail="Sucursal del punto de emisión no encontrada o inactiva.")
+                if empresa_id is not None and empresa_id != sucursal.empresa_id:
+                    raise HTTPException(status_code=403, detail="Bodega y punto de emisión pertenecen a empresas distintas.")
+                empresa_id = sucursal.empresa_id
+            if empresa_id is None:
+                inferred_companies = {
+                    resolve_product_tax_company(session, detalle.producto_id).id
+                    for detalle in payload.detalles
+                }
+                if len(inferred_companies) == 1:
+                    empresa_id = next(iter(inferred_companies))
+                else:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="No se puede resolver una empresa única para la venta.",
+                    )
+            if payload.empresa_id is not None and payload.empresa_id != empresa_id:
+                raise HTTPException(status_code=403, detail="La empresa del request no coincide con el contexto resuelto.")
+
+        empresa = session.get(Empresa, empresa_id)
+        if not empresa or not empresa.activo:
+            raise HTTPException(status_code=403, detail="La empresa seleccionada no existe o está inactiva.")
+        trusted_payload = payload.model_copy(update={"empresa_id": empresa_id})
+        return self.emision_rimpe_strategy.resolver_contexto_tributario(session, trusted_payload)
 
     def _resolver_secuencial_formateado(
         self,
@@ -248,31 +366,31 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             raise HTTPException(status_code=400, detail="Sucursal y punto de emisión deben usar códigos SRI de tres dígitos.")
         return punto, sucursal
 
-    def _resolver_bodega_para_venta(self, session: Session, payload: VentaCreate):
+    def _resolver_bodega_para_venta(self, session: Session, payload: VentaCreate) -> UUID:
         if payload.bodega_id is not None:
             bodega = session.get(Bodega, payload.bodega_id)
             if not bodega or not bodega.activo:
                 raise HTTPException(status_code=404, detail="Bodega no encontrada o inactiva.")
-            empresa_scope = self._empresa_scope()
+            empresa_scope = self._empresa_scope(empresa_id=payload.empresa_id)
             if empresa_scope is not None and bodega.empresa_id != empresa_scope:
                 raise HTTPException(status_code=403, detail="La bodega no pertenece a la empresa seleccionada.")
             return payload.bodega_id
         if not payload.detalles:
             raise HTTPException(status_code=400, detail="La venta no tiene detalles para orquestar inventario.")
 
-        empresa_scope = self._empresa_scope()
+        empresa_scope = self._empresa_scope(empresa_id=payload.empresa_id)
         producto_referencia = payload.detalles[0].producto_id
         stmt_stocks = (
             select(InventarioStock)
-            .join(Bodega, Bodega.id == InventarioStock.bodega_id)
+            .join(Bodega, col(Bodega.id) == col(InventarioStock.bodega_id))
             .where(
-                InventarioStock.producto_id == producto_referencia,
-                InventarioStock.activo.is_(True),
-                Bodega.activo.is_(True),
+                col(InventarioStock.producto_id) == producto_referencia,
+                col(InventarioStock.activo).is_(True),
+                col(Bodega.activo).is_(True),
             )
         )
         if empresa_scope is not None:
-            stmt_stocks = stmt_stocks.where(Bodega.empresa_id == empresa_scope)
+            stmt_stocks = stmt_stocks.where(col(Bodega.empresa_id) == empresa_scope)
         stocks_referencia = list(session.exec(stmt_stocks).all())
         if not stocks_referencia:
             raise HTTPException(
@@ -284,9 +402,9 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         for detalle in payload.detalles:
             stock_detalle = session.exec(
                 select(InventarioStock).where(
-                    InventarioStock.bodega_id == bodega_id,
-                    InventarioStock.producto_id == detalle.producto_id,
-                    InventarioStock.activo.is_(True),
+                    col(InventarioStock.bodega_id) == bodega_id,
+                    col(InventarioStock.producto_id) == detalle.producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
             ).first()
             if stock_detalle is None:
@@ -310,11 +428,11 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             referencia_documento=f"VENTA:{venta.id}",
             usuario_auditoria=payload.usuario_auditoria,
             detalles=[
-                {
-                    "producto_id": detalle.producto_id,
-                    "cantidad": detalle.cantidad,
-                    "costo_unitario": detalle.precio_unitario,
-                }
+                MovimientoInventarioDetalleCreate(
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=detalle.precio_unitario,
+                )
                 for detalle in payload.detalles
             ],
         )
@@ -333,7 +451,11 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    def _resolver_bodega_para_emitir_venta(self, session: Session, detalles: list[VentaDetalle]):
+    def _resolver_bodega_para_emitir_venta(
+        self,
+        session: Session,
+        detalles: list[VentaDetalle],
+    ) -> UUID:
         if not detalles:
             raise ValueError("No se puede emitir una venta sin detalles.")
 
@@ -343,15 +465,15 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         empresa_scope = self._empresa_scope()
         stmt_stocks = (
             select(InventarioStock)
-            .join(Bodega, Bodega.id == InventarioStock.bodega_id)
+            .join(Bodega, col(Bodega.id) == col(InventarioStock.bodega_id))
             .where(
-                InventarioStock.producto_id == producto_referencia,
-                InventarioStock.activo.is_(True),
-                Bodega.activo.is_(True),
+                col(InventarioStock.producto_id) == producto_referencia,
+                col(InventarioStock.activo).is_(True),
+                col(Bodega.activo).is_(True),
             )
         )
         if empresa_scope is not None:
-            stmt_stocks = stmt_stocks.where(Bodega.empresa_id == empresa_scope)
+            stmt_stocks = stmt_stocks.where(col(Bodega.empresa_id) == empresa_scope)
         stocks_referencia = list(session.exec(stmt_stocks).all())
         if not stocks_referencia:
             raise ValueError(f"Stock insuficiente para el producto {producto_referencia}")
@@ -362,9 +484,9 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             for producto_id, cantidad_requerida in requerido_por_producto.items():
                 stock_detalle = session.exec(
                     select(InventarioStock).where(
-                        InventarioStock.bodega_id == bodega_id,
-                        InventarioStock.producto_id == producto_id,
-                        InventarioStock.activo.is_(True),
+                        col(InventarioStock.bodega_id) == bodega_id,
+                        col(InventarioStock.producto_id) == producto_id,
+                        col(InventarioStock.activo).is_(True),
                     )
                 ).one_or_none()
                 if stock_detalle is None or q4(stock_detalle.cantidad_actual) - cantidad_requerida < Decimal("0.0000"):
@@ -394,8 +516,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         for producto_id in producto_ids:
             total_stock = session.exec(
                 select(func.coalesce(func.sum(InventarioStock.cantidad_actual), Decimal("0.0000"))).where(
-                    InventarioStock.producto_id == producto_id,
-                    InventarioStock.activo.is_(True),
+                    col(InventarioStock.producto_id) == producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
             ).one()
             producto = session.get(Producto, producto_id)
@@ -432,9 +554,9 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             stock = session.exec(
                 select(InventarioStock)
                 .where(
-                    InventarioStock.bodega_id == bodega_id,
-                    InventarioStock.producto_id == producto_id,
-                    InventarioStock.activo.is_(True),
+                    col(InventarioStock.bodega_id) == bodega_id,
+                    col(InventarioStock.producto_id) == producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -452,9 +574,9 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                 MovimientoInventario.referencia_documento == f"VENTA:{venta_id}",
                 MovimientoInventario.tipo_movimiento == TipoMovimientoInventario.EGRESO,
                 MovimientoInventario.estado == EstadoMovimientoInventario.CONFIRMADO,
-                MovimientoInventario.activo.is_(True),
+                col(MovimientoInventario.activo).is_(True),
             )
-            .order_by(MovimientoInventario.fecha.desc(), MovimientoInventario.creado_en.desc())
+            .order_by(col(MovimientoInventario.fecha).desc(), col(MovimientoInventario.creado_en).desc())
         ).first()
         if movimiento is None:
             return None, {}
@@ -463,7 +585,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             session.exec(
                 select(MovimientoInventarioDetalle).where(
                     MovimientoInventarioDetalle.movimiento_inventario_id == movimiento.id,
-                    MovimientoInventarioDetalle.activo.is_(True),
+                    col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -476,7 +598,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
     def emitir_venta(
         self,
         session: Session,
-        venta_id,
+        venta_id: UUID,
         *,
         usuario_auditoria: str,
         background_tasks: BackgroundTasks | None = None,
@@ -486,8 +608,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             venta = session.exec(
                 select(Venta)
                 .where(
-                    Venta.id == venta_id,
-                    Venta.activo.is_(True),
+                    col(Venta.id) == venta_id,
+                    col(Venta.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -506,8 +628,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             detalles = list(
                 session.exec(
                     select(VentaDetalle).where(
-                        VentaDetalle.venta_id == venta.id,
-                        VentaDetalle.activo.is_(True),
+                        col(VentaDetalle.venta_id) == venta.id,
+                        col(VentaDetalle.activo).is_(True),
                     )
                 ).all()
             )
@@ -520,11 +642,11 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                 referencia_documento=f"VENTA:{venta.id}",
                 usuario_auditoria=usuario_auditoria,
                 detalles=[
-                    {
-                        "producto_id": detalle.producto_id,
-                        "cantidad": detalle.cantidad,
-                        "costo_unitario": detalle.precio_unitario,
-                    }
+                    MovimientoInventarioDetalleCreate(
+                        producto_id=detalle.producto_id,
+                        cantidad=detalle.cantidad,
+                        costo_unitario=detalle.precio_unitario,
+                    )
                     for detalle in detalles
                 ],
             )
@@ -542,8 +664,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
 
             cxc_existente = session.exec(
                 select(CuentaPorCobrar).where(
-                    CuentaPorCobrar.venta_id == venta.id,
-                    CuentaPorCobrar.activo.is_(True),
+                    col(CuentaPorCobrar.venta_id) == venta.id,
+                    col(CuentaPorCobrar.activo).is_(True),
                 )
             ).one_or_none()
             if cxc_existente is not None:
@@ -598,8 +720,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             venta = session.exec(
                 select(Venta)
                 .where(
-                    Venta.id == venta_id,
-                    Venta.activo.is_(True),
+                    col(Venta.id) == venta_id,
+                    col(Venta.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -635,8 +757,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             cxc = session.exec(
                 select(CuentaPorCobrar)
                 .where(
-                    CuentaPorCobrar.venta_id == venta.id,
-                    CuentaPorCobrar.activo.is_(True),
+                    col(CuentaPorCobrar.venta_id) == venta.id,
+                    col(CuentaPorCobrar.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -649,8 +771,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             detalles_venta = list(
                 session.exec(
                     select(VentaDetalle).where(
-                        VentaDetalle.venta_id == venta.id,
-                        VentaDetalle.activo.is_(True),
+                        col(VentaDetalle.venta_id) == venta.id,
+                        col(VentaDetalle.activo).is_(True),
                     )
                 ).all()
             )
@@ -670,11 +792,11 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                 motivo_ajuste=motivo_auditoria,
                 usuario_auditoria=usuario_auditoria,
                 detalles=[
-                    {
-                        "producto_id": detalle.producto_id,
-                        "cantidad": detalle.cantidad,
-                        "costo_unitario": costos_por_producto.get(detalle.producto_id, detalle.precio_unitario),
-                    }
+                    MovimientoInventarioDetalleCreate(
+                        producto_id=detalle.producto_id,
+                        cantidad=detalle.cantidad,
+                        costo_unitario=costos_por_producto.get(detalle.producto_id, detalle.precio_unitario),
+                    )
                     for detalle in detalles_venta
                 ],
             )
@@ -756,8 +878,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         session: Session,
         payload: VentaCreate,
         *,
-        context: dict,
-        **kwargs,
+        context: dict[str, Any],
+        **kwargs: Any,
     ) -> Venta:
         _ = (context, kwargs)
         try:
@@ -814,7 +936,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
                     cantidad=detalle.cantidad,
                     precio_unitario=detalle.precio_unitario,
                     descuento=detalle.descuento,
-                    subtotal_sin_impuesto=q2(detalle.subtotal_sin_impuesto),
+                    subtotal_sin_impuesto=q2(str(detalle.model_dump()["subtotal_sin_impuesto"])),
                     es_actividad_excluida=detalle.es_actividad_excluida,
                     usuario_auditoria=payload.usuario_auditoria,
                 )
@@ -855,7 +977,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         venta_create = self.hidratar_venta_desde_productos(session, payload)
         return self.registrar_venta(session, venta_create)
 
-    def actualizar_venta(self, session: Session, venta_id, payload: VentaUpdate) -> Venta:
+    def actualizar_venta(self, session: Session, venta_id: UUID, payload: VentaUpdate) -> Venta:
         venta = session.get(Venta, venta_id)
         if not venta or not venta.activo:
             raise HTTPException(status_code=404, detail="Venta no encontrada")
@@ -886,7 +1008,7 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         session.refresh(venta)
         return venta
 
-    def obtener_venta_read(self, session: Session, venta_id) -> VentaRead:
+    def obtener_venta_read(self, session: Session, venta_id: UUID) -> VentaRead:
         from collections import defaultdict
 
         venta = session.get(Venta, venta_id)
@@ -895,8 +1017,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         ensure_entity_belongs_to_selected_company(venta.empresa_id)
 
         stmt_detalle = select(VentaDetalle).where(
-            VentaDetalle.venta_id == venta.id,
-            VentaDetalle.activo.is_(True),
+            col(VentaDetalle.venta_id) == venta.id,
+            col(VentaDetalle.activo).is_(True),
         )
         detalles_db = list(session.exec(stmt_detalle).all())
         detalle_ids = [detalle.id for detalle in detalles_db]
@@ -906,8 +1028,8 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             impuestos_db = list(
                 session.exec(
                     select(VentaDetalleImpuesto).where(
-                        VentaDetalleImpuesto.venta_detalle_id.in_(detalle_ids),
-                        VentaDetalleImpuesto.activo.is_(True),
+                        col(VentaDetalleImpuesto.venta_detalle_id).in_(detalle_ids),
+                        col(VentaDetalleImpuesto.activo).is_(True),
                     )
                 ).all()
             )
@@ -984,18 +1106,18 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
         limit: int,
         offset: int,
         only_active: bool = True,
-        fecha_inicio=None,
-        fecha_fin=None,
+        fecha_inicio: date | None = None,
+        fecha_fin: date | None = None,
         estado: EstadoVenta | None = None,
         tipo_emision: TipoEmisionVenta | None = None,
         texto: str | None = None,
-    ):
+    ) -> tuple[list[dict[str, Any]], PaginationMeta]:
         stmt = select(Venta)
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
             stmt = stmt.where(Venta.empresa_id == empresa_scope)
         if only_active:
-            stmt = stmt.where(Venta.activo.is_(True))
+            stmt = stmt.where(col(Venta.activo).is_(True))
         else:
             stmt = stmt.execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
         if fecha_inicio is not None:
@@ -1010,15 +1132,15 @@ class VentaService(TemplateMethodService[VentaCreate, Venta]):
             pattern = f"%{texto.strip()}%"
             stmt = stmt.where(
                 or_(
-                    Venta.identificacion_comprador.ilike(pattern),
-                    Venta.secuencial_formateado.ilike(pattern),
+                    col(Venta.identificacion_comprador).ilike(pattern),
+                    col(Venta.secuencial_formateado).ilike(pattern),
                 )
             )
 
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         ventas = list(
             session.exec(
-                stmt.order_by(Venta.fecha_emision.desc(), Venta.creado_en.desc())
+                stmt.order_by(col(Venta.fecha_emision).desc(), col(Venta.creado_en).desc())
                 .offset(offset)
                 .limit(limit)
             ).all()

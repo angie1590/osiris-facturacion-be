@@ -47,6 +47,10 @@ line-length = 100
 python_version = "3.11"
 strict = true
 
+[[tool.mypy.overrides]]
+module = ["jose", "jose.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-v"
 testpaths = ["tests"]

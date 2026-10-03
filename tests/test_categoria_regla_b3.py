@@ -3,13 +3,14 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
+from osiris.modules.inventario.atributo.entity import Atributo
 from osiris.modules.inventario.categoria.entity import Categoria
+from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
@@ -26,7 +27,9 @@ def _build_test_engine():
         tables=[
             AuditLog.__table__,
             CasaComercial.__table__,
+            Atributo.__table__,
             Categoria.__table__,
+            CategoriaAtributo.__table__,
             Producto.__table__,
             ProductoCategoria.__table__,
             ImpuestoCatalogo.__table__,
@@ -71,7 +74,7 @@ def _seed_categoria_hoja_con_dos_productos(session: Session) -> tuple[Categoria,
     return categoria_a, [producto_1.id, producto_2.id]
 
 
-def test_regla_b3_migra_productos_a_general_al_crear_hija():
+def test_regla_b3_migra_productos_a_sin_clasificar_hermana_al_crear_hija():
     engine = _build_test_engine()
     service = CategoriaService()
 
@@ -93,26 +96,30 @@ def test_regla_b3_migra_productos_a_general_al_crear_hija():
         assert categoria_a_db is not None
         assert categoria_a_db.es_padre is True
 
-        general = session.exec(
+        sin_clasificar = session.exec(
             select(Categoria)
             .where(Categoria.parent_id == categoria_a.id)
-            .where(func.lower(Categoria.nombre) == "general")
+            .where(Categoria.is_default.is_(True))
         ).first()
-        assert general is not None
+        assert sin_clasificar is not None
+        assert sin_clasificar.nombre == "Sin clasificar"
+        assert sin_clasificar.parent_id == categoria_a.id
+        assert sin_clasificar.is_default is True
+        assert categoria_b.parent_id == sin_clasificar.parent_id
 
         rows_parent = session.exec(
             select(ProductoCategoria).where(ProductoCategoria.categoria_id == categoria_a.id)
         ).all()
         assert len(rows_parent) == 0
 
-        rows_general = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == general.id)
+        rows_unclassified = session.exec(
+            select(ProductoCategoria).where(ProductoCategoria.categoria_id == sin_clasificar.id)
         ).all()
-        assert len(rows_general) == 2
-        assert {row.producto_id for row in rows_general} == set(producto_ids)
+        assert len(rows_unclassified) == 2
+        assert {row.producto_id for row in rows_unclassified} == set(producto_ids)
 
 
-def test_regla_b3_reutiliza_general_existente_en_siguiente_hija():
+def test_regla_b3_reutiliza_sin_clasificar_en_siguiente_hija():
     engine = _build_test_engine()
     service = CategoriaService()
 
@@ -138,12 +145,13 @@ def test_regla_b3_reutiliza_general_existente_en_siguiente_hija():
             },
         )
 
-        generals = session.exec(
+        defaults = session.exec(
             select(Categoria)
             .where(Categoria.parent_id == categoria_a.id)
-            .where(func.lower(Categoria.nombre) == "general")
+            .where(Categoria.is_default.is_(True))
         ).all()
-        assert len(generals) == 1
+        assert len(defaults) == 1
+        assert defaults[0].nombre == "Sin clasificar"
 
         rows_parent = session.exec(
             select(ProductoCategoria).where(ProductoCategoria.categoria_id == categoria_a.id)
@@ -151,7 +159,7 @@ def test_regla_b3_reutiliza_general_existente_en_siguiente_hija():
         assert len(rows_parent) == 0
 
 
-def test_regla_b3_update_mueve_categoria_bajo_hoja_con_productos_y_migra_a_general():
+def test_regla_b3_update_mueve_categoria_bajo_hoja_con_productos_y_migra_a_sin_clasificar():
     engine = _build_test_engine()
     service = CategoriaService()
 
@@ -183,20 +191,63 @@ def test_regla_b3_update_mueve_categoria_bajo_hoja_con_productos_y_migra_a_gener
         assert categoria_x_db is not None
         assert categoria_x_db.es_padre is True
 
-        general = session.exec(
+        sin_clasificar = session.exec(
             select(Categoria)
             .where(Categoria.parent_id == categoria_x.id)
-            .where(func.lower(Categoria.nombre) == "general")
+            .where(Categoria.is_default.is_(True))
         ).first()
-        assert general is not None
+        assert sin_clasificar is not None
+        assert sin_clasificar.parent_id == updated.parent_id
 
         rows_x = session.exec(
             select(ProductoCategoria).where(ProductoCategoria.categoria_id == categoria_x.id)
         ).all()
         assert len(rows_x) == 0
 
-        rows_general = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == general.id)
+        rows_unclassified = session.exec(
+            select(ProductoCategoria).where(ProductoCategoria.categoria_id == sin_clasificar.id)
         ).all()
-        assert len(rows_general) == 2
-        assert {row.producto_id for row in rows_general} == set(producto_ids)
+        assert len(rows_unclassified) == 2
+        assert {row.producto_id for row in rows_unclassified} == set(producto_ids)
+
+
+def test_bucket_sin_clasificar_se_desactiva_al_quedar_sin_productos_activos():
+    engine = _build_test_engine()
+    service = CategoriaService()
+
+    with Session(engine) as session:
+        parent = Categoria(
+            nombre=f"Parent-{uuid4().hex[:6]}",
+            es_padre=True,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        bucket = Categoria(
+            nombre="Sin clasificar",
+            es_padre=False,
+            is_default=True,
+            parent_id=parent.id,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        product = Producto(
+            nombre=f"P-{uuid4().hex[:6]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add_all([parent, bucket, product])
+        session.flush()
+        session.add(ProductoCategoria(producto_id=product.id, categoria_id=bucket.id))
+        session.commit()
+
+        service.desactivar_defaults_vacios(session, {bucket.id})
+        session.refresh(bucket)
+        assert bucket.activo is True
+
+        product.activo = False
+        session.add(product)
+        service.desactivar_defaults_vacios(session, {bucket.id})
+        session.refresh(bucket)
+        assert bucket.activo is False

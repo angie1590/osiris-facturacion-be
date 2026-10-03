@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 from uuid import UUID
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 from fastapi import HTTPException
 
 from osiris.domain.repository import BaseRepository
@@ -17,40 +17,53 @@ class ProductoImpuestoRepository(BaseRepository):
         self,
         session: Session,
         producto_id: UUID,
-        impuesto_catalogo_id: UUID
+        impuesto_catalogo_id: UUID,
+        empresa_id: UUID | None = None,
     ) -> Optional[ProductoImpuesto]:
         """Obtiene la relación específica producto-impuesto."""
         stmt = select(ProductoImpuesto).where(
-            ProductoImpuesto.producto_id == producto_id,
-            ProductoImpuesto.impuesto_catalogo_id == impuesto_catalogo_id,
-            ProductoImpuesto.activo.is_(True)
+            col(ProductoImpuesto.producto_id) == producto_id,
+            col(ProductoImpuesto.impuesto_catalogo_id) == impuesto_catalogo_id,
+            col(ProductoImpuesto.activo).is_(True)
         )
+        if empresa_id is not None:
+            stmt = stmt.where(col(ProductoImpuesto.empresa_id) == empresa_id)
         return session.exec(stmt).first()
 
-    def list_by_producto(self, session: Session, producto_id: UUID) -> List[ProductoImpuesto]:
+    def list_by_producto(
+        self,
+        session: Session,
+        producto_id: UUID,
+        empresa_id: UUID | None = None,
+    ) -> List[ProductoImpuesto]:
         """Lista todos los impuestos activos asignados a un producto."""
         stmt = select(ProductoImpuesto).where(
-            ProductoImpuesto.producto_id == producto_id,
-            ProductoImpuesto.activo.is_(True)
+            col(ProductoImpuesto.producto_id) == producto_id,
+            col(ProductoImpuesto.activo).is_(True)
         )
+        if empresa_id is not None:
+            stmt = stmt.where(col(ProductoImpuesto.empresa_id) == empresa_id)
         return list(session.exec(stmt).all())
 
     def count_by_tipo_impuesto(
         self,
         session: Session,
         producto_id: UUID,
-        tipo_impuesto: TipoImpuesto
+        tipo_impuesto: TipoImpuesto,
+        empresa_id: UUID | None = None,
     ) -> int:
         """Cuenta cuántos impuestos de un tipo específico tiene asignado un producto."""
         stmt = select(ProductoImpuesto).join(
             ImpuestoCatalogo,
-            ProductoImpuesto.impuesto_catalogo_id == ImpuestoCatalogo.id
+            col(ProductoImpuesto.impuesto_catalogo_id) == col(ImpuestoCatalogo.id)
         ).where(
-            ProductoImpuesto.producto_id == producto_id,
-            ProductoImpuesto.activo.is_(True),
-            ImpuestoCatalogo.tipo_impuesto == tipo_impuesto,
-            ImpuestoCatalogo.activo.is_(True)
+            col(ProductoImpuesto.producto_id) == producto_id,
+            col(ProductoImpuesto.activo).is_(True),
+            col(ImpuestoCatalogo.tipo_impuesto) == tipo_impuesto,
+            col(ImpuestoCatalogo.activo).is_(True)
         )
+        if empresa_id is not None:
+            stmt = stmt.where(col(ProductoImpuesto.empresa_id) == empresa_id)
 
         resultados = session.exec(stmt).all()
         return len(resultados)
@@ -59,10 +72,11 @@ class ProductoImpuestoRepository(BaseRepository):
         self,
         session: Session,
         producto_id: UUID,
-        impuesto_catalogo_id: UUID
+        impuesto_catalogo_id: UUID,
+        empresa_id: UUID | None = None,
     ) -> None:
         """Valida que no exista ya una asignación activa de este impuesto al producto."""
-        existente = self.get_by_producto_impuesto(session, producto_id, impuesto_catalogo_id)
+        existente = self.get_by_producto_impuesto(session, producto_id, impuesto_catalogo_id, empresa_id)
         if existente:
             raise HTTPException(
                 status_code=409,

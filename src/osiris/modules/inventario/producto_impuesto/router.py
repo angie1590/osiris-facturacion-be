@@ -7,29 +7,39 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from osiris.core.db import get_session
+from osiris.core.auth import require_roles
 from osiris.modules.inventario.producto_impuesto.models import ProductoImpuestoRead
 from osiris.modules.inventario.producto_impuesto.service import ProductoImpuestoService
 from osiris.modules.sri.impuesto_catalogo.models import ImpuestoCatalogoRead
-
 
 router = APIRouter(prefix="/api/v1/productos", tags=["Productos"])
 service = ProductoImpuestoService()
 
 
 @router.get("/{producto_id}/impuestos", response_model=List[ImpuestoCatalogoRead])
-def listar_impuestos_producto(producto_id: UUID, session: Session = Depends(get_session)):
+def listar_impuestos_producto(
+    producto_id: UUID,
+    session: Session = Depends(get_session),
+) -> List[ImpuestoCatalogoRead]:
     impuestos = service.get_impuestos_completos(session, producto_id)
     return [ImpuestoCatalogoRead.model_validate(imp) for imp in impuestos]
 
 
-@router.post("/{producto_id}/impuestos", response_model=ProductoImpuestoRead, status_code=201)
+@router.post(
+    "/{producto_id}/impuestos",
+    response_model=ProductoImpuestoRead,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin", "operator", "supervisor"))],
+)
 def asignar_impuesto_a_producto(
     producto_id: UUID,
     impuesto_catalogo_id: UUID,
     usuario_auditoria: str,
     session: Session = Depends(get_session),
-):
-    producto_impuesto = service.asignar_impuesto(session, producto_id, impuesto_catalogo_id, usuario_auditoria)
+) -> ProductoImpuestoRead:
+    producto_impuesto = service.asignar_impuesto(
+        session, producto_id, impuesto_catalogo_id, usuario_auditoria
+    )
 
     impuesto = session.get(service.impuesto_repo.model, impuesto_catalogo_id)
 
@@ -40,7 +50,14 @@ def asignar_impuesto_a_producto(
     return response
 
 
-@router.delete("/impuestos/{producto_impuesto_id}", status_code=204)
-def eliminar_impuesto_de_producto(producto_impuesto_id: UUID, session: Session = Depends(get_session)):
+@router.delete(
+    "/impuestos/{producto_impuesto_id}",
+    status_code=204,
+    dependencies=[Depends(require_roles("admin", "operator", "supervisor"))],
+)
+def eliminar_impuesto_de_producto(
+    producto_impuesto_id: UUID,
+    session: Session = Depends(get_session),
+) -> None:
     service.eliminar_impuesto(session, producto_impuesto_id)
     return None
