@@ -3,10 +3,13 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.inspection import inspect as sa_inspect
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import InstanceState, Mapper
 
 from osiris.modules.common.audit_log.entity import AuditAction, AuditLog
 from osiris.modules.sri.core_sri.models import Venta
@@ -22,7 +25,7 @@ _SKIP_DIFF_FIELDS = {
 }
 
 
-def _serialize(value):
+def _serialize(value: Any) -> Any:
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, (datetime, date)):
@@ -34,9 +37,9 @@ def _serialize(value):
     return value
 
 
-def _snapshot_model(target) -> dict:
-    state = sa_inspect(target)
-    data: dict = {}
+def _snapshot_model(target: Producto | Venta) -> dict[str, Any]:
+    state: InstanceState[Producto | Venta] = sa_inspect(target, raiseerr=True)
+    data: dict[str, Any] = {}
     for attr in state.mapper.column_attrs:
         key = attr.key
         if key in _SKIP_DIFF_FIELDS:
@@ -45,10 +48,10 @@ def _snapshot_model(target) -> dict:
     return data
 
 
-def _diff_model_update(target) -> tuple[dict, dict]:
-    state = sa_inspect(target)
-    before: dict = {}
-    after: dict = {}
+def _diff_model_update(target: Producto | Venta) -> tuple[dict[str, Any], dict[str, Any]]:
+    state: InstanceState[Producto | Venta] = sa_inspect(target, raiseerr=True)
+    before: dict[str, Any] = {}
+    after: dict[str, Any] = {}
     for attr in state.mapper.column_attrs:
         key = attr.key
         if key in _SKIP_DIFF_FIELDS:
@@ -70,7 +73,7 @@ def _diff_model_update(target) -> tuple[dict, dict]:
     return before, after
 
 
-def _current_actor(target) -> str | None:
+def _current_actor(target: Producto | Venta) -> str | None:
     return (
         getattr(target, "updated_by", None)
         or getattr(target, "created_by", None)
@@ -78,7 +81,7 @@ def _current_actor(target) -> str | None:
     )
 
 
-def _write_audit(connection, *, target, accion: AuditAction, before: dict, after: dict) -> None:
+def _write_audit(connection: Connection, *, target: Producto | Venta, accion: AuditAction, before: dict[str, Any], after: dict[str, Any]) -> None:
     now = datetime.utcnow()
     table_name = target.__tablename__
     record_id = str(getattr(target, "id"))
@@ -108,7 +111,7 @@ def _write_audit(connection, *, target, accion: AuditAction, before: dict, after
 
 @sa.event.listens_for(Producto, "after_insert")
 @sa.event.listens_for(Venta, "after_insert")
-def _audit_after_insert(_mapper, connection, target):
+def _audit_after_insert(_mapper: Mapper[Producto] | Mapper[Venta], connection: Connection, target: Producto | Venta) -> None:
     _write_audit(
         connection,
         target=target,
@@ -120,7 +123,7 @@ def _audit_after_insert(_mapper, connection, target):
 
 @sa.event.listens_for(Producto, "after_update")
 @sa.event.listens_for(Venta, "after_update")
-def _audit_after_update(_mapper, connection, target):
+def _audit_after_update(_mapper: Mapper[Producto] | Mapper[Venta], connection: Connection, target: Producto | Venta) -> None:
     before, after = _diff_model_update(target)
     if not before and not after:
         return
@@ -134,7 +137,7 @@ def _audit_after_update(_mapper, connection, target):
 
 @sa.event.listens_for(Producto, "after_delete")
 @sa.event.listens_for(Venta, "after_delete")
-def _audit_after_delete(_mapper, connection, target):
+def _audit_after_delete(_mapper: Mapper[Producto] | Mapper[Venta], connection: Connection, target: Producto | Venta) -> None:
     _write_audit(
         connection,
         target=target,

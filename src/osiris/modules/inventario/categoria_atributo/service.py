@@ -25,7 +25,7 @@ from .models import CategoriaAtributoCreate, CategoriaAtributoUpdate
 
 class CategoriaAtributoService:
     @staticmethod
-    def _validar_nombre_unico_en_rama(
+    def _validar_nombre_unico_global(
         session: Session,
         categoria_id: UUID,
         atributo_id: UUID,
@@ -40,44 +40,20 @@ class CategoriaAtributoService:
         if not atributo or not atributo.activo:
             raise HTTPException(status_code=404, detail="Atributo no encontrado o inactivo.")
 
-        descendants = (
-            select(col(Categoria.id).label("categoria_id"))
-            .where(col(Categoria.id) == categoria_id, col(Categoria.activo).is_(True))
-            .cte(name="categoria_descendientes_validacion", recursive=True)
-        )
-        descendants = descendants.union_all(
-            select(col(Categoria.id).label("categoria_id")).where(
-                col(Categoria.parent_id) == descendants.c.categoria_id,
-                col(Categoria.activo).is_(True),
-            )
-        )
-        category_ids = set(session.exec(select(descendants.c.categoria_id)).all())
-
-        parent_id = categoria.parent_id
-        visited: set[UUID] = set()
-        while parent_id is not None and parent_id not in visited:
-            visited.add(parent_id)
-            parent = session.get(Categoria, parent_id)
-            if parent is None or not parent.activo:
-                break
-            category_ids.add(parent.id)
-            parent_id = parent.parent_id
-
-        existing_attributes = session.exec(
-            select(Atributo)
-            .join(CategoriaAtributo, col(CategoriaAtributo.atributo_id) == col(Atributo.id))
+        normalized_name = atributo.nombre.strip().casefold()
+        existing_attribute_id = session.exec(
+            select(col(Atributo.id))
             .where(
-                col(CategoriaAtributo.categoria_id).in_(category_ids),
-                col(CategoriaAtributo.activo).is_(True),
                 col(Atributo.activo).is_(True),
                 col(Atributo.id) != atributo_id,
+                func.lower(func.trim(col(Atributo.nombre))) == normalized_name,
             )
-        ).all()
-        normalized_name = atributo.nombre.strip().casefold()
-        if any(item.nombre.strip().casefold() == normalized_name for item in existing_attributes):
+            .limit(1)
+        ).first()
+        if existing_attribute_id is not None:
             raise HTTPException(
                 status_code=409,
-                detail="Ya existe un atributo con ese nombre en la rama efectiva de la categoría.",
+                detail="Ya existe un atributo activo con ese nombre en otra categoría.",
             )
 
     @staticmethod
@@ -294,8 +270,15 @@ class CategoriaAtributoService:
     def get(self, session: Session, id: UUID) -> Optional[CategoriaAtributo]:
         return session.get(CategoriaAtributo, id)
 
-    def create(self, session: Session, dto: CategoriaAtributoCreate, usuario_auditoria: Optional[str] = None) -> CategoriaAtributo:
-        self._validar_nombre_unico_en_rama(session, dto.categoria_id, dto.atributo_id)
+    def create(
+        self,
+        session: Session,
+        dto: CategoriaAtributoCreate,
+        usuario_auditoria: Optional[str] = None,
+        *,
+        commit: bool = True,
+    ) -> CategoriaAtributo:
+        self._validar_nombre_unico_global(session, dto.categoria_id, dto.atributo_id)
         atributo_master: Optional[Atributo] = None
         valor_default = dto.valor_default
         if dto.obligatorio is True and self._is_empty_default(valor_default):
@@ -334,8 +317,9 @@ class CategoriaAtributoService:
                     "valor_default": entity.valor_default,
                 },
             )
-        session.commit()
-        session.refresh(entity)
+        if commit:
+            session.commit()
+            session.refresh(entity)
         return entity
 
     def update(self, session: Session, id: UUID, dto: CategoriaAtributoUpdate, usuario_auditoria: Optional[str] = None) -> Optional[CategoriaAtributo]:
@@ -371,7 +355,16 @@ class CategoriaAtributoService:
 
         entity.usuario_auditoria = usuario_auditoria or entity.usuario_auditoria
         session.add(entity)
-        if (not obligatorio_anterior) and entity.obligatorio is True and not self._is_empty_default(entity.valor_default):
+        backfill_on_required_transition = (
+            not obligatorio_anterior
+            and entity.obligatorio is True
+            and dto.aplicar_default_a_existentes is not False
+        )
+        if (
+            entity.obligatorio is True
+            and not self._is_empty_default(entity.valor_default)
+            and (backfill_on_required_transition or dto.aplicar_default_a_existentes is True)
+        ):
             if atributo_master is None:
                 atributo_master = session.get(Atributo, entity.atributo_id)
             self._ejecutar_backfill_atributo(

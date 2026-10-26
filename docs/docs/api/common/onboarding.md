@@ -15,7 +15,7 @@ Antes de integrar los endpoints de onboarding, considera estas reglas de contrat
 
 1. Soft delete y filtro `only_active`:
    - `only_active=true`: retorna solo registros activos.
-   - `only_active=false`: retorna solo registros inactivos.
+  - `only_active=false`: incluye activos e inactivos; no equivale a un filtro de solo inactivos.
 2. Códigos HTTP esperados:
    - `400`: error de validación de payload/formato.
    - `404`: recurso no encontrado.
@@ -25,13 +25,13 @@ Antes de integrar los endpoints de onboarding, considera estas reglas de contrat
 4. Secuenciales SRI:
    - El endpoint de siguiente secuencial devuelve siempre el número en formato de 9 dígitos (`zfill(9)`), por ejemplo `000000123`.
 5. Multiempresa por sesión:
-   - El aislamiento por empresa se aplica por contexto de sesión/JWT. Ver detalle en [Empresa Seleccionada por Sesión](./empresa-seleccionada-sesion).
+  - El aislamiento por empresa se aplica por contexto de sesión/JWT a recursos con ámbito empresarial. Persona y maestros comerciales siguen globales; Empleado valida Empresa pero mantiene unicidad global por Persona. Ver [Empresa Seleccionada por Sesión](./empresa-seleccionada-sesion).
 
 ## Política de Registros Activos (Frontend)
 
 - El frontend debe consultar por defecto con `only_active=true` para mostrar únicamente registros activos.
 - Los registros inactivos representan **borrado lógico** y no deben mostrarse en flujos operativos normales.
-- Para pantallas administrativas de auditoría o recuperación, usar `only_active=false` para consultar inactivos.
+- Para pantallas administrativas de auditoría o recuperación, `only_active=false` consulta ambos estados; usar `estado=inactivo` solo donde el endpoint lo admita.
 
 ## Catálogos y Enums Operativos
 

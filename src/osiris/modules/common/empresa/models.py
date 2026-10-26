@@ -50,7 +50,7 @@ class EmpresaBase(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _validar_reglas_tributarias(self):
+    def _validar_reglas_tributarias(self) -> EmpresaBase:
         if (
             self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
             and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
@@ -126,7 +126,7 @@ class EmpresaUpdate(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _validar_modo_emision_por_regimen(self):
+    def _validar_modo_emision_por_regimen(self) -> EmpresaUpdate:
         puede_emitir_nota_venta = (
             self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
             or self.artesano_calificado is True
@@ -147,7 +147,7 @@ class EmpresaUpdate(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validar_campos_tributarios_condicionales(self):
+    def _validar_campos_tributarios_condicionales(self) -> EmpresaUpdate:
         if (
             self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
             and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
@@ -187,7 +187,7 @@ class EmpresaRegimenModoRules(BaseModel):
     artesano_calificado: bool = False
 
     @model_validator(mode="after")
-    def _validar_modo_emision_por_regimen(self):
+    def _validar_modo_emision_por_regimen(self) -> EmpresaRegimenModoRules:
         puede_emitir_nota_venta = (
             self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
             or self.artesano_calificado

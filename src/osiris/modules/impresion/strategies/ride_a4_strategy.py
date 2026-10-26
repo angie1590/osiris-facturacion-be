@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from html import unescape
 
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy
+from osiris.modules.impresion.strategies.render_strategy import RenderStrategy, checked_pdf_output
 
 
 def _pdf_escape(text: str) -> str:
@@ -62,7 +62,7 @@ class RideA4Strategy(RenderStrategy):
         try:
             from weasyprint import HTML  # type: ignore
 
-            return HTML(string=html_content).write_pdf()
+            return checked_pdf_output(HTML(string=html_content).write_pdf())
         except ModuleNotFoundError:
             # Fallback local para entornos sin dependencia gráfica.
             plain = unescape(re.sub(r"<[^>]+>", " ", html_content))

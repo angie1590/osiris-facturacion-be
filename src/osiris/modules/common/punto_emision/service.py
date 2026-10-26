@@ -6,10 +6,11 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.sql.elements import ColumnElement
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.permisos import verificar_permiso
 from osiris.domain.service import BaseService
+from osiris.utils.pagination import PaginationMeta
 from osiris.modules.common.audit_log.entity import AuditLog
 from .repository import PuntoEmisionRepository
 from .entity import PuntoEmision, PuntoEmisionSecuencial, TipoDocumentoSRI
@@ -18,7 +19,7 @@ from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.common.usuario.entity import Usuario
 
 
-class PuntoEmisionService(BaseService):
+class PuntoEmisionService(BaseService[PuntoEmision]):
     MODULO_PERMISO_AJUSTE_SECUENCIAL = "PUNTOS_EMISION"
 
     repo = PuntoEmisionRepository()
@@ -30,7 +31,7 @@ class PuntoEmisionService(BaseService):
     def list_by_sucursal(
         self, session: Session, *, sucursal_id: UUID,
         limit: int, offset: int, only_active: bool = True
-    ):
+    ) -> tuple[list[PuntoEmision], PaginationMeta]:
         return self.list_paginated(
             session,
             limit=limit,
@@ -47,18 +48,18 @@ class PuntoEmisionService(BaseService):
             PuntoEmision.codigo == codigo,
         )
         if only_active is True:
-            stmt = stmt.where(PuntoEmision.activo.is_(True))
+            stmt = stmt.where(col(PuntoEmision.activo).is_(True))
         return session.exec(stmt).first()
 
     @staticmethod
     def _require_admin(session: Session, usuario_id: UUID) -> None:
         stmt = (
             select(Usuario, Rol)
-            .join(Rol, Rol.id == Usuario.rol_id)
+            .join(Rol, col(Rol.id) == Usuario.rol_id)
             .where(
                 Usuario.id == usuario_id,
-                Usuario.activo.is_(True),
-                Rol.activo.is_(True),
+                col(Usuario.activo).is_(True),
+                col(Rol.activo).is_(True),
             )
         )
         row = session.exec(stmt).first()

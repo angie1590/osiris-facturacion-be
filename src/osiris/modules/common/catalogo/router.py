@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,12 +24,12 @@ service = CatalogoService()
 
 
 @router.get("", response_model=list[CatalogoRead])
-def listar_catalogos(session: Session = Depends(get_session)):
+def listar_catalogos(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     return service.list(session)
 
 
 @router.post("", response_model=CatalogoRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles("admin", "supervisor"))])
-def crear_catalogo(payload: CatalogoCreate, session: Session = Depends(get_session)):
+def crear_catalogo(payload: CatalogoCreate, session: Session = Depends(get_session)) -> dict[str, Any]:
     return service.create(session, name=payload.name, description=payload.description)
 
 
@@ -37,7 +38,7 @@ def actualizar_catalogo(
     catalog_id: UUID,
     payload: CatalogoUpdate,
     session: Session = Depends(get_session),
-):
+) -> dict[str, Any]:
     catalog = service.update(session, catalog_id, payload.model_dump(exclude_unset=True))
     if catalog is None:
         raise HTTPException(status_code=404, detail="Catálogo no encontrado.")
@@ -45,7 +46,7 @@ def actualizar_catalogo(
 
 
 @router.delete("/{catalog_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_roles("admin", "supervisor"))])
-def eliminar_catalogo(catalog_id: UUID, session: Session = Depends(get_session)):
+def eliminar_catalogo(catalog_id: UUID, session: Session = Depends(get_session)) -> None:
     if service.delete(session, catalog_id) is None:
         raise HTTPException(status_code=404, detail="Catálogo no encontrado.")
 
@@ -55,7 +56,7 @@ def listar_valores_catalogo(
     catalog_id: UUID,
     include_inactive: bool = Query(True),
     session: Session = Depends(get_session),
-):
+) -> list[dict[str, Any]]:
     return service.list_values(session, catalog_id, include_inactive=include_inactive)
 
 
@@ -64,7 +65,7 @@ def agregar_valor_catalogo(
     catalog_id: UUID,
     payload: CatalogoValorCreate,
     session: Session = Depends(get_session),
-):
+) -> dict[str, Any]:
     return service.add_value(session, catalog_id, payload.value)
 
 
@@ -74,7 +75,7 @@ def actualizar_valor_catalogo(
     value_id: UUID,
     payload: CatalogoValorUpdate,
     session: Session = Depends(get_session),
-):
+) -> dict[str, Any]:
     value = service.update_value(session, catalog_id, value_id, payload.value)
     if value is None:
         raise HTTPException(status_code=404, detail="Valor de catálogo no encontrado.")
@@ -82,7 +83,7 @@ def actualizar_valor_catalogo(
 
 
 @router.post("/{catalog_id}/valores/{value_id}/deactivate", response_model=CatalogoValorRead, dependencies=[Depends(require_roles("admin", "supervisor"))])
-def desactivar_valor_catalogo(catalog_id: UUID, value_id: UUID, session: Session = Depends(get_session)):
+def desactivar_valor_catalogo(catalog_id: UUID, value_id: UUID, session: Session = Depends(get_session)) -> dict[str, Any]:
     value = service.toggle_value(session, catalog_id, value_id, active=False)
     if value is None:
         raise HTTPException(status_code=404, detail="Valor de catálogo no encontrado.")
@@ -90,7 +91,7 @@ def desactivar_valor_catalogo(catalog_id: UUID, value_id: UUID, session: Session
 
 
 @router.post("/{catalog_id}/valores/{value_id}/reactivate", response_model=CatalogoValorRead, dependencies=[Depends(require_roles("admin", "supervisor"))])
-def reactivar_valor_catalogo(catalog_id: UUID, value_id: UUID, session: Session = Depends(get_session)):
+def reactivar_valor_catalogo(catalog_id: UUID, value_id: UUID, session: Session = Depends(get_session)) -> dict[str, Any]:
     value = service.toggle_value(session, catalog_id, value_id, active=True)
     if value is None:
         raise HTTPException(status_code=404, detail="Valor de catálogo no encontrado.")

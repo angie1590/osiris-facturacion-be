@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import create_engine
+from sqlmodel import Session
 
 from osiris.modules.common.persona.models import (
     PersonaCreate,
@@ -15,6 +18,7 @@ from osiris.modules.common.persona.models import (
 from osiris.modules.common.persona.entity import Persona
 from osiris.modules.common.persona.service import PersonaService
 from osiris.modules.common.persona.repository import PersonaRepository
+from osiris.modules.common.persona.composition import PersonaReference, resolve_persona
 
 
 
@@ -242,3 +246,120 @@ def test_persona_repository_delete_logico():
     session.commit.assert_not_called()
     # No exigimos refresh por ser DELETE 204 y no tener triggers de UPDATE
     session.refresh.assert_not_called()
+
+
+def test_persona_passport_normalization_in_create_update_and_service():
+    payload = {
+        "identificacion": " ab123 ", "tipo_identificacion": "PASAPORTE",
+        "nombre": " Ana ", "apellido": " Perez ", "usuario_auditoria": "test",
+    }
+    created = PersonaCreate(**payload)
+    updated = PersonaUpdate(**payload)
+    assert created.identificacion == updated.identificacion == "AB123"
+    assert created.nombre == created.nombre.strip()
+    session = MagicMock()
+    repository = MagicMock()
+    PersonaService(repository).create(session, payload)
+    assert repository.create.call_args.args[1]["identificacion"] == "AB123"
+
+
+def test_persona_server_search_pagination_and_inactive_views():
+    engine = create_engine("sqlite://")
+    Persona.__table__.create(engine)
+    try:
+        with Session(engine) as session:
+            session.add_all([
+                Persona(identificacion="AA111", tipo_identificacion="PASAPORTE", nombre="Ana", apellido="Uno", email="ana@example.com", usuario_auditoria="test"),
+                Persona(identificacion=" ab123 ", tipo_identificacion="PASAPORTE", nombre="Zoe", apellido="Dos", telefono="0999999999", usuario_auditoria="test", activo=False),
+            ])
+            session.commit()
+            repo = PersonaRepository()
+            items, total = repo.list(session, limit=1)
+            assert total == 1 and items[0].nombre == "Ana"
+            items, total = repo.list(session, only_active=False, identificacion="Ab123")
+            assert total == 1 and items[0].nombre == "Zoe" and items[0].activo is False
+            items, total = repo.list(session, q="example.com")
+            assert total == 1 and items[0].nombre == "Ana"
+            items, total = repo.list(session, only_active=False, q="0999999999", estado="inactivo")
+            assert total == 1 and items[0].nombre == "Zoe"
+            items, total = repo.list(session, only_active=False, limit=1, offset=1, sort_by="nombre")
+            assert total == 2 and items[0].nombre == "Zoe"
+    finally:
+        engine.dispose()
+
+
+def test_persona_service_rejects_partial_identity_update():
+    with pytest.raises(HTTPException) as exc:
+        PersonaService().update(MagicMock(), uuid4(), {"identificacion": "AB123"})
+    assert exc.value.status_code == 422
+
+
+def test_composite_persona_reference_is_exclusive():
+    draft = {"identificacion": "AB123", "tipo_identificacion": "PASAPORTE", "nombre": "Ana", "apellido": "Perez"}
+    assert PersonaReference(persona_nueva=draft).persona_nueva.identificacion == "AB123"
+    assert PersonaReference(persona_id=uuid4()).persona_nueva is None
+    for payload in [{}, {"persona_id": uuid4(), "persona_nueva": draft}]:
+        with pytest.raises(ValidationError):
+            PersonaReference(**payload)
+
+
+def test_composite_persona_reuses_existing_without_overwriting_and_rejects_inactive():
+    engine = create_engine("sqlite://")
+    Persona.__table__.create(engine)
+    draft = {"identificacion": " ab123 ", "tipo_identificacion": "PASAPORTE", "nombre": "Propuesta", "apellido": "Nueva"}
+    try:
+        with Session(engine) as session:
+            original = Persona(identificacion="AB123", tipo_identificacion="PASAPORTE", nombre="Original", apellido="Persistido", usuario_auditoria="test")
+            session.add(original)
+            session.commit()
+            payload = resolve_persona(session, {"persona_nueva": draft, "tipo_cliente_id": uuid4()})
+            assert payload["persona_id"] == original.id
+            assert "persona_nueva" not in payload
+            assert original.nombre == "Original"
+            original.activo = False
+            session.commit()
+            with pytest.raises(HTTPException) as exc:
+                resolve_persona(session, {"persona_nueva": draft})
+            assert exc.value.status_code == 409
+            assert exc.value.detail["persona_id"] == str(original.id)
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("role", ["cliente", "proveedor_persona", "empleado", "usuario", "proveedores_sociedad"])
+def test_persona_deactivation_rejects_every_active_dependency(role):
+    session = MagicMock()
+    service = PersonaService(repo=MagicMock())
+    person = Persona(identificacion="AB123", tipo_identificacion="PASAPORTE", nombre="Ana", apellido="Perez")
+    dependency = MagicMock()
+    dependency.id = uuid4()
+    dependency.activo = True
+    dependency.razon_social = "Sociedad de prueba"
+    keys = ["cliente", "proveedor_persona", "empleado", "usuario", "proveedores_sociedad"]
+    cursor = MagicMock()
+    cursor.first.return_value = person
+    dependency_results = []
+    for key in keys:
+        result = MagicMock()
+        result.all.return_value = [dependency] if key == role else []
+        dependency_results.append(result)
+    session.exec.side_effect = [cursor, cursor, *dependency_results]
+    with pytest.raises(HTTPException) as exc:
+        service.delete(session, person.id)
+    assert exc.value.status_code == 409
+    assert exc.value.detail["dependencias_activas"][0]["recurso"] == role
+    assert person.activo is True
+    service.repo.delete.assert_not_called()
+    session.rollback.assert_called_once()
+
+
+def test_persona_generic_update_cannot_bypass_reactivation():
+    with pytest.raises(HTTPException) as exc:
+        PersonaService().update(MagicMock(), uuid4(), {"activo": True})
+    assert exc.value.status_code == 422
+
+
+def test_persona_dto_rejects_internal_lifecycle_and_audit_fields():
+    for field in ("activo", "created_by", "updated_by", "creado_en", "actualizado_en"):
+        with pytest.raises(ValidationError):
+            PersonaUpdate.model_validate({field: True})

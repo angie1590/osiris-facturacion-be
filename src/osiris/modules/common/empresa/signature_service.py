@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import hashlib
 from datetime import datetime, timezone
+from typing import cast
+from uuid import UUID
 
 from cryptography import x509
 from cryptography.fernet import Fernet, InvalidToken
@@ -33,7 +35,7 @@ class EmpresaSignatureService:
     def save(
         self,
         session: Session,
-        empresa_id,
+        empresa_id: UUID,
         *,
         filename: str,
         content: bytes,
@@ -76,14 +78,14 @@ class EmpresaSignatureService:
         try:
             cipher = self._fernet()
             return (
-                cipher.decrypt(empresa.firma_electronica_cifrada),
-                cipher.decrypt(empresa.firma_password_cifrada).decode("utf-8"),
+                cipher.decrypt(cast(bytes, empresa.firma_electronica_cifrada)),
+                cipher.decrypt(cast(bytes, empresa.firma_password_cifrada)).decode("utf-8"),
             )
         except (InvalidToken, UnicodeDecodeError) as exc:
             raise HTTPException(status_code=500, detail="No se pudo descifrar la firma electrónica.") from exc
 
     @staticmethod
-    def delete(session: Session, empresa_id) -> Empresa:
+    def delete(session: Session, empresa_id: UUID) -> Empresa:
         empresa = session.get(Empresa, empresa_id)
         if not empresa or not empresa.activo:
             raise HTTPException(status_code=404, detail="Empresa no encontrada.")

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from sqlalchemy import func
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import ensure_entity_belongs_to_selected_company, resolve_company_scope
 from osiris.modules.sri.core_sri.models import (
@@ -24,7 +25,7 @@ from osiris.modules.sri.core_sri.all_schemas import (
     RetencionRecibidaRead,
 )
 from osiris.modules.ventas.strategies.validacion_impuestos_sri_strategy import ValidacionImpuestosSRIStrategy
-from osiris.utils.pagination import build_pagination_meta
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 
 
@@ -47,9 +48,9 @@ class RetencionRecibidaService:
     def _validar_unicidad(self, session: Session, cliente_id: UUID, numero_retencion: str) -> None:
         existente = session.exec(
             select(RetencionRecibida).where(
-                RetencionRecibida.cliente_id == cliente_id,
-                RetencionRecibida.numero_retencion == numero_retencion,
-                RetencionRecibida.activo.is_(True),
+                col(RetencionRecibida.cliente_id) == cliente_id,
+                col(RetencionRecibida.numero_retencion) == numero_retencion,
+                col(RetencionRecibida.activo).is_(True),
             )
         ).first()
         if existente:
@@ -105,8 +106,8 @@ class RetencionRecibidaService:
             retencion = session.exec(
                 select(RetencionRecibida)
                 .where(
-                    RetencionRecibida.id == retencion_id,
-                    RetencionRecibida.activo.is_(True),
+                    col(RetencionRecibida.id) == retencion_id,
+                    col(RetencionRecibida.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -122,8 +123,8 @@ class RetencionRecibidaService:
             cxc = session.exec(
                 select(CuentaPorCobrar)
                 .where(
-                    CuentaPorCobrar.venta_id == retencion.venta_id,
-                    CuentaPorCobrar.activo.is_(True),
+                    col(CuentaPorCobrar.venta_id) == retencion.venta_id,
+                    col(CuentaPorCobrar.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -160,8 +161,8 @@ class RetencionRecibidaService:
             retencion = session.exec(
                 select(RetencionRecibida)
                 .where(
-                    RetencionRecibida.id == retencion_id,
-                    RetencionRecibida.activo.is_(True),
+                    col(RetencionRecibida.id) == retencion_id,
+                    col(RetencionRecibida.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -177,8 +178,8 @@ class RetencionRecibidaService:
             cxc = session.exec(
                 select(CuentaPorCobrar)
                 .where(
-                    CuentaPorCobrar.venta_id == retencion.venta_id,
-                    CuentaPorCobrar.activo.is_(True),
+                    col(CuentaPorCobrar.venta_id) == retencion.venta_id,
+                    col(CuentaPorCobrar.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()
@@ -223,8 +224,8 @@ class RetencionRecibidaService:
         detalles = list(
             session.exec(
                 select(RetencionRecibidaDetalle).where(
-                    RetencionRecibidaDetalle.retencion_recibida_id == retencion.id,
-                    RetencionRecibidaDetalle.activo.is_(True),
+                    col(RetencionRecibidaDetalle.retencion_recibida_id) == retencion.id,
+                    col(RetencionRecibidaDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -251,32 +252,32 @@ class RetencionRecibidaService:
         limit: int,
         offset: int,
         only_active: bool = True,
-        fecha_inicio=None,
-        fecha_fin=None,
+        fecha_inicio: date | None = None,
+        fecha_fin: date | None = None,
         estado: EstadoRetencionRecibida | None = None,
-    ):
+    ) -> tuple[list[RetencionRecibidaListItemRead], PaginationMeta]:
         stmt = select(RetencionRecibida)
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
-            stmt = stmt.join(Venta, Venta.id == RetencionRecibida.venta_id).where(
-                Venta.activo.is_(True),
-                Venta.empresa_id == empresa_scope,
+            stmt = stmt.join(Venta, col(Venta.id) == col(RetencionRecibida.venta_id)).where(
+                col(Venta.activo).is_(True),
+                col(Venta.empresa_id) == empresa_scope,
             )
         if only_active:
-            stmt = stmt.where(RetencionRecibida.activo.is_(True))
+            stmt = stmt.where(col(RetencionRecibida.activo).is_(True))
         else:
             stmt = stmt.execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
         if fecha_inicio is not None:
-            stmt = stmt.where(RetencionRecibida.fecha_emision >= fecha_inicio)
+            stmt = stmt.where(col(RetencionRecibida.fecha_emision) >= fecha_inicio)
         if fecha_fin is not None:
-            stmt = stmt.where(RetencionRecibida.fecha_emision <= fecha_fin)
+            stmt = stmt.where(col(RetencionRecibida.fecha_emision) <= fecha_fin)
         if estado is not None:
-            stmt = stmt.where(RetencionRecibida.estado == estado)
+            stmt = stmt.where(col(RetencionRecibida.estado) == estado)
 
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         retenciones = list(
             session.exec(
-                stmt.order_by(RetencionRecibida.fecha_emision.desc(), RetencionRecibida.creado_en.desc())
+                stmt.order_by(col(RetencionRecibida.fecha_emision).desc(), col(RetencionRecibida.creado_en).desc())
                 .offset(offset)
                 .limit(limit)
             ).all()

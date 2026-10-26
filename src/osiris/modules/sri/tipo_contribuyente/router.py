@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 
 from osiris.core.db import get_session
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
@@ -16,5 +16,5 @@ def list_tipos_contribuyente(
 ) -> list[TipoContribuyente]:
     statement = select(TipoContribuyente)
     if only_active:
-        statement = statement.where(TipoContribuyente.activo.is_(True))
+        statement = statement.where(col(TipoContribuyente.activo).is_(True))
     return list(session.exec(statement).all())

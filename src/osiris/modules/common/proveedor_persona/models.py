@@ -4,25 +4,28 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from sqlmodel import SQLModel, Field
-from pydantic import ConfigDict
+from sqlmodel import Field
+from osiris.domain.base_models import BaseOSModel
+from osiris.modules.common.persona.composition import PersonaReference
+from osiris.modules.common.persona.models import PersonaRead
 
 
-class ProveedorPersonaCreate(SQLModel):
+class ProveedorPersonaCreate(PersonaReference):
+    model_config = {"extra": "forbid", "from_attributes": True}
     nombre_comercial: Optional[str] = None
     tipo_contribuyente_id: str = Field(min_length=1, max_length=2)
-    persona_id: UUID
     usuario_auditoria: Optional[str] = None
 
 
-class ProveedorPersonaUpdate(SQLModel):
-    # No se permite cambiar persona_id (igual que cliente)
+class ProveedorPersonaUpdate(BaseOSModel):
+    model_config = {"extra": "forbid", "from_attributes": True}
+    persona_id: Optional[UUID] = None
     nombre_comercial: Optional[str] = None
     tipo_contribuyente_id: Optional[str] = Field(default=None, min_length=1, max_length=2)
     usuario_auditoria: Optional[str] = None
 
 
-class ProveedorPersonaRead(SQLModel):
+class ProveedorPersonaRead(BaseOSModel):
     id: UUID
     nombre_comercial: Optional[str] = None
     tipo_contribuyente_id: str
@@ -30,6 +33,12 @@ class ProveedorPersonaRead(SQLModel):
     activo: bool
     creado_en: datetime
     actualizado_en: datetime
-    usuario_auditoria: str
+    usuario_auditoria: Optional[str] = None
+    persona: Optional[PersonaRead] = None
+    tipo_contribuyente_nombre: Optional[str] = None
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = {"from_attributes": True}

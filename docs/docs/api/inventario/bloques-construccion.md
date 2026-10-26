@@ -553,9 +553,12 @@ Actualiza los parámetros de una asignación (orden, obligatorio, valor_default)
   "orden": 2,
   "obligatorio": false,
   "valor_default": "Gris",
+  "aplicar_default_a_existentes": false,
   "usuario_auditoria": "admin"
 }
 ```
+
+Al cambiar una asignación opcional a obligatoria, envía `valor_default`. `aplicar_default_a_existentes` es opcional y por defecto conserva el comportamiento previo del API; cuando es `true`, el backend agrega el valor tipado solo a productos aplicables que todavía no tengan un valor EAV para ese atributo. Los valores existentes nunca se sobrescriben. La interfaz solicita confirmación antes de enviar esta opción.
 
 **Response 200:**
 ```json

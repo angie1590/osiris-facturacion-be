@@ -4,7 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Column
+from sqlalchemy import Column, Index, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlmodel import Field
 
@@ -23,6 +23,9 @@ class Persona(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     Mantiene los mismos campos que tu modelo anterior.
     """
     __tablename__ = "tbl_persona"
+    __table_args__ = (
+        Index("uq_tbl_persona_identificacion_normalizada", text("upper(trim(identificacion))"), unique=True),
+    )
 
     tipo_identificacion: TipoIdentificacion = Field(
         sa_column=Column(

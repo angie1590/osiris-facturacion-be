@@ -95,6 +95,10 @@ class BaseRepository:
         # ---- TOTAL (seguro) ----
         # Contamos sobre un subquery que ya incluye todos los filtros (y joins si los hubiere)
         count_stmt = select(func.count()).select_from(ordered_stmt.subquery())
+        if ordered_stmt.get_execution_options().get(SOFT_DELETE_INCLUDE_INACTIVE_OPTION, False):
+            count_stmt = count_stmt.execution_options(
+                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
+            )
         total = int(session.execute(count_stmt).scalar_one())
 
         # ---- ITEMS (paginados) ----

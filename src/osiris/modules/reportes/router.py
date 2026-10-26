@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -33,7 +34,7 @@ from osiris.modules.reportes.services.reporte_tributario_service import ReporteT
 from osiris.modules.reportes.services.reportes_service import ReportesVentasService
 
 
-REPORT_RESPONSES = {
+REPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Parámetros inválidos para la consulta del reporte."},
     422: {"description": "Error de validación de parámetros de entrada."},
 }
@@ -55,7 +56,7 @@ def obtener_reporte_ventas_resumen(
     punto_emision_id: UUID | None = Query(default=None),
     sucursal_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> ReporteVentasResumenRead:
     return reportes_ventas_service.obtener_resumen_ventas(
         session,
         fecha_inicio=fecha_inicio,
@@ -72,7 +73,7 @@ def obtener_reporte_top_productos_ventas(
     punto_emision_id: UUID | None = Query(default=None),
     limite: int = Query(default=10, ge=1, le=100),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteTopProductoRead]:
     return reportes_ventas_service.obtener_top_productos(
         session,
         fecha_inicio=fecha_inicio,
@@ -88,7 +89,7 @@ def obtener_reporte_tendencias_ventas(
     fecha_fin: date = Query(..., description="Fecha final del rango"),
     agrupacion: AgrupacionTendencia = Query(default=AgrupacionTendencia.DIARIA),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteVentasTendenciaRead]:
     return reportes_ventas_service.obtener_tendencias_ventas(
         session,
         fecha_inicio=fecha_inicio,
@@ -102,7 +103,7 @@ def obtener_reporte_ventas_por_vendedor(
     fecha_inicio: date | None = Query(default=None, description="Fecha inicial opcional"),
     fecha_fin: date | None = Query(default=None, description="Fecha final opcional"),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteVentasPorVendedorRead]:
     return reportes_ventas_service.obtener_ventas_por_vendedor(
         session,
         fecha_inicio=fecha_inicio,
@@ -116,7 +117,7 @@ def obtener_reporte_compras_por_proveedor(
     fecha_fin: date = Query(..., description="Fecha final del rango"),
     sucursal_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteComprasPorProveedorRead]:
     return reporte_compras_service.obtener_compras_por_proveedor(
         session,
         fecha_inicio=fecha_inicio,
@@ -131,7 +132,7 @@ def obtener_reporte_monitor_estados_sri(
     fecha_fin: date = Query(..., description="Fecha final del rango"),
     sucursal_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteMonitorSRIEstadoRead]:
     return reporte_monitor_sri_service.obtener_monitor_estados(
         session,
         fecha_inicio=fecha_inicio,
@@ -145,7 +146,7 @@ def obtener_reporte_rentabilidad_por_cliente(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteRentabilidadClienteRead]:
     return reportes_ventas_service.obtener_rentabilidad_por_cliente(
         session,
         fecha_inicio=fecha_inicio,
@@ -158,7 +159,7 @@ def obtener_reporte_rentabilidad_transaccional(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
     session: Session = Depends(get_session),
-):
+) -> list[ReporteRentabilidadTransaccionRead]:
     return reportes_ventas_service.obtener_rentabilidad_transaccional(
         session,
         fecha_inicio=fecha_inicio,
@@ -172,7 +173,7 @@ def obtener_reporte_impuestos_mensual(
     anio: int = Query(..., ge=2000, le=2100, description="Anio fiscal"),
     sucursal_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> ReporteImpuestosMensualRead:
     return reporte_tributario_service.obtener_reporte_mensual_impuestos(
         session,
         mes=mes,
@@ -182,7 +183,7 @@ def obtener_reporte_impuestos_mensual(
 
 
 @router.get("/inventario/valoracion", response_model=ReporteInventarioValoracionRead, summary="Valoración de inventario", responses=REPORT_RESPONSES)
-def obtener_reporte_valoracion_inventario(session: Session = Depends(get_session)):
+def obtener_reporte_valoracion_inventario(session: Session = Depends(get_session)) -> ReporteInventarioValoracionRead:
     return reporte_inventario_service.obtener_valoracion_inventario(session)
 
 
@@ -193,7 +194,7 @@ def obtener_reporte_kardex_inventario(
     fecha_fin: date | None = Query(default=None, description="Fecha final opcional"),
     sucursal_id: UUID | None = Query(default=None, description="Filtro opcional por sucursal"),
     session: Session = Depends(get_session),
-):
+) -> ReporteInventarioKardexRead:
     return reporte_inventario_service.obtener_kardex_historico(
         session,
         producto_id=producto_id,
@@ -204,12 +205,12 @@ def obtener_reporte_kardex_inventario(
 
 
 @router.get("/cartera/cobrar", response_model=list[ReporteCarteraCobrarItemRead], summary="Cartera por cobrar", responses=REPORT_RESPONSES)
-def obtener_reporte_cartera_cobrar(session: Session = Depends(get_session)):
+def obtener_reporte_cartera_cobrar(session: Session = Depends(get_session)) -> list[ReporteCarteraCobrarItemRead]:
     return reporte_cartera_service.obtener_cartera_cobrar(session)
 
 
 @router.get("/cartera/pagar", response_model=list[ReporteCarteraPagarItemRead], summary="Cartera por pagar", responses=REPORT_RESPONSES)
-def obtener_reporte_cartera_pagar(session: Session = Depends(get_session)):
+def obtener_reporte_cartera_pagar(session: Session = Depends(get_session)) -> list[ReporteCarteraPagarItemRead]:
     return reporte_cartera_service.obtener_cartera_pagar(session)
 
 
@@ -219,7 +220,7 @@ def obtener_reporte_cierre_caja_diario(
     usuario_id: UUID | None = Query(default=None, description="Filtro opcional por usuario"),
     sucursal_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> ReporteCajaCierreDiarioRead:
     return reporte_caja_service.obtener_cierre_diario(
         session,
         fecha=fecha,

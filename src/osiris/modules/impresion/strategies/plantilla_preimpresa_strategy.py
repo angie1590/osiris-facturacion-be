@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy
+from osiris.modules.impresion.strategies.render_strategy import (
+    RenderStrategy,
+    checked_html_output,
+    checked_pdf_output,
+)
 from osiris.modules.impresion.strategies.ride_a4_strategy import _build_minimal_pdf
+
+
+class PreimpresaContext(TypedDict, total=False):
+    paginas: list[list[dict[str, str]]]
+    margen_superior_cm: str
+    total: str
 
 
 class PlantillaPreimpresaStrategy(RenderStrategy):
     def __init__(self, templates_dir: Path) -> None:
         self.templates_dir = templates_dir
 
-    def render_html(self, context: dict) -> str:
+    def render_html(self, context: PreimpresaContext) -> str:
         template_name = "nota_venta_preimpresa.html"
         template_path = self.templates_dir / template_name
         if not template_path.exists():
@@ -24,13 +35,13 @@ class PlantillaPreimpresaStrategy(RenderStrategy):
                 autoescape=select_autoescape(["html", "xml"]),
             )
             template = env.get_template(template_name)
-            return template.render(**context)
+            return checked_html_output(template.render(**context))
         except ModuleNotFoundError:
             # Fallback para entornos sin Jinja2.
             return self._render_html_fallback(context)
 
     @staticmethod
-    def _render_html_fallback(context: dict) -> str:
+    def _render_html_fallback(context: PreimpresaContext) -> str:
         paginas = context.get("paginas") or []
         margen_superior_cm = context.get("margen_superior_cm", "5")
         total = context.get("total", "0.00")
@@ -92,7 +103,7 @@ class PlantillaPreimpresaStrategy(RenderStrategy):
         try:
             from weasyprint import HTML  # type: ignore
 
-            return HTML(string=html_content).write_pdf()
+            return checked_pdf_output(HTML(string=html_content).write_pdf())
         except ModuleNotFoundError:
             plain = " ".join(html_content.split())
             lines = [plain[i : i + 90] for i in range(0, max(len(plain), 1), 90)] or ["NOTA VENTA PREIMPRESA"]

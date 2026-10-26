@@ -100,7 +100,7 @@ def require_roles(*allowed_roles: str) -> Callable[..., Usuario]:
 
 def authenticate(session: Session, username: str, password: str) -> Usuario | None:
     usuario = session.exec(
-        select(Usuario).where(func.lower(Usuario.username) == username.strip().lower())
+        select(Usuario).where(func.lower(func.trim(Usuario.username)) == username.strip().lower())
     ).first()
     if not usuario or not usuario.activo or not verify_password(password, usuario.password_hash):
         return None

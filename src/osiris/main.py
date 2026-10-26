@@ -169,7 +169,7 @@ def _log_unauthorized_access_sync(
     security_engine: Engine,
     request: Request,
     user_id: str | None,
-    payload: dict[str, Any] | str | None,
+    payload: object,
     reason: str,
     rule: SensitiveEndpointRule,
 ) -> None:
@@ -203,7 +203,7 @@ async def _safe_log_unauthorized_access(
     security_engine: Engine,
     request: Request,
     user_id: str | None,
-    payload: dict[str, Any] | str | None,
+    payload: object,
     reason: str,
     rule: SensitiveEndpointRule,
 ) -> None:

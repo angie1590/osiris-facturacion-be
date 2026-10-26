@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -31,6 +32,7 @@ from osiris.modules.sri.core_sri.models import (
     VentaDetalleImpuesto,
 )
 from osiris.modules.sri.facturacion_electronica.services.venta_sri_async_service import VentaSriAsyncService
+from osiris.modules.sri.facturacion_electronica.services import venta_sri_async_service as fe_service
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
@@ -152,6 +154,59 @@ def _crear_venta_electronica(session: Session, *, firma_configurada: bool = True
     session.commit()
     session.refresh(venta)
     return venta
+
+
+def test_gateway_sri_sin_dependencia_falla_cerrado_en_produccion(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(fe_service, "ManejadorXML", None)
+    monkeypatch.setattr(fe_service, "SRIService", None)
+    monkeypatch.setattr(
+        fe_service,
+        "get_settings",
+        lambda: SimpleNamespace(ENVIRONMENT="production", FEEC_MOCK_ENABLED=True),
+    )
+
+    response = fe_service.FEECVentaGatewayDefault().enviar_documento(
+        tipo_documento="VENTA",
+        payload={},
+    )
+
+    assert response["estado"] == "RECHAZADO"
+    assert "autorización simulada deshabilitada" in response["mensaje"]
+
+
+def test_gateway_sri_mock_requiere_flag_explicito(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(fe_service, "ManejadorXML", None)
+    monkeypatch.setattr(fe_service, "SRIService", None)
+    monkeypatch.setattr(
+        fe_service,
+        "get_settings",
+        lambda: SimpleNamespace(ENVIRONMENT="development", FEEC_MOCK_ENABLED=False),
+    )
+
+    response = fe_service.FEECVentaGatewayDefault().enviar_documento(
+        tipo_documento="VENTA",
+        payload={},
+    )
+
+    assert response["estado"] == "RECHAZADO"
+
+
+def test_gateway_sri_mock_explicito_se_permite_en_desarrollo(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(fe_service, "ManejadorXML", None)
+    monkeypatch.setattr(fe_service, "SRIService", None)
+    monkeypatch.setattr(
+        fe_service,
+        "get_settings",
+        lambda: SimpleNamespace(ENVIRONMENT="development", FEEC_MOCK_ENABLED=True),
+    )
+
+    response = fe_service.FEECVentaGatewayDefault().enviar_documento(
+        tipo_documento="VENTA",
+        payload={},
+    )
+
+    assert response["estado"] == "AUTORIZADO"
+    assert "mock FE-EC explícito" in response["mensaje"]
 
 
 def test_encolar_venta_requiere_firma_electronica():

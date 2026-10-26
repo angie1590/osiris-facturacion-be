@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
@@ -7,7 +8,7 @@ from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
-from osiris.modules.common.punto_emision.entity import TipoDocumentoSRI
+from osiris.modules.common.punto_emision.entity import PuntoEmision, PuntoEmisionSecuencial, TipoDocumentoSRI
 from osiris.modules.common.punto_emision.models import (
     AjusteManualSecuencialRequest,
     PuntoEmisionCreate,
@@ -30,13 +31,13 @@ def list_puntos_emision(
     offset: int = Query(0, ge=0),
     only_active: bool = Query(True),
     session: Session = Depends(get_session),
-):
+) -> dict[str, Any]:
     items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset)
     return {"items": items, "meta": meta}
 
 
 @router.get("/{item_id}", response_model=PuntoEmisionRead)
-def get_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_session)):
+def get_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> PuntoEmision:
     obj = service.get(session, item_id)
     if not obj:
         raise HTTPException(status_code=404, detail=f"Punto-emision {item_id} not found")
@@ -44,7 +45,7 @@ def get_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_
 
 
 @router.post("", response_model=PuntoEmisionRead, status_code=status.HTTP_201_CREATED)
-def create_punto_emision(payload: PuntoEmisionCreate = Body(...), session: Session = Depends(get_session)):
+def create_punto_emision(payload: PuntoEmisionCreate = Body(...), session: Session = Depends(get_session)) -> PuntoEmision:
     return service.create(session, payload.model_dump(exclude_unset=True))
 
 
@@ -53,7 +54,7 @@ def update_punto_emision(
     item_id: UUID = Path(...),
     payload: PuntoEmisionUpdate = Body(...),
     session: Session = Depends(get_session),
-):
+) -> PuntoEmision:
     updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Punto-emision {item_id} not found")
@@ -61,7 +62,7 @@ def update_punto_emision(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_session)):
+def delete_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
         raise HTTPException(status_code=404, detail=f"Punto-emision {item_id} not found")
@@ -73,7 +74,7 @@ def obtener_siguiente_secuencial(
     tipo_documento: TipoDocumentoSRI = Path(..., description="Tipo de documento SRI"),
     payload: SiguienteSecuencialRequest = Body(default=SiguienteSecuencialRequest()),
     session: Session = Depends(get_session),
-):
+) -> SiguienteSecuencialResponse:
     secuencial = service.obtener_siguiente_secuencial_formateado(
         session,
         punto_emision_id=punto_emision_id,
@@ -89,7 +90,7 @@ def ajustar_secuencial_manual(
     tipo_documento: TipoDocumentoSRI = Path(..., description="Tipo de documento SRI"),
     payload: AjusteManualSecuencialRequest = Body(...),
     session: Session = Depends(get_session),
-):
+) -> PuntoEmisionSecuencial:
     return service.ajustar_secuencial_manual(
         session,
         punto_emision_id=punto_emision_id,

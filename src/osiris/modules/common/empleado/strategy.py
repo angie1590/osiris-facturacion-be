@@ -5,8 +5,10 @@ from typing import Any, Dict
 from uuid import UUID
 from sqlmodel import Session, select
 from fastapi import HTTPException
+from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 
 from osiris.modules.common.usuario.service import UsuarioService
+from osiris.modules.common.usuario.entity import Usuario
 from osiris.modules.common.rol.entity import Rol  # <-- importar Rol para validar FK
 
 
@@ -26,7 +28,7 @@ class EmpleadoCrearUsuarioStrategy:
         persona_id: UUID,
         usuario_payload: Dict[str, Any],
         commit: bool = True,
-    ):
+    ) -> Usuario:
         if not usuario_payload:
             raise HTTPException(status_code=400, detail="Debe enviar el bloque 'usuario' con username, password y rol_id")
 
@@ -40,12 +42,19 @@ class EmpleadoCrearUsuarioStrategy:
             raise HTTPException(status_code=400, detail=f"Faltan campos requeridos en usuario: {', '.join(missing)}")
 
         # ✅ Validar FK rol_id (existente y activo) ANTES de crear el usuario
-        rol_id = usuario_payload.get("rol_id")
+        usuario_payload = self.usuario_service._ensure_dict(usuario_payload)
+        try:
+            rol_id = UUID(str(usuario_payload.get("rol_id")))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="rol_id debe ser UUID") from exc
+        usuario_payload["rol_id"] = rol_id
         ok_rol = session.exec(
-            select(Rol.id).where(Rol.id == rol_id, getattr(Rol, "activo", True) == True)  # noqa: E712
+            select(Rol).where(Rol.id == rol_id).execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
         ).first()
         if not ok_rol:
             raise HTTPException(status_code=404, detail=f"Rol {rol_id} no encontrado o inactivo")
+        if ok_rol.activo is False:
+            raise HTTPException(status_code=409, detail="Rol inactivo")
 
         # Forzar persona_id del empleado
         usuario_payload["persona_id"] = persona_id

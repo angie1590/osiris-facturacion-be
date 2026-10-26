@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, computed_field, model_validator
@@ -43,7 +43,7 @@ class CompraCreate(BaseModel):
     detalles: list[VentaCompraDetalleCreate] = Field(..., min_length=1)
 
     @model_validator(mode="after")
-    def rechazar_ice_especifico_fuera_de_alcance(self):
+    def rechazar_ice_especifico_fuera_de_alcance(self) -> CompraCreate:
         if any(
             impuesto.componente == TipoComponenteTributario.ESPECIFICO
             for detalle in self.detalles
@@ -52,47 +52,57 @@ class CompraCreate(BaseModel):
             raise ValueError("El cálculo ICE específico temporal solo está habilitado para ventas.")
         return self
 
-    @computed_field(return_type=Decimal)
+    @property
     def subtotal_sin_impuestos(self) -> Decimal:
-        return q2(sum((d.subtotal_sin_impuesto for d in self.detalles), Decimal("0.00")))
+        return q2(sum((cast(Decimal, d.subtotal_sin_impuesto) for d in self.detalles), Decimal("0.00")))
 
-    @computed_field(return_type=Decimal)
+    subtotal_sin_impuestos = computed_field(return_type=Decimal)(subtotal_sin_impuestos)
+
+    @property
     def subtotal_12(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_12_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_12 = computed_field(return_type=Decimal)(subtotal_12)
+
+    @property
     def subtotal_15(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_15_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_15 = computed_field(return_type=Decimal)(subtotal_15)
+
+    @property
     def subtotal_0(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_0_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_0 = computed_field(return_type=Decimal)(subtotal_0)
+
+    @property
     def subtotal_no_objeto(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva is None or iva.codigo_porcentaje_sri in IVA_NO_OBJETO_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_no_objeto = computed_field(return_type=Decimal)(subtotal_no_objeto)
+
+    @property
     def monto_iva(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
@@ -101,7 +111,9 @@ class CompraCreate(BaseModel):
                 total += detalle.valor_impuesto(iva)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    monto_iva = computed_field(return_type=Decimal)(monto_iva)
+
+    @property
     def monto_ice(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
@@ -109,9 +121,13 @@ class CompraCreate(BaseModel):
                 total += detalle.valor_impuesto(ice)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    monto_ice = computed_field(return_type=Decimal)(monto_ice)
+
+    @property
     def valor_total(self) -> Decimal:
         return q2(self.subtotal_sin_impuestos + self.monto_iva + self.monto_ice)
+
+    valor_total = computed_field(return_type=Decimal)(valor_total)
 
 
 class CompraRegistroCreate(BaseModel):
@@ -232,7 +248,7 @@ class PlantillaRetencionDetalleInput(BaseModel):
     porcentaje: Decimal = Field(..., gt=Decimal("0"))
 
     @model_validator(mode="after")
-    def normalizar_porcentaje(self):
+    def normalizar_porcentaje(self) -> PlantillaRetencionDetalleInput:
         self.porcentaje = q2(self.porcentaje)
         return self
 
@@ -285,9 +301,11 @@ class RetencionDetalleCreate(BaseModel):
     porcentaje: Decimal = Field(..., gt=Decimal("0"))
     base_calculo: Decimal = Field(..., ge=Decimal("0"))
 
-    @computed_field(return_type=Decimal)
+    @property
     def valor_retenido(self) -> Decimal:
         return q2(q2(self.base_calculo) * q2(self.porcentaje) / Decimal("100"))
+
+    valor_retenido = computed_field(return_type=Decimal)(valor_retenido)
 
 
 class RetencionCreate(BaseModel):
@@ -295,9 +313,11 @@ class RetencionCreate(BaseModel):
     usuario_auditoria: str
     detalles: list[RetencionDetalleCreate] = Field(..., min_length=1)
 
-    @computed_field(return_type=Decimal)
+    @property
     def total_retenido(self) -> Decimal:
         return q2(sum((d.valor_retenido for d in self.detalles), Decimal("0.00")))
+
+    total_retenido = computed_field(return_type=Decimal)(total_retenido)
 
 
 class RetencionEmitRequest(BaseModel):

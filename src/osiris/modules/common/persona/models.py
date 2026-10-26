@@ -37,10 +37,12 @@ class PersonaBase(BaseOSModel):
 
 
 class PersonaCreate(PersonaBase):
-    usuario_auditoria: str
+    usuario_auditoria: Optional[str] = None
+    model_config = {"extra": "forbid"}
 
     @model_validator(mode="after")
     def validar_identificacion_por_tipo(self) -> "PersonaCreate":
+        self.identificacion = ValidacionCedulaRucService.normalizar_identificacion(self.identificacion)
         tipo = self.tipo_identificacion
         identificacion = self.identificacion
 
@@ -65,11 +67,13 @@ class PersonaUpdate(BaseOSModel):
     telefono: Optional[TelStr] = None
     ciudad: Optional[Str120] = None
     email: Optional[EmailStr] = None
-    usuario_auditoria: str
-    activo: Optional[bool] = None
+    usuario_auditoria: Optional[str] = None
+    model_config = {"extra": "forbid"}
 
     @model_validator(mode="after")
     def validar_identificacion_si_cambia(self) -> "PersonaUpdate":
+        if self.identificacion is not None:
+            self.identificacion = ValidacionCedulaRucService.normalizar_identificacion(self.identificacion)
         tipo = self.tipo_identificacion
         identificacion = self.identificacion
 

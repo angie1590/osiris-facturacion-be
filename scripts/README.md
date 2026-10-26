@@ -4,6 +4,30 @@ Este directorio contiene scripts de utilidad para gestionar datos en la base de 
 
 ## Scripts Disponibles
 
+### audit_directory_integrity.py
+
+Preflight de solo lectura antes de las migraciones de identidad del Directorio.
+Incluye activos e inactivos, colisiones normalizadas de identificacion, username,
+nombre de TipoCliente y RUC, duplicados de roles por Persona y referencias
+historicas detectadas por foreign keys. No modifica ni fusiona registros.
+
+```bash
+PYTHONPATH=src poetry run python scripts/audit_directory_integrity.py --summary
+# En macOS, con el puerto publicado del compose actual:
+PYTHONPATH=src poetry run python scripts/audit_directory_integrity.py --host 127.0.0.1 --port 5435 --summary
+```
+
+Sin `--summary`, muestra claves e IDs para revision administrativa. Tratar ese
+reporte como datos personales: no publicarlo en logs abiertos. Sale con codigo 1
+si hay conflictos y con 0 si las claves estan libres de colisiones. Las entradas
+en `requieren_normalizacion` no autorizan modificar datos automaticamente.
+
+Si hay conflictos: detener el despliegue, respaldar la base, revisar todos los
+registros y referencias (incluidos historicos), obtener aprobacion administrativa
+de la correccion y repetir el preflight. No borrar filas, cambiar FKs ni fusionar
+identidades solo para satisfacer un constraint. La revision Alembic vuelve a
+comprobar las colisiones antes de crear cualquier indice.
+
 ### 0. validate_setup.py / validate_setup.sh
 
 **Propósito**: Validar la configuración del entorno de desarrollo antes de ejecutar el proyecto (compatible Mac/Windows/Linux).

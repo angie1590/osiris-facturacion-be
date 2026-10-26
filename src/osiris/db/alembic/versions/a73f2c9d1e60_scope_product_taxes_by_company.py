@@ -31,10 +31,11 @@ def _company_tax_ids(value: object) -> set[str]:
     return {str(item) for item in value if item is not None}
 
 
-def _canonical_iva_zero(bind) -> UUID:
+def _canonical_iva_zero(bind: sa.Connection) -> UUID:
+    tax_id = sa.column("id", sa.Uuid())
     taxes = sa.table(
         "aux_impuesto_catalogo",
-        sa.column("id", sa.Uuid()),
+        tax_id,
         sa.column("tipo_impuesto", sa.String()),
         sa.column("porcentaje_iva", sa.Numeric()),
         sa.column("clasificacion_iva", sa.String()),
@@ -44,7 +45,7 @@ def _canonical_iva_zero(bind) -> UUID:
         sa.column("activo", sa.Boolean()),
     )
     rows = bind.execute(
-        sa.select(taxes.c.id).where(
+        sa.select(tax_id).where(
             sa.cast(taxes.c.tipo_impuesto, sa.String()) == "IVA",
             taxes.c.porcentaje_iva == 0,
             taxes.c.clasificacion_iva.is_(None),
@@ -63,7 +64,7 @@ def _canonical_iva_zero(bind) -> UUID:
     return rows[0]
 
 
-def _preflight(bind) -> tuple[dict[UUID, UUID], UUID]:
+def _preflight(bind: sa.Connection) -> tuple[dict[UUID, UUID], UUID]:
     companies = sa.table(
         "tbl_empresa",
         sa.column("id", sa.Uuid()),

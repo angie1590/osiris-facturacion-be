@@ -1,25 +1,88 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Sequence
 from osiris.domain.service import BaseService
 from uuid import UUID
 from osiris.core.audit import record_domain_change
 from fastapi import HTTPException
 from sqlalchemy import func
 from sqlmodel import Session, col, select
+from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 
 from osiris.modules.common.catalogo.entity import Catalogo
 from osiris.modules.common.catalogo.entity import CatalogoValor
+from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
+from osiris.modules.inventario.categoria_atributo.models import CategoriaAtributoCreate
+from osiris.modules.inventario.categoria_atributo.service import CategoriaAtributoService
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,
 )
 from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
 from .repository import AtributoRepository
-from .entity import Atributo, TipoDato
+from .entity import Atributo, AtributoCambio, TipoDato
 
 class AtributoService(BaseService[Atributo]):
     repo = AtributoRepository()
+    _DEFINITION_FIELDS = (
+        "nombre", "tipo_dato", "select_options", "catalog_id", "allow_negative",
+        "min_value", "max_value", "activo",
+    )
+
+    @staticmethod
+    def _validate_unique_name(
+        session: Session,
+        nombre: str,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        normalized_name = nombre.strip().casefold()
+        if not normalized_name:
+            return
+        statement = select(col(Atributo.id)).where(
+            col(Atributo.activo).is_(True),
+            func.lower(func.trim(col(Atributo.nombre))) == normalized_name,
+        )
+        if exclude_id is not None:
+            statement = statement.where(col(Atributo.id) != exclude_id)
+        if session.exec(statement.limit(1)).first() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya existe un atributo activo con ese nombre.",
+            )
+
+    def create_for_category(
+        self,
+        session: Session,
+        data: dict[str, Any],
+        *,
+        commit: bool = True,
+    ) -> Atributo:
+        values = self._ensure_dict(data)
+        categoria_id = values.pop("categoria_id")
+        assignment_values = {
+            "orden": values.pop("orden", None),
+            "obligatorio": values.pop("obligatorio", False),
+            "valor_default": values.pop("valor_default", None),
+            "usuario_auditoria": values.get("usuario_auditoria"),
+        }
+        try:
+            attribute = self.create(session, values, commit=False)
+            CategoriaAtributoService().create(
+                session,
+                CategoriaAtributoCreate(
+                    **assignment_values,
+                    categoria_id=categoria_id,
+                    atributo_id=attribute.id,
+                ),
+                usuario_auditoria=assignment_values["usuario_auditoria"],
+                commit=False,
+            )
+            if commit and isinstance(session, Session):
+                session.commit()
+                session.refresh(attribute)
+            return attribute
+        except Exception as exc:
+            self._handle_transaction_error(session, exc)
 
     @staticmethod
     def _value_from_row(
@@ -44,6 +107,167 @@ class AtributoService(BaseService[Atributo]):
             return value
         return str(value.isoformat()) if hasattr(value, "isoformat") else str(value)
 
+    @classmethod
+    def _serialize_definition(cls, attribute: Atributo) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for field in cls._DEFINITION_FIELDS:
+            value = getattr(attribute, field)
+            if field == "tipo_dato":
+                value = value.value
+            elif field == "catalog_id" and value is not None:
+                value = str(value)
+            elif field in {"min_value", "max_value"} and value is not None:
+                value = str(value)
+            result[field] = value
+        return result
+
+    @classmethod
+    def _serialize_definition_from_values(cls, values: dict[str, Any]) -> dict[str, Any]:
+        result = {field: values.get(field) for field in cls._DEFINITION_FIELDS}
+        tipo = result.get("tipo_dato")
+        if isinstance(tipo, TipoDato):
+            result["tipo_dato"] = tipo.value
+        catalog_id = result.get("catalog_id")
+        if catalog_id is not None:
+            result["catalog_id"] = str(catalog_id)
+        for field in ("min_value", "max_value"):
+            if result[field] is not None:
+                result[field] = str(result[field])
+        result["activo"] = bool(result.get("activo", True))
+        return result
+
+    @staticmethod
+    def _serialize_value(row: ProductoAtributoValor) -> dict[str, Any]:
+        return {
+            "id": str(row.id), "producto_id": str(row.producto_id),
+            "atributo_id": str(row.atributo_id), "valor_string": row.valor_string,
+            "valor_integer": row.valor_integer,
+            "valor_decimal": str(row.valor_decimal) if row.valor_decimal is not None else None,
+            "valor_boolean": row.valor_boolean,
+            "valor_date": row.valor_date.isoformat() if row.valor_date is not None else None,
+            "activo": row.activo,
+        }
+
+    @staticmethod
+    def _serialize_assignment(row: CategoriaAtributo) -> dict[str, Any]:
+        return {
+            "id": str(row.id), "categoria_id": str(row.categoria_id),
+            "atributo_id": str(row.atributo_id), "orden": row.orden,
+            "obligatorio": row.obligatorio, "valor_default": row.valor_default,
+            "activo": row.activo,
+        }
+
+    @staticmethod
+    def _serialize_remap(row: ProductoAtributoRemapeo) -> dict[str, Any]:
+        return {
+            "id": str(row.id), "producto_id": str(row.producto_id),
+            "atributo_id": str(row.atributo_id), "tipo_anterior": row.tipo_anterior,
+            "tipo_nuevo": row.tipo_nuevo, "valor_anterior": row.valor_anterior,
+            "motivo": row.motivo, "activo": row.activo,
+        }
+
+    def _capture_state(self, session: Session, attribute: Atributo, *, lock: bool = False) -> dict[str, Any]:
+        def rows(model: Any, field: str) -> Sequence[Any]:
+            statement = select(model).where(col(getattr(model, field)) == attribute.id).execution_options(
+                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
+            )
+            if lock:
+                statement = statement.with_for_update()
+            return session.exec(statement).all()
+
+        values = sorted((self._serialize_value(row) for row in rows(ProductoAtributoValor, "atributo_id")), key=lambda row: row["id"])
+        assignments = sorted((self._serialize_assignment(row) for row in rows(CategoriaAtributo, "atributo_id")), key=lambda row: row["id"])
+        reverted_snapshots = session.exec(
+            select(AtributoCambio).where(
+                col(AtributoCambio.atributo_id) == attribute.id,
+                col(AtributoCambio.revertido).is_(True),
+            )
+        ).all()
+        reversed_remap_ids = {
+            remap["id"]
+            for snapshot in reverted_snapshots
+            for remap in snapshot.remapeos_posteriores
+            if remap["id"] not in {previous["id"] for previous in snapshot.remapeos_anteriores}
+        }
+        remaps = sorted(
+            (self._serialize_remap(row) for row in rows(ProductoAtributoRemapeo, "atributo_id") if str(row.id) not in reversed_remap_ids),
+            key=lambda row: row["id"],
+        )
+        return {
+            "definicion": self._serialize_definition(attribute),
+            "valores": values,
+            "asignaciones": assignments,
+            "remapeos": remaps,
+        }
+
+    @staticmethod
+    def _has_pending_remaps(state: dict[str, Any]) -> bool:
+        return any(remap["activo"] for remap in state["remapeos"])
+
+    def _create_snapshot(
+        self,
+        session: Session,
+        attribute: Atributo,
+        operation: str,
+        before: dict[str, Any],
+        after: dict[str, Any],
+    ) -> AtributoCambio:
+        snapshot = AtributoCambio(
+            atributo_id=attribute.id,
+            operacion=operation,
+            definicion_anterior=before["definicion"],
+            definicion_posterior=after["definicion"],
+            asignaciones_anteriores=before["asignaciones"],
+            asignaciones_posteriores=after["asignaciones"],
+            valores_anteriores=before["valores"],
+            valores_posteriores=after["valores"],
+            remapeos_anteriores=before["remapeos"],
+            remapeos_posteriores=after["remapeos"],
+        )
+        session.add(snapshot)
+        session.flush()
+        return snapshot
+
+    def _convert_value(
+        self,
+        session: Session,
+        old_value: Any,
+        target: dict[str, Any],
+    ) -> tuple[str, Any]:
+        new_type: TipoDato = target["tipo_dato"]
+        field_name, new_value = ProductoAtributoValorService()._cast_by_tipo(new_type, old_value)
+        if new_type == TipoDato.SELECT:
+            matched = next(
+                (option for option in (target.get("select_options") or []) if option.casefold() == str(new_value).casefold()),
+                None,
+            )
+            if matched is None:
+                raise ValueError("value is not in select options")
+            new_value = matched
+        elif new_type == TipoDato.CATALOG:
+            catalog_id = target.get("catalog_id")
+            if catalog_id is None:
+                raise ValueError("catalog is missing")
+            matched = session.exec(
+                select(CatalogoValor.valor).where(
+                    col(CatalogoValor.catalogo_id) == catalog_id,
+                    col(CatalogoValor.activo).is_(True),
+                    func.lower(col(CatalogoValor.valor)) == str(new_value).casefold(),
+                )
+            ).first()
+            if matched is None:
+                raise ValueError("value is not active in catalog")
+            new_value = matched
+        elif new_type in {TipoDato.INTEGER, TipoDato.DECIMAL}:
+            decimal_value = Decimal(str(new_value))
+            if not target.get("allow_negative", False) and decimal_value < 0:
+                raise ValueError("negative values are not allowed")
+            if target.get("min_value") is not None and decimal_value < target["min_value"]:
+                raise ValueError("below configured minimum")
+            if target.get("max_value") is not None and decimal_value > target["max_value"]:
+                raise ValueError("above configured maximum")
+        return field_name, new_value
+
     def _convert_existing_values(
         self,
         session: Session,
@@ -52,15 +276,12 @@ class AtributoService(BaseService[Atributo]):
     ) -> tuple[int, list[UUID]]:
         old_type = attribute.tipo_dato
         new_type = target["tipo_dato"]
-        if old_type == new_type:
-            return 0, []
-
         rows = list(
             session.exec(
                 select(ProductoAtributoValor).where(
                     col(ProductoAtributoValor.atributo_id) == attribute.id,
                     col(ProductoAtributoValor.activo).is_(True),
-                )
+                ).with_for_update()
             ).all()
         )
         value_service = ProductoAtributoValorService()
@@ -69,37 +290,7 @@ class AtributoService(BaseService[Atributo]):
         for row in rows:
             old_value = self._value_from_row(row, old_type)
             try:
-                field_name, new_value = value_service._cast_by_tipo(new_type, old_value)
-                if new_type == TipoDato.SELECT:
-                    matched = next(
-                        (option for option in (target.get("select_options") or []) if option.casefold() == str(new_value).casefold()),
-                        None,
-                    )
-                    if matched is None:
-                        raise ValueError("value is not in select options")
-                    new_value = matched
-                elif new_type == TipoDato.CATALOG:
-                    catalog_id = target.get("catalog_id")
-                    if catalog_id is None:
-                        raise ValueError("catalog is missing")
-                    matched = session.exec(
-                        select(CatalogoValor.valor).where(
-                            col(CatalogoValor.catalogo_id) == catalog_id,
-                            col(CatalogoValor.activo).is_(True),
-                            func.lower(col(CatalogoValor.valor)) == str(new_value).casefold(),
-                        )
-                    ).first()
-                    if matched is None:
-                        raise ValueError("value is not active in catalog")
-                    new_value = matched
-                elif new_type in {TipoDato.INTEGER, TipoDato.DECIMAL}:
-                    decimal_value = Decimal(str(new_value))
-                    if not target.get("allow_negative", False) and decimal_value < 0:
-                        raise ValueError("negative values are not allowed")
-                    if target.get("min_value") is not None and decimal_value < target["min_value"]:
-                        raise ValueError("below configured minimum")
-                    if target.get("max_value") is not None and decimal_value > target["max_value"]:
-                        raise ValueError("above configured maximum")
+                field_name, new_value = self._convert_value(session, old_value, target)
                 value_service._clear_value_columns(row)
                 setattr(row, field_name, new_value)
                 session.add(row)
@@ -216,6 +407,7 @@ class AtributoService(BaseService[Atributo]):
     ) -> Atributo:
         values = self._ensure_dict(data)
         try:
+            self._validate_unique_name(session, str(values.get("nombre", "")))
             values = self._normalize_definition(session, values)
             attribute: Atributo = super().create(session, values, commit=False)
             if isinstance(session, Session):
@@ -248,7 +440,9 @@ class AtributoService(BaseService[Atributo]):
     ) -> Atributo | None:
         values = self._ensure_dict(data)
         try:
-            current = self.repo.get(session, item_id)
+            current = session.exec(
+                select(Atributo).where(col(Atributo.id) == item_id).with_for_update()
+            ).first()
             if current is None:
                 return None
             merged = {
@@ -260,21 +454,37 @@ class AtributoService(BaseService[Atributo]):
                 "min_value": values.get("min_value", current.min_value),
                 "max_value": values.get("max_value", current.max_value),
             }
+            self._validate_unique_name(session, str(merged["nombre"]), exclude_id=item_id)
             normalized = self._normalize_definition(session, merged)
             values.update(normalized)
+            definition_changed = any(
+                getattr(current, field) != normalized[field]
+                for field in self._DEFINITION_FIELDS[:-1]
+            )
+            if not definition_changed:
+                return current
+            before_state = self._capture_state(session, current, lock=True)
+            conversion_fields = {"tipo_dato", "select_options", "catalog_id", "allow_negative", "min_value", "max_value"}
+            conversion_changed = any(
+                getattr(current, field) != normalized[field]
+                for field in conversion_fields
+            )
+            if conversion_changed and self._has_pending_remaps(before_state):
+                raise HTTPException(status_code=409, detail={
+                    "code": "ATTRIBUTE_HAS_PENDING_REMAPS",
+                    "message": "Resuelve o revierte los remapeos pendientes antes de cambiar la definición del atributo.",
+                })
             converted_count = 0
             pending_remaps: list[UUID] = []
-            if isinstance(session, Session) and current.tipo_dato != normalized["tipo_dato"]:
+            if conversion_changed and isinstance(session, Session):
                 converted_count, pending_remaps = self._convert_existing_values(session, current, normalized)
-            before = {
-                "nombre": current.nombre,
-                "tipo_dato": current.tipo_dato.value,
-                "catalog_id": str(current.catalog_id) if current.catalog_id else None,
-            }
+            before = before_state["definicion"]
             attribute: Atributo | None = super().update(session, item_id, values, commit=False)
             if attribute is None:
                 return None
             if isinstance(session, Session):
+                after_state = self._capture_state(session, attribute, lock=True)
+                snapshot = self._create_snapshot(session, attribute, "update", before_state, after_state)
                 record_domain_change(
                     session,
                     entity="tbl_atributo",
@@ -282,11 +492,10 @@ class AtributoService(BaseService[Atributo]):
                     action="UPDATE_ATTRIBUTE",
                     before=before,
                     after={
-                        "nombre": attribute.nombre,
-                        "tipo_dato": attribute.tipo_dato.value,
-                        "catalog_id": str(attribute.catalog_id) if attribute.catalog_id else None,
+                        **after_state["definicion"],
                         "converted_values": converted_count,
                         "pending_remap_ids": [str(remap_id) for remap_id in pending_remaps],
+                        "snapshot_id": str(snapshot.id),
                     },
                 )
             if commit and isinstance(session, Session):
@@ -298,26 +507,334 @@ class AtributoService(BaseService[Atributo]):
 
     def delete(self, session: Session, item_id: UUID, *, commit: bool = True) -> bool | None:
         try:
-            attribute = self.repo.get(session, item_id)
+            attribute: Atributo | None = session.exec(
+                select(Atributo).where(col(Atributo.id) == item_id).with_for_update()
+            ).first()
             if attribute is None:
                 return None
-            before = {
-                "nombre": attribute.nombre,
-                "tipo_dato": attribute.tipo_dato.value,
-                "activo": attribute.activo,
-            }
-            deleted = super().delete(session, item_id, commit=False)
+            before_state = self._capture_state(session, attribute, lock=True)
+            pending = [remap for remap in before_state["remapeos"] if remap["activo"]]
+            if pending:
+                raise HTTPException(status_code=409, detail={
+                    "code": "ATTRIBUTE_HAS_PENDING_REMAPS",
+                    "message": "Resuelve o revierte los remapeos pendientes antes de dar de baja el atributo.",
+                    "remapeos_pendientes": len(pending),
+                })
+            assignments = session.exec(
+                select(CategoriaAtributo).where(col(CategoriaAtributo.atributo_id) == item_id).with_for_update()
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).all()
+            values = session.exec(
+                select(ProductoAtributoValor).where(col(ProductoAtributoValor.atributo_id) == item_id).with_for_update()
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).all()
+            attribute.activo = False
+            session.add(attribute)
+            for row in assignments:
+                if row.activo:
+                    row.activo = False
+                    session.add(row)
+            for value_row in values:
+                if value_row.activo:
+                    value_row.activo = False
+                    session.add(value_row)
+            after_state = self._capture_state(session, attribute, lock=True)
+            snapshot = self._create_snapshot(session, attribute, "deactivate", before_state, after_state)
             if isinstance(session, Session):
                 record_domain_change(
                     session,
                     entity="tbl_atributo",
                     entity_id=item_id,
                     action="DELETE_ATTRIBUTE",
-                    before=before,
-                    after={"activo": False},
+                    before=before_state["definicion"],
+                    after={"activo": False, "snapshot_id": str(snapshot.id)},
                 )
             if commit and isinstance(session, Session):
                 session.commit()
-            return deleted
+            else:
+                session.flush()
+            return True
         except Exception as exc:
             self._handle_transaction_error(session, exc)
+
+    def preview_update(self, session: Session, item_id: UUID, data: Any) -> dict[str, Any] | None:
+        values = self._ensure_dict(data)
+        attribute = self.repo.get(session, item_id)
+        if attribute is None:
+            return None
+
+        target = {
+            "nombre": values.get("nombre", attribute.nombre),
+            "tipo_dato": values.get("tipo_dato", attribute.tipo_dato),
+            "select_options": values.get("select_options", attribute.select_options),
+            "catalog_id": values.get("catalog_id", attribute.catalog_id),
+            "allow_negative": values.get("allow_negative", attribute.allow_negative),
+            "min_value": values.get("min_value", attribute.min_value),
+            "max_value": values.get("max_value", attribute.max_value),
+        }
+        try:
+            target["tipo_dato"] = TipoDato(str(target["tipo_dato"]).lower()) if not isinstance(target["tipo_dato"], TipoDato) else target["tipo_dato"]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Tipo de dato de atributo no soportado.") from None
+        self._validate_unique_name(session, str(target["nombre"]), exclude_id=item_id)
+
+        tipo = target["tipo_dato"]
+        if tipo == TipoDato.SELECT:
+            options = [str(option).strip() for option in (target["select_options"] or []) if str(option).strip()]
+            if not options or len({option.casefold() for option in options}) != len(options):
+                raise HTTPException(status_code=400, detail="Las opciones select deben existir y ser únicas.")
+            target["select_options"] = options
+            target["catalog_id"] = None
+        elif tipo == TipoDato.CATALOG:
+            target["select_options"] = None
+            catalog_id = target["catalog_id"]
+            catalog = session.get(Catalogo, catalog_id) if catalog_id else session.exec(
+                select(Catalogo).where(func.lower(col(Catalogo.nombre)) == self._pluralize_es(str(target["nombre"])).lower())
+            ).first()
+            if catalog_id and (catalog is None or not catalog.activo):
+                raise HTTPException(status_code=400, detail="El catálogo de destino debe existir y estar activo.")
+            target["catalog_id"] = catalog.id if catalog is not None else None
+        else:
+            target["select_options"] = None
+            target["catalog_id"] = None
+
+        numeric_type = tipo in {TipoDato.INTEGER, TipoDato.DECIMAL}
+        target["allow_negative"] = bool(target["allow_negative"]) if numeric_type else False
+        minimum = Decimal(str(target["min_value"])) if target["min_value"] is not None else None
+        maximum = Decimal(str(target["max_value"])) if target["max_value"] is not None else None
+        if not numeric_type and (minimum is not None or maximum is not None):
+            raise HTTPException(status_code=400, detail="Los límites numéricos solo aplican a integer o decimal.")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise HTTPException(status_code=400, detail="min_value no puede ser mayor que max_value.")
+        target["min_value"] = minimum
+        target["max_value"] = maximum
+
+        before_state = self._capture_state(session, attribute)
+        changed = any(
+            getattr(attribute, field) != target[field]
+            for field in ("tipo_dato", "select_options", "catalog_id", "allow_negative", "min_value", "max_value")
+        )
+        if changed and self._has_pending_remaps(before_state):
+            raise HTTPException(status_code=409, detail={
+                "code": "ATTRIBUTE_HAS_PENDING_REMAPS",
+                "message": "Resuelve o revierte los remapeos pendientes antes de cambiar la definición del atributo.",
+            })
+
+        rows = session.exec(
+            select(ProductoAtributoValor).where(
+                col(ProductoAtributoValor.atributo_id) == item_id,
+                col(ProductoAtributoValor.activo).is_(True),
+            )
+        ).all()
+        incompatible: list[dict[str, Any]] = []
+        converted = 0
+        for row in rows if changed else []:
+            old_value = self._value_from_row(row, attribute.tipo_dato)
+            try:
+                self._convert_value(session, old_value, target)
+                converted += 1
+            except (ValueError, TypeError, InvalidOperation, KeyError) as exc:
+                incompatible.append({
+                    "producto_id": str(row.producto_id),
+                    "valor": self._json_value(old_value),
+                    "motivo": str(exc),
+                })
+        return {
+            "atributo_id": str(item_id),
+            "definicion_actual": before_state["definicion"],
+            "definicion_propuesta": self._serialize_definition_from_values({**target, "activo": attribute.activo}),
+            "valores_activos": len(rows),
+            "asignaciones_activas": sum(1 for assignment in before_state["asignaciones"] if assignment["activo"]),
+            "productos_afectados": len({str(row.producto_id) for row in rows}),
+            "convertibles": converted,
+            "incompatibles": incompatible,
+            "remapeos_pendientes": sum(1 for remap in before_state["remapeos"] if remap["activo"]),
+            "requiere_confirmacion": changed and bool(rows),
+        }
+
+    @staticmethod
+    def _restore_definition(attribute: Atributo, definition: dict[str, Any]) -> None:
+        attribute.nombre = definition["nombre"]
+        attribute.tipo_dato = TipoDato(definition["tipo_dato"])
+        attribute.select_options = definition["select_options"]
+        attribute.catalog_id = UUID(definition["catalog_id"]) if definition["catalog_id"] else None
+        attribute.allow_negative = definition["allow_negative"]
+        attribute.min_value = Decimal(definition["min_value"]) if definition["min_value"] is not None else None
+        attribute.max_value = Decimal(definition["max_value"]) if definition["max_value"] is not None else None
+        attribute.activo = definition["activo"]
+
+    @staticmethod
+    def _restore_rows(
+        session: Session,
+        model: Any,
+        current: Sequence[Any],
+        wanted: list[dict[str, Any]],
+    ) -> None:
+        by_id = {str(row.id): row for row in current}
+        wanted_ids = {data["id"] for data in wanted}
+        for row in current:
+            if str(row.id) not in wanted_ids:
+                raise HTTPException(status_code=409, detail="No se puede eliminar una fila histórica durante la reversión.")
+        for data in wanted:
+            row = by_id.get(data["id"])
+            if row is None:
+                raise HTTPException(status_code=409, detail="No se puede restaurar una fila histórica eliminada.")
+            for field, value in data.items():
+                if field == "id":
+                    continue
+                if field in {"producto_id", "atributo_id", "categoria_id"} and value is not None:
+                    value = UUID(value)
+                elif field == "valor_decimal" and value is not None:
+                    value = Decimal(value)
+                elif field == "valor_date" and value is not None:
+                    value = date.fromisoformat(value)
+                setattr(row, field, value)
+            session.add(row)
+
+    @staticmethod
+    def _restore_remaps(
+        session: Session,
+        current: Sequence[ProductoAtributoRemapeo],
+        wanted: list[dict[str, Any]],
+    ) -> None:
+        by_id = {str(row.id): row for row in current}
+        wanted_ids = {data["id"] for data in wanted}
+        for current_remap in current:
+            if str(current_remap.id) not in wanted_ids:
+                current_remap.activo = False
+                session.add(current_remap)
+        for data in wanted:
+            remap = by_id.get(data["id"])
+            if remap is None:
+                raise HTTPException(status_code=409, detail="No se puede restaurar un remapeo histórico eliminado.")
+            remap.producto_id = UUID(data["producto_id"])
+            remap.atributo_id = UUID(data["atributo_id"])
+            remap.tipo_anterior = data["tipo_anterior"]
+            remap.tipo_nuevo = data["tipo_nuevo"]
+            remap.valor_anterior = data["valor_anterior"]
+            remap.motivo = data["motivo"]
+            remap.activo = data["activo"]
+            session.add(remap)
+
+    def lifecycle_status(self, session: Session, item_id: UUID) -> dict[str, Any] | None:
+        attribute = session.exec(
+            select(Atributo).where(col(Atributo.id) == item_id)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        ).first()
+        if attribute is None:
+            return None
+        snapshot = session.exec(
+            select(AtributoCambio).where(
+                col(AtributoCambio.atributo_id) == item_id,
+                col(AtributoCambio.revertido).is_(False),
+            ).order_by(col(AtributoCambio.creado_en).desc(), col(AtributoCambio.id).desc())
+        ).first()
+        if snapshot is None:
+            reason = (
+                "Este atributo inactivo no tiene snapshot de baja; requiere recuperación administrativa."
+                if not attribute.activo
+                else "No existe un snapshot reversible para este atributo."
+            )
+            return {
+                "atributo_id": str(item_id), "can_undo": False,
+                "can_reactivate": False, "operacion": None,
+                "state_unchanged": False, "snapshot_id": None,
+                "motivo": reason,
+                "creado_en": None, "valores_afectados": 0, "categorias_afectadas": 0,
+            }
+        current_state = self._capture_state(session, attribute)
+        expected_state = {
+            "definicion": snapshot.definicion_posterior,
+            "asignaciones": snapshot.asignaciones_posteriores,
+            "valores": snapshot.valores_posteriores,
+            "remapeos": snapshot.remapeos_posteriores,
+        }
+        unchanged = current_state == expected_state
+        changed_sections = [
+            section for section in ("definicion", "asignaciones", "valores", "remapeos")
+            if current_state[section] != expected_state[section]
+        ]
+        return {
+            "atributo_id": str(item_id),
+            "can_undo": unchanged,
+            "can_reactivate": unchanged and snapshot.operacion == "deactivate" and not attribute.activo,
+            "operacion": snapshot.operacion,
+            "state_unchanged": unchanged,
+            "snapshot_id": str(snapshot.id),
+            "motivo": None if unchanged else f"El estado cambió después de la operación: {', '.join(changed_sections)}.",
+            "creado_en": snapshot.creado_en.isoformat(),
+            "valores_afectados": len(snapshot.valores_posteriores),
+            "categorias_afectadas": sum(1 for assignment in snapshot.asignaciones_posteriores if assignment["activo"]),
+        }
+
+    def undo(self, session: Session, item_id: UUID, *, operation: str | None = None) -> dict[str, Any] | None:
+        try:
+            attribute = session.exec(
+                select(Atributo).where(col(Atributo.id) == item_id).with_for_update()
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).first()
+            if attribute is None:
+                return None
+            statement = select(AtributoCambio).where(
+                col(AtributoCambio.atributo_id) == item_id,
+                col(AtributoCambio.revertido).is_(False),
+            ).order_by(col(AtributoCambio.creado_en).desc(), col(AtributoCambio.id).desc()).with_for_update()
+            snapshot = session.exec(statement).first()
+            if snapshot is None:
+                if not attribute.activo:
+                    raise HTTPException(status_code=409, detail={
+                        "code": "LEGACY_ATTRIBUTE_NO_SNAPSHOT",
+                        "message": "Este atributo inactivo no tiene snapshot de baja; requiere recuperación administrativa.",
+                    })
+                raise HTTPException(status_code=409, detail="No hay cambios reversibles para este atributo.")
+            if operation is not None and snapshot.operacion != operation:
+                raise HTTPException(status_code=409, detail="La última operación no corresponde a la acción solicitada.")
+
+            current_state = self._capture_state(session, attribute, lock=True)
+            expected_state = {
+                "definicion": snapshot.definicion_posterior,
+                "asignaciones": snapshot.asignaciones_posteriores,
+                "valores": snapshot.valores_posteriores,
+                "remapeos": snapshot.remapeos_posteriores,
+            }
+            if current_state != expected_state:
+                raise HTTPException(status_code=409, detail={
+                    "code": "ATTRIBUTE_STATE_CHANGED",
+                    "message": "El atributo o sus datos relacionados cambiaron después de esta operación; no se puede revertir con seguridad.",
+                })
+
+            assignments = session.exec(
+                select(CategoriaAtributo).where(col(CategoriaAtributo.atributo_id) == item_id).with_for_update()
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).all()
+            values = session.exec(
+                select(ProductoAtributoValor).where(col(ProductoAtributoValor.atributo_id) == item_id).with_for_update()
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).all()
+            remaps = session.exec(
+                select(ProductoAtributoRemapeo).where(col(ProductoAtributoRemapeo.atributo_id) == item_id).with_for_update()
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).all()
+            self._restore_definition(attribute, snapshot.definicion_anterior)
+            self._restore_rows(session, CategoriaAtributo, assignments, snapshot.asignaciones_anteriores)
+            self._restore_rows(session, ProductoAtributoValor, values, snapshot.valores_anteriores)
+            self._restore_remaps(session, remaps, snapshot.remapeos_anteriores)
+            snapshot.revertido = True
+            snapshot.revertido_en = datetime.utcnow()
+            session.add(attribute)
+            session.add(snapshot)
+            record_domain_change(
+                session,
+                entity="tbl_atributo",
+                entity_id=item_id,
+                action="UNDO_ATTRIBUTE_CHANGE",
+                before=current_state["definicion"],
+                after={"snapshot_id": str(snapshot.id), "restored": snapshot.definicion_anterior},
+            )
+            session.commit()
+            return {"snapshot_id": str(snapshot.id), "operacion": snapshot.operacion}
+        except Exception as exc:
+            self._handle_transaction_error(session, exc)
+
+    def reactivate(self, session: Session, item_id: UUID) -> dict[str, Any] | None:
+        return self.undo(session, item_id, operation="deactivate")

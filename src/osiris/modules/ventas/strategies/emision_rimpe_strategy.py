@@ -100,4 +100,5 @@ class EmisionRimpeStrategy:
                 )
             tipo_emision = tipo_emision or TipoEmisionVenta.ELECTRONICA
 
+        assert tipo_emision is not None
         return empresa_id, regimen_emisor, tipo_emision

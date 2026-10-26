@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.punto_emision.entity import PuntoEmision
@@ -41,54 +41,54 @@ class ReporteCajaService:
     ) -> ReporteCajaCierreDiarioRead:
         empresa_scope = self._empresa_scope()
         filtros_pagos = [
-            PagoCxC.activo.is_(True),
-            PagoCxC.fecha == fecha,
+            col(PagoCxC.activo).is_(True),
+            col(PagoCxC.fecha) == fecha,
         ]
         filtros_retenciones = [
-            RetencionRecibida.activo.is_(True),
-            RetencionRecibida.estado == EstadoRetencionRecibida.APLICADA,
-            RetencionRecibida.fecha_emision == fecha,
+            col(RetencionRecibida.activo).is_(True),
+            col(RetencionRecibida.estado) == EstadoRetencionRecibida.APLICADA,
+            col(RetencionRecibida.fecha_emision) == fecha,
         ]
         if usuario_id is not None:
             usuario_id_str = str(usuario_id)
             filtros_pagos.append(
                 or_(
-                    PagoCxC.created_by == usuario_id_str,
-                    PagoCxC.usuario_auditoria == usuario_id_str,
+                    col(PagoCxC.created_by) == usuario_id_str,
+                    col(PagoCxC.usuario_auditoria) == usuario_id_str,
                 )
             )
             filtros_retenciones.append(
                 or_(
-                    RetencionRecibida.created_by == usuario_id_str,
-                    RetencionRecibida.usuario_auditoria == usuario_id_str,
+                    col(RetencionRecibida.created_by) == usuario_id_str,
+                    col(RetencionRecibida.usuario_auditoria) == usuario_id_str,
                 )
             )
         if sucursal_id is not None:
-            filtros_pagos.append(PuntoEmision.sucursal_id == sucursal_id)
-            filtros_retenciones.append(PuntoEmision.sucursal_id == sucursal_id)
+            filtros_pagos.append(col(PuntoEmision.sucursal_id) == sucursal_id)
+            filtros_retenciones.append(col(PuntoEmision.sucursal_id) == sucursal_id)
 
         pagos_stmt = (
             select(
-                PagoCxC.forma_pago_sri,
-                func.coalesce(func.sum(PagoCxC.monto), 0).label("monto"),
+                col(PagoCxC.forma_pago_sri),
+                func.coalesce(func.sum(col(PagoCxC.monto)), 0).label("monto"),
             )
             .select_from(PagoCxC)
         )
         if sucursal_id is not None or empresa_scope is not None:
             pagos_stmt = (
                 pagos_stmt
-                .join(CuentaPorCobrar, CuentaPorCobrar.id == PagoCxC.cuenta_por_cobrar_id)
-                .join(Venta, Venta.id == CuentaPorCobrar.venta_id)
+                .join(CuentaPorCobrar, col(CuentaPorCobrar.id) == col(PagoCxC.cuenta_por_cobrar_id))
+                .join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
             )
             if empresa_scope is not None:
-                pagos_stmt = pagos_stmt.where(Venta.empresa_id == empresa_scope)
+                pagos_stmt = pagos_stmt.where(col(Venta.empresa_id) == empresa_scope)
             if sucursal_id is not None:
-                pagos_stmt = pagos_stmt.join(PuntoEmision, PuntoEmision.id == Venta.punto_emision_id)
+                pagos_stmt = pagos_stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
         pagos_stmt = (
             pagos_stmt
             .where(*filtros_pagos)
-            .group_by(PagoCxC.forma_pago_sri)
-            .order_by(PagoCxC.forma_pago_sri.asc())
+            .group_by(col(PagoCxC.forma_pago_sri))
+            .order_by(col(PagoCxC.forma_pago_sri).asc())
         )
         pagos_rows = session.exec(pagos_stmt).all()
         pagos = [
@@ -100,18 +100,18 @@ class ReporteCajaService:
         ]
         total_dinero = q2(sum((pago.monto for pago in pagos), Decimal("0.00")))
 
-        retenciones_stmt = select(func.coalesce(func.sum(RetencionRecibida.total_retenido), 0)).select_from(
+        retenciones_stmt = select(func.coalesce(func.sum(col(RetencionRecibida.total_retenido)), 0)).select_from(
             RetencionRecibida
         )
         if sucursal_id is not None or empresa_scope is not None:
             retenciones_stmt = (
                 retenciones_stmt
-                .join(Venta, Venta.id == RetencionRecibida.venta_id)
+                .join(Venta, col(Venta.id) == col(RetencionRecibida.venta_id))
             )
             if empresa_scope is not None:
-                retenciones_stmt = retenciones_stmt.where(Venta.empresa_id == empresa_scope)
+                retenciones_stmt = retenciones_stmt.where(col(Venta.empresa_id) == empresa_scope)
             if sucursal_id is not None:
-                retenciones_stmt = retenciones_stmt.join(PuntoEmision, PuntoEmision.id == Venta.punto_emision_id)
+                retenciones_stmt = retenciones_stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
         retenciones_stmt = retenciones_stmt.where(*filtros_retenciones)
         total_retenciones = q2(self._d(session.exec(retenciones_stmt).one()))
 

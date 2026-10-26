@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from uuid import UUID
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,8 +13,11 @@ from osiris.core.auth import authenticate, create_token, decode_token, get_curre
 from osiris.core.db import get_session
 from osiris.core.settings import get_settings
 from osiris.modules.common.usuario.entity import Usuario
+from osiris.modules.common.usuario.service import UsuarioService
+from osiris.core.security import PASSWORD_MIN_LENGTH
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Autenticación"])
+service = UsuarioService()
 
 
 class RefreshRequest(BaseModel):
@@ -22,7 +26,7 @@ class RefreshRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str | None = None
-    new_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH)
 
 
 class ApprovalCodeRequest(BaseModel):
@@ -30,7 +34,7 @@ class ApprovalCodeRequest(BaseModel):
 
 
 @router.post("/login")
-def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)) -> dict[str, Any]:
     usuario = authenticate(session, form.username, form.password)
     if not usuario:
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
@@ -45,7 +49,7 @@ def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depend
 
 
 @router.post("/refresh")
-def refresh(body: RefreshRequest, session: Session = Depends(get_session)):
+def refresh(body: RefreshRequest, session: Session = Depends(get_session)) -> dict[str, Any]:
     try:
         payload = decode_token(body.refresh_token)
         if payload.get("type") != "refresh":
@@ -67,50 +71,37 @@ def refresh(body: RefreshRequest, session: Session = Depends(get_session)):
 
 
 @router.get("/me")
-def me(usuario=Depends(get_current_usuario), session: Session = Depends(get_session)):
+def me(usuario: Usuario = Depends(get_current_usuario), session: Session = Depends(get_session)) -> dict[str, Any]:
     return user_response(session, usuario)
 
 
 @router.post("/logout")
-def logout(usuario=Depends(get_current_usuario), session: Session = Depends(get_session)):
-    usuario.sesion_invalidada_en = datetime.utcnow()
-    session.add(usuario)
-    session.commit()
+def logout(usuario: Usuario = Depends(get_current_usuario), session: Session = Depends(get_session)) -> dict[str, str]:
+    service.invalidate_session(session, usuario)
     return {"message": "Logged out successfully"}
 
 
 @router.post("/change-password")
-def change_password(body: ChangePasswordRequest, usuario=Depends(get_current_usuario), session: Session = Depends(get_session)):
-    if body.current_password and not authenticate(session, usuario.username, body.current_password):
-        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
-    from osiris.core.security import hash_password
-
-    usuario.password_hash = hash_password(body.new_password)
-    usuario.requiere_cambio_password = False
-    session.add(usuario)
-    session.commit()
+def change_password(body: ChangePasswordRequest, usuario: Usuario = Depends(get_current_usuario), session: Session = Depends(get_session)) -> dict[str, str]:
+    service.change_password(session, usuario, new_password=body.new_password, current_password=body.current_password)
     return {"message": "Password changed successfully"}
 
 
 @router.post("/approval-code")
 def set_approval_code(
     body: ApprovalCodeRequest,
-    usuario=Depends(get_current_usuario),
+    usuario: Usuario = Depends(get_current_usuario),
     session: Session = Depends(get_session),
-):
-    from osiris.core.security import hash_password
-
-    usuario.codigo_aprobacion_hash = hash_password(body.approval_code)
-    session.add(usuario)
-    session.commit()
+) -> dict[str, str]:
+    service.set_approval_code(session, usuario, body.approval_code)
     return {"message": "Approval code saved successfully"}
 
 
 @router.post("/approval-code/verify")
 def verify_approval_code_endpoint(
     body: ApprovalCodeRequest,
-    usuario=Depends(get_current_usuario),
-):
+    usuario: Usuario = Depends(get_current_usuario),
+) -> dict[str, bool]:
     if not verify_approval_code(usuario, body.approval_code):
         raise HTTPException(status_code=401, detail="Approval code inválido")
     return {"valid": True}

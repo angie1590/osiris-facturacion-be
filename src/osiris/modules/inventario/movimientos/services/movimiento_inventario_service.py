@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
+from typing import Any, TypedDict
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, update
-from sqlalchemy.orm.exc import NoResultFound
-from sqlmodel import Session, select
+from sqlalchemy.exc import NoResultFound
+from sqlmodel import Session, select, col
 
 from osiris.modules.sri.core_sri.services.template_method import TemplateMethodService
 from osiris.modules.inventario.movimientos.strategies.calculo_kardex_strategy import CalculoKardexStrategy
@@ -20,6 +21,7 @@ from osiris.modules.inventario.movimientos.models import (
 )
 from osiris.modules.inventario.movimientos.schemas import (
     MovimientoInventarioCreate,
+    MovimientoInventarioDetalleCreate,
     TransferenciaInventarioCreate,
     MovimientoInventarioDetalleRead,
     TransferenciaInventarioRead,
@@ -31,6 +33,19 @@ from osiris.modules.common.audit_log.entity import AuditLog
 
 
 Q4 = Decimal("0.0001")
+
+
+class ValoracionProducto(TypedDict):
+    producto_id: UUID
+    cantidad_actual: Decimal
+    costo_promedio_vigente: Decimal
+    valor_total: Decimal
+
+
+class ValoracionBodega(TypedDict):
+    bodega_id: UUID
+    total_bodega: Decimal
+    productos: list[ValoracionProducto]
 
 
 def q4(value: Decimal | int | str) -> Decimal:
@@ -55,8 +70,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         session: Session,
         payload: MovimientoInventarioCreate,
         *,
-        context: dict,
-        **kwargs,
+        context: dict[str, Any],
+        **kwargs: Any,
     ) -> MovimientoInventario:
         commit = kwargs.get("commit", True)
         _ = context
@@ -95,7 +110,7 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
     def confirmar_movimiento(
         self,
         session: Session,
-        movimiento_id,
+        movimiento_id: UUID,
         *,
         motivo_ajuste: str | None = None,
         usuario_autorizador: str | None = None,
@@ -125,8 +140,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         detalles = list(
             session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    MovimientoInventarioDetalle.movimiento_inventario_id == movimiento.id,
-                    MovimientoInventarioDetalle.activo.is_(True),
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento.id,
+                    col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -223,11 +238,11 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             referencia_documento=referencia_base,
             usuario_auditoria=payload.usuario_auditoria,
             detalles=[
-                {
-                    "producto_id": detalle.producto_id,
-                    "cantidad": detalle.cantidad,
-                    "costo_unitario": Decimal("0.0000"),
-                }
+                MovimientoInventarioDetalleCreate(
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=Decimal("0.0000"),
+                )
                 for detalle in payload.detalles
             ],
         )
@@ -244,8 +259,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             d.producto_id: q4(d.costo_unitario)
             for d in session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    MovimientoInventarioDetalle.movimiento_inventario_id == movimiento_egreso.id,
-                    MovimientoInventarioDetalle.activo.is_(True),
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento_egreso.id,
+                    col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
         }
@@ -257,11 +272,11 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             referencia_documento=f"{referencia_base}:DESTINO",
             usuario_auditoria=payload.usuario_auditoria,
             detalles=[
-                {
-                    "producto_id": detalle.producto_id,
-                    "cantidad": detalle.cantidad,
-                    "costo_unitario": costos_egreso.get(detalle.producto_id, Decimal("0.0000")),
-                }
+                MovimientoInventarioDetalleCreate(
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=costos_egreso.get(detalle.producto_id, Decimal("0.0000")),
+                )
                 for detalle in payload.detalles
             ],
         )
@@ -304,8 +319,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         movimiento = session.exec(
             select(MovimientoInventario)
             .where(
-                MovimientoInventario.id == movimiento_id,
-                MovimientoInventario.activo.is_(True),
+                col(MovimientoInventario.id) == movimiento_id,
+                col(MovimientoInventario.activo).is_(True),
             )
             .with_for_update()
         ).one_or_none()
@@ -334,8 +349,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         detalles = list(
             session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    MovimientoInventarioDetalle.movimiento_inventario_id == movimiento.id,
-                    MovimientoInventarioDetalle.activo.is_(True),
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento.id,
+                    col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -350,11 +365,11 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             motivo_ajuste=f"Anulación movimiento {movimiento.id}: {motivo}",
             usuario_auditoria=usuario_autorizador or movimiento.usuario_auditoria,
             detalles=[
-                {
-                    "producto_id": detalle.producto_id,
-                    "cantidad": detalle.cantidad,
-                    "costo_unitario": detalle.costo_unitario,
-                }
+                MovimientoInventarioDetalleCreate(
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=detalle.costo_unitario,
+                )
                 for detalle in detalles
             ],
         )
@@ -391,9 +406,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
 
         for producto_id in producto_ids:
             total_stock = session.exec(
-                select(func.coalesce(func.sum(InventarioStock.cantidad_actual), Decimal("0.0000"))).where(
-                    InventarioStock.producto_id == producto_id,
-                    InventarioStock.activo.is_(True),
+                select(func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), Decimal("0.0000"))).where(
+                    col(InventarioStock.producto_id) == producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
             ).one()
 
@@ -422,24 +437,24 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         # Algunos tests unitarios crean un subconjunto de tablas; en ese escenario
         # se omite la sincronización referencial producto-bodega.
         try:
-            session.exec(select(ProductoBodega.id).limit(1)).first()
+            session.exec(select(col(ProductoBodega.id)).limit(1)).first()
         except Exception:
             return
 
         for producto_id in producto_ids:
             stock = session.exec(
                 select(InventarioStock).where(
-                    InventarioStock.bodega_id == bodega_id,
-                    InventarioStock.producto_id == producto_id,
-                    InventarioStock.activo.is_(True),
+                    col(InventarioStock.bodega_id) == bodega_id,
+                    col(InventarioStock.producto_id) == producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
             ).one_or_none()
             cantidad = q4(stock.cantidad_actual) if stock is not None else Decimal("0.0000")
 
             relacion = session.exec(
                 select(ProductoBodega).where(
-                    ProductoBodega.bodega_id == bodega_id,
-                    ProductoBodega.producto_id == producto_id,
+                    col(ProductoBodega.bodega_id) == bodega_id,
+                    col(ProductoBodega.producto_id) == producto_id,
                 )
             ).one_or_none()
             if relacion is None:
@@ -496,9 +511,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             stock = session.exec(
                 select(InventarioStock)
                 .where(
-                    InventarioStock.bodega_id == movimiento.bodega_id,
-                    InventarioStock.producto_id == detalle.producto_id,
-                    InventarioStock.activo.is_(True),
+                    col(InventarioStock.bodega_id) == movimiento.bodega_id,
+                    col(InventarioStock.producto_id) == detalle.producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
                 .with_for_update()
             ).one()
@@ -517,11 +532,11 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         result = session.exec(
             update(InventarioStock)
             .where(
-                InventarioStock.id == stock.id,
-                InventarioStock.activo.is_(True),
-                InventarioStock.cantidad_actual >= cantidad_detalle,
+                col(InventarioStock.id) == stock.id,
+                col(InventarioStock.activo).is_(True),
+                col(InventarioStock.cantidad_actual) >= cantidad_detalle,
             )
-            .values(cantidad_actual=InventarioStock.cantidad_actual - cantidad_detalle)
+            .values(cantidad_actual=col(InventarioStock.cantidad_actual) - cantidad_detalle)
         )
         if (getattr(result, "rowcount", 0) or 0) != 1:
             raise ValueError("Inventario insuficiente: no se permite stock negativo.")
@@ -535,9 +550,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         stock = session.exec(
             select(InventarioStock)
             .where(
-                InventarioStock.bodega_id == movimiento.bodega_id,
-                InventarioStock.producto_id == detalle.producto_id,
-                InventarioStock.activo.is_(True),
+                col(InventarioStock.bodega_id) == movimiento.bodega_id,
+                col(InventarioStock.producto_id) == detalle.producto_id,
+                col(InventarioStock.activo).is_(True),
             )
             .with_for_update()
         ).one_or_none()
@@ -579,31 +594,31 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         *,
         producto_id: UUID,
         bodega_id: UUID,
-        fecha_inicio=None,
-        fecha_fin=None,
-    ) -> dict:
+        fecha_inicio: date | None = None,
+        fecha_fin: date | None = None,
+    ) -> dict[str, object]:
         filtros_base = [
-            MovimientoInventario.bodega_id == bodega_id,
-            MovimientoInventario.estado == EstadoMovimientoInventario.CONFIRMADO,
-            MovimientoInventarioDetalle.producto_id == producto_id,
-            MovimientoInventario.activo.is_(True),
-            MovimientoInventarioDetalle.activo.is_(True),
+            col(MovimientoInventario.bodega_id) == bodega_id,
+            col(MovimientoInventario.estado) == EstadoMovimientoInventario.CONFIRMADO,
+            col(MovimientoInventarioDetalle.producto_id) == producto_id,
+            col(MovimientoInventario.activo).is_(True),
+            col(MovimientoInventarioDetalle.activo).is_(True),
         ]
 
         saldo_inicial = Decimal("0.0000")
         if fecha_inicio is not None:
             filas_saldo = session.exec(
                 select(
-                    MovimientoInventario.tipo_movimiento,
-                    MovimientoInventarioDetalle.cantidad,
+                    col(MovimientoInventario.tipo_movimiento),
+                    col(MovimientoInventarioDetalle.cantidad),
                 )
                 .join(
                     MovimientoInventarioDetalle,
-                    MovimientoInventarioDetalle.movimiento_inventario_id == MovimientoInventario.id,
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
                 )
                 .where(
                     *filtros_base,
-                    MovimientoInventario.fecha < fecha_inicio,
+                    col(MovimientoInventario.fecha) < fecha_inicio,
                 )
             ).all()
             for tipo_movimiento, cantidad in filas_saldo:
@@ -615,21 +630,21 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
 
         filtros_movimientos = list(filtros_base)
         if fecha_inicio is not None:
-            filtros_movimientos.append(MovimientoInventario.fecha >= fecha_inicio)
+            filtros_movimientos.append(col(MovimientoInventario.fecha) >= fecha_inicio)
         if fecha_fin is not None:
-            filtros_movimientos.append(MovimientoInventario.fecha <= fecha_fin)
+            filtros_movimientos.append(col(MovimientoInventario.fecha) <= fecha_fin)
 
         filas = session.exec(
             select(MovimientoInventario, MovimientoInventarioDetalle)
             .join(
                 MovimientoInventarioDetalle,
-                MovimientoInventarioDetalle.movimiento_inventario_id == MovimientoInventario.id,
+                col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
             )
             .where(*filtros_movimientos)
             .order_by(
-                MovimientoInventario.fecha.asc(),
-                MovimientoInventario.creado_en.asc(),
-                MovimientoInventarioDetalle.id.asc(),
+                col(MovimientoInventario.fecha).asc(),
+                col(MovimientoInventario.creado_en).asc(),
+                col(MovimientoInventarioDetalle.id).asc(),
             )
         ).all()
 
@@ -675,12 +690,12 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
     def obtener_valoracion(
         self,
         session: Session,
-    ) -> dict:
+    ) -> dict[str, object]:
         stocks = session.exec(
-            select(InventarioStock).where(InventarioStock.activo.is_(True))
+            select(InventarioStock).where(col(InventarioStock.activo).is_(True))
         ).all()
 
-        agrupado: dict[UUID, dict] = {}
+        agrupado: dict[UUID, ValoracionBodega] = {}
         total_global = Decimal("0.0000")
         for stock in stocks:
             cantidad = q4(stock.cantidad_actual)
@@ -712,7 +727,7 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             "total_global": total_global,
         }
 
-    def obtener_movimiento_read(self, session: Session, movimiento_id) -> MovimientoInventarioRead:
+    def obtener_movimiento_read(self, session: Session, movimiento_id: UUID) -> MovimientoInventarioRead:
         movimiento = session.get(MovimientoInventario, movimiento_id)
         if not movimiento or not movimiento.activo:
             raise HTTPException(status_code=404, detail="Movimiento de inventario no encontrado")
@@ -720,8 +735,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         detalles = list(
             session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    MovimientoInventarioDetalle.movimiento_inventario_id == movimiento.id,
-                    MovimientoInventarioDetalle.activo.is_(True),
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento.id,
+                    col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -754,9 +769,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
     def _obtener_stock_producto_bodega(session: Session, *, bodega_id: UUID, producto_id: UUID) -> Decimal:
         stock = session.exec(
             select(InventarioStock).where(
-                InventarioStock.bodega_id == bodega_id,
-                InventarioStock.producto_id == producto_id,
-                InventarioStock.activo.is_(True),
+                col(InventarioStock.bodega_id) == bodega_id,
+                col(InventarioStock.producto_id) == producto_id,
+                col(InventarioStock.activo).is_(True),
             )
         ).one_or_none()
         if stock is None:
@@ -772,24 +787,24 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
     ) -> Decimal:
         filas = session.exec(
             select(
-                MovimientoInventario.tipo_movimiento,
-                MovimientoInventarioDetalle.cantidad,
+                col(MovimientoInventario.tipo_movimiento),
+                col(MovimientoInventarioDetalle.cantidad),
             )
             .join(
                 MovimientoInventarioDetalle,
-                MovimientoInventarioDetalle.movimiento_inventario_id == MovimientoInventario.id,
+                col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
             )
             .where(
-                MovimientoInventario.bodega_id == bodega_id,
-                MovimientoInventario.estado == EstadoMovimientoInventario.CONFIRMADO,
-                MovimientoInventario.activo.is_(True),
-                MovimientoInventarioDetalle.producto_id == producto_id,
-                MovimientoInventarioDetalle.activo.is_(True),
+                col(MovimientoInventario.bodega_id) == bodega_id,
+                col(MovimientoInventario.estado) == EstadoMovimientoInventario.CONFIRMADO,
+                col(MovimientoInventario.activo).is_(True),
+                col(MovimientoInventarioDetalle.producto_id) == producto_id,
+                col(MovimientoInventarioDetalle.activo).is_(True),
             )
             .order_by(
-                MovimientoInventario.fecha.asc(),
-                MovimientoInventario.creado_en.asc(),
-                MovimientoInventarioDetalle.id.asc(),
+                col(MovimientoInventario.fecha).asc(),
+                col(MovimientoInventario.creado_en).asc(),
+                col(MovimientoInventarioDetalle.id).asc(),
             )
         ).all()
 
@@ -844,9 +859,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
     def _validar_producto_vs_stock(self, session: Session, *, producto_ids: set[UUID]) -> None:
         for producto_id in producto_ids:
             total_stock = session.exec(
-                select(func.coalesce(func.sum(InventarioStock.cantidad_actual), Decimal("0.0000"))).where(
-                    InventarioStock.producto_id == producto_id,
-                    InventarioStock.activo.is_(True),
+                select(func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), Decimal("0.0000"))).where(
+                    col(InventarioStock.producto_id) == producto_id,
+                    col(InventarioStock.activo).is_(True),
                 )
             ).one()
 

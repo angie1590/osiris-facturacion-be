@@ -4,9 +4,10 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
 from osiris.core.db import get_session
+from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.bodega.models import BodegaCreate, BodegaRead, BodegaUpdate
 from osiris.modules.inventario.bodega.service import BodegaService
 
@@ -22,7 +23,7 @@ def list_bodegas(
     empresa_id: Optional[UUID] = Query(None),
     sucursal_id: Optional[UUID] = Query(None),
     session: Session = Depends(get_session),
-):
+) -> list[Bodega]:
     return service.list_paginated(
         session,
         skip=skip,
@@ -33,7 +34,7 @@ def list_bodegas(
 
 
 @router.get("/{id}", response_model=BodegaRead)
-def get_bodega(id: UUID, session: Session = Depends(get_session)):
+def get_bodega(id: UUID, session: Session = Depends(get_session)) -> Bodega:
     entity = service.get(session, id)
     if not entity:
         raise HTTPException(status_code=404, detail="Bodega no encontrada")
@@ -41,12 +42,12 @@ def get_bodega(id: UUID, session: Session = Depends(get_session)):
 
 
 @router.post("", response_model=BodegaRead, status_code=201)
-def create_bodega(dto: BodegaCreate, session: Session = Depends(get_session)):
+def create_bodega(dto: BodegaCreate, session: Session = Depends(get_session)) -> Bodega:
     return service.create(session, dto, usuario_auditoria="api")
 
 
 @router.put("/{id}", response_model=BodegaRead)
-def update_bodega(id: UUID, dto: BodegaUpdate, session: Session = Depends(get_session)):
+def update_bodega(id: UUID, dto: BodegaUpdate, session: Session = Depends(get_session)) -> Bodega:
     entity = service.update(session, id, dto, usuario_auditoria="api")
     if not entity:
         raise HTTPException(status_code=404, detail="Bodega no encontrada")
@@ -54,7 +55,7 @@ def update_bodega(id: UUID, dto: BodegaUpdate, session: Session = Depends(get_se
 
 
 @router.delete("/{id}", status_code=204)
-def delete_bodega(id: UUID, session: Session = Depends(get_session)):
+def delete_bodega(id: UUID, session: Session = Depends(get_session)) -> None:
     success = service.delete(session, id, usuario_auditoria="api")
     if not success:
         raise HTTPException(status_code=404, detail="Bodega no encontrada")

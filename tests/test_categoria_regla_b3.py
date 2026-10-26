@@ -3,6 +3,8 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -36,6 +38,48 @@ def _build_test_engine():
         ],
     )
     return engine
+
+
+@pytest.mark.parametrize("operation", ["create", "rename", "move"])
+def test_reject_duplicate_active_sibling_names(operation):
+    with Session(_build_test_engine()) as session:
+        parent = Categoria(nombre="Periféricos", es_padre=True)
+        other_parent = Categoria(nombre="Otros", es_padre=True)
+        session.add_all([parent, other_parent])
+        session.flush()
+        original = Categoria(nombre="Mouse", parent_id=parent.id)
+        candidate = Categoria(nombre="Teclado" if operation == "rename" else "Mouse", parent_id=other_parent.id if operation == "move" else parent.id)
+        session.add(original)
+        if operation != "create":
+            session.add(candidate)
+        session.commit()
+        service = CategoriaService()
+        with pytest.raises(HTTPException) as error:
+            if operation == "create":
+                service.create(session, {"nombre": " mouse ", "parent_id": parent.id, "es_padre": False})
+            elif operation == "rename":
+                service.update(session, candidate.id, {"nombre": " MOUSE "})
+            else:
+                service.update(session, candidate.id, {"parent_id": parent.id})
+        assert error.value.status_code == 409
+        assert error.value.detail["code"] == "CATEGORY_DUPLICATE_NAME"
+
+
+def test_category_names_allow_other_parents_and_inactive_history_but_reject_root_duplicates():
+    with Session(_build_test_engine()) as session:
+        service = CategoriaService()
+        first = service.create(session, {"nombre": "Periféricos", "es_padre": True})
+        second = service.create(session, {"nombre": "Accesorios", "es_padre": True})
+        service.create(session, {"nombre": "Mouse", "parent_id": first.id})
+        service.create(session, {"nombre": "Mouse", "parent_id": second.id})
+        session.add(Categoria(nombre="Teclado", parent_id=first.id, activo=False))
+        session.commit()
+        created = service.create(session, {"nombre": "Teclado", "parent_id": first.id})
+        assert created.activo is True
+        service.update(session, created.id, {"nombre": "Teclado"})
+        with pytest.raises(HTTPException) as error:
+            service.create(session, {"nombre": " periféricos ", "es_padre": True})
+        assert error.value.status_code == 409
 
 
 def _seed_categoria_hoja_con_dos_productos(session: Session) -> tuple[Categoria, list[UUID]]:

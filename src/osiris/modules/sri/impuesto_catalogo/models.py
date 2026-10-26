@@ -38,7 +38,7 @@ class ImpuestoCatalogoCreate(BaseOSModel):
     usuario_auditoria: Optional[str] = None
 
     @model_validator(mode="after")
-    def validate_impuesto_fields(self):
+    def validate_impuesto_fields(self) -> ImpuestoCatalogoCreate:
         """Valida que los campos obligatorios estén presentes según el tipo de impuesto."""
         # Validar código de tipo de impuesto según tabla SRI
         codigos_validos = {"IVA": "2", "ICE": "3", "IRBPNR": "5"}

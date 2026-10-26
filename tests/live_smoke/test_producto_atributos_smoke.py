@@ -38,10 +38,21 @@ def test_producto_con_atributos():
     with httpx.Client(timeout=TIMEOUT) as client:
         unique_suffix = uuid.uuid4().hex[:6]
 
+        # Los atributos siempre se crean vinculados a una categoría.
+        attr_category = {
+            "nombre": f"Atributos_{unique_suffix}",
+            "es_padre": False,
+            "usuario_auditoria": "smoke_test",
+        }
+        r = client.post(f"{BASE}/categorias", json=attr_category)
+        assert r.status_code == 201
+        attr_category_id = r.json()["id"]
+
         # 1. Crear atributos
         attr_color = {
             "nombre": f"color_principal_{unique_suffix}",
             "tipo_dato": "string",
+            "categoria_id": attr_category_id,
             "usuario_auditoria": "smoke_test"
         }
         r = client.post(f"{BASE}/atributos", json=attr_color)
@@ -51,6 +62,7 @@ def test_producto_con_atributos():
         attr_fecha = {
             "nombre": f"fecha_caducidad_{unique_suffix}",
             "tipo_dato": "date",
+            "categoria_id": attr_category_id,
             "usuario_auditoria": "smoke_test"
         }
         r = client.post(f"{BASE}/atributos", json=attr_fecha)

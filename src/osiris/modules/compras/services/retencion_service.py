@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.sucursal.entity import Sucursal
@@ -37,7 +39,7 @@ from osiris.modules.sri.core_sri.all_schemas import (
 )
 from osiris.modules.sri.facturacion_electronica.services.sri_async_service import SriAsyncService
 from osiris.modules.compras.strategies.validacion_impuestos_sri_strategy import ValidacionImpuestosSRIStrategy
-from osiris.utils.pagination import build_pagination_meta
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 
 
 class RetencionService:
@@ -76,10 +78,10 @@ class RetencionService:
         stmt = (
             select(PlantillaRetencion)
             .where(
-                PlantillaRetencion.activo.is_(True),
-                PlantillaRetencion.proveedor_id == proveedor_id,
+                col(PlantillaRetencion.activo).is_(True),
+                col(PlantillaRetencion.proveedor_id) == proveedor_id,
             )
-            .order_by(PlantillaRetencion.actualizado_en.desc())
+            .order_by(col(PlantillaRetencion.actualizado_en).desc())
         )
         plantilla = session.exec(stmt).first()
         if plantilla:
@@ -88,10 +90,10 @@ class RetencionService:
         stmt_global = (
             select(PlantillaRetencion)
             .where(
-                PlantillaRetencion.activo.is_(True),
-                PlantillaRetencion.es_global.is_(True),
+                col(PlantillaRetencion.activo).is_(True),
+                col(PlantillaRetencion.es_global).is_(True),
             )
-            .order_by(PlantillaRetencion.actualizado_en.desc())
+            .order_by(col(PlantillaRetencion.actualizado_en).desc())
         )
         return session.exec(stmt_global).first()
 
@@ -103,10 +105,10 @@ class RetencionService:
         stmt = (
             select(PlantillaRetencionDetalle)
             .where(
-                PlantillaRetencionDetalle.activo.is_(True),
-                PlantillaRetencionDetalle.plantilla_retencion_id == plantilla_id,
+                col(PlantillaRetencionDetalle.activo).is_(True),
+                col(PlantillaRetencionDetalle.plantilla_retencion_id) == plantilla_id,
             )
-            .order_by(PlantillaRetencionDetalle.creado_en.asc())
+            .order_by(col(PlantillaRetencionDetalle.creado_en).asc())
         )
         return list(session.exec(stmt).all())
 
@@ -121,10 +123,10 @@ class RetencionService:
         stmt = (
             select(RetencionDetalle)
             .where(
-                RetencionDetalle.activo.is_(True),
-                RetencionDetalle.retencion_id == retencion_id,
+                col(RetencionDetalle.activo).is_(True),
+                col(RetencionDetalle.retencion_id) == retencion_id,
             )
-            .order_by(RetencionDetalle.creado_en.asc())
+            .order_by(col(RetencionDetalle.creado_en).asc())
         )
         return list(session.exec(stmt).all())
 
@@ -133,8 +135,8 @@ class RetencionService:
         cxp = session.exec(
             select(CuentaPorPagar)
             .where(
-                CuentaPorPagar.compra_id == compra_id,
-                CuentaPorPagar.activo.is_(True),
+                col(CuentaPorPagar.compra_id) == compra_id,
+                col(CuentaPorPagar.activo).is_(True),
             )
             .with_for_update()
         ).one_or_none()
@@ -161,9 +163,9 @@ class RetencionService:
     def _validar_no_duplicidad_retencion_por_compra(self, session: Session, compra_id: UUID) -> None:
         existente = session.exec(
             select(Retencion).where(
-                Retencion.compra_id == compra_id,
-                Retencion.activo.is_(True),
-                Retencion.estado != EstadoRetencion.ANULADA,
+                col(Retencion.compra_id) == compra_id,
+                col(Retencion.activo).is_(True),
+                col(Retencion.estado) != EstadoRetencion.ANULADA,
             )
         ).first()
         if existente:
@@ -213,19 +215,19 @@ class RetencionService:
             total_retenido=q2(total_retenido),
         )
 
-    def listar_retenciones(self, session: Session, *, limit: int, offset: int, texto: str | None = None):
-        stmt = select(Retencion).join(Compra, Compra.id == Retencion.compra_id).where(Retencion.activo.is_(True))
+    def listar_retenciones(self, session: Session, *, limit: int, offset: int, texto: str | None = None) -> tuple[list[dict[str, UUID | date | Decimal | str]], PaginationMeta]:
+        stmt = select(Retencion).join(Compra, col(Compra.id) == col(Retencion.compra_id)).where(col(Retencion.activo).is_(True))
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(Sucursal.empresa_id == empresa_scope)
+            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(col(Sucursal.empresa_id) == empresa_scope)
         if texto:
             pattern = f"%{texto.strip()}%"
             stmt = stmt.where(
-                or_(Compra.secuencial_factura.ilike(pattern), Compra.identificacion_proveedor.ilike(pattern))
+                or_(col(Compra.secuencial_factura).ilike(pattern), col(Compra.identificacion_proveedor).ilike(pattern))
             )
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
-        retenciones = list(session.exec(stmt.order_by(Retencion.fecha_emision.desc()).offset(offset).limit(limit)).all())
-        items = []
+        retenciones = list(session.exec(stmt.order_by(col(Retencion.fecha_emision).desc()).offset(offset).limit(limit)).all())
+        items: list[dict[str, UUID | date | Decimal | str]] = []
         for retencion in retenciones:
             compra = session.get(Compra, retencion.compra_id)
             if compra is not None:
@@ -358,7 +360,7 @@ class RetencionService:
             ],
         )
 
-    def obtener_payload_fe_retencion(self, session: Session, retencion_id: UUID) -> dict:
+    def obtener_payload_fe_retencion(self, session: Session, retencion_id: UUID) -> dict[str, Any]:
         retencion = self.obtener_retencion_read(session, retencion_id)
         return self.fe_mapper_service.retencion_to_fe_payload(retencion)
 
@@ -373,13 +375,13 @@ class RetencionService:
 
         if not payload.es_global:
             prev_stmt = select(PlantillaRetencion).where(
-                PlantillaRetencion.activo.is_(True),
-                PlantillaRetencion.proveedor_id == compra.proveedor_id,
+                col(PlantillaRetencion.activo).is_(True),
+                col(PlantillaRetencion.proveedor_id) == compra.proveedor_id,
             )
         else:
             prev_stmt = select(PlantillaRetencion).where(
-                PlantillaRetencion.activo.is_(True),
-                PlantillaRetencion.es_global.is_(True),
+                col(PlantillaRetencion.activo).is_(True),
+                col(PlantillaRetencion.es_global).is_(True),
             )
         previas = list(session.exec(prev_stmt).all())
         for previa in previas:

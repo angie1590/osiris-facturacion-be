@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import FacturaPayload
+
 from datetime import date
+from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
@@ -8,6 +12,7 @@ from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
+from osiris.modules.ventas.models import CuentaPorCobrar, PagoCxC
 from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import FEMapperService
 from osiris.modules.sri.core_sri.models import (
     EstadoCuentaPorCobrar,
@@ -36,9 +41,10 @@ from osiris.modules.ventas.schemas import (
 from osiris.modules.ventas.services.cxc_service import CuentaPorCobrarService
 from osiris.modules.ventas.services.retencion_recibida_service import RetencionRecibidaService
 from osiris.modules.ventas.services.venta_service import VentaService
+from osiris.utils.pagination import PaginationMeta
 
 
-COMMON_RESPONSES = {
+COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Solicitud inválida para la regla de negocio."},
     404: {"description": "Recurso no encontrado."},
 }
@@ -60,7 +66,7 @@ def crear_venta(
     background_tasks: BackgroundTasks,
     emitir_automaticamente: bool = Query(default=True),
     session: Session = Depends(get_session),
-):
+) -> VentaRead:
     venta = venta_service.registrar_venta(session, payload)
     if emitir_automaticamente:
         venta = venta_service.emitir_venta(
@@ -84,7 +90,7 @@ def listar_ventas(
     tipo_emision: TipoEmisionVenta | None = Query(default=None),
     texto: str | None = Query(default=None, min_length=1),
     session: Session = Depends(get_session),
-):
+) -> dict[str, list[dict[str, Any]] | PaginationMeta]:
     items, meta = venta_service.listar_ventas(
         session,
         limit=limit,
@@ -105,7 +111,7 @@ def crear_venta_desde_productos(
     background_tasks: BackgroundTasks,
     emitir_automaticamente: bool = Query(default=True),
     session: Session = Depends(get_session),
-):
+) -> VentaRead:
     venta = venta_service.registrar_venta_desde_productos(session, payload)
     if emitir_automaticamente:
         venta = venta_service.emitir_venta(
@@ -119,24 +125,24 @@ def crear_venta_desde_productos(
 
 
 @ventas_router.put("/{venta_id}", response_model=VentaRead, summary="Actualizar venta", responses=COMMON_RESPONSES)
-def actualizar_venta(venta_id: UUID, payload: VentaUpdate, session: Session = Depends(get_session)):
+def actualizar_venta(venta_id: UUID, payload: VentaUpdate, session: Session = Depends(get_session)) -> VentaRead:
     venta = venta_service.actualizar_venta(session, venta_id, payload)
     return venta_service.obtener_venta_read(session, venta.id)
 
 
 @ventas_router.patch("/{venta_id}", response_model=VentaRead, summary="Actualizar venta parcialmente", responses=COMMON_RESPONSES)
-def actualizar_venta_parcial(venta_id: UUID, payload: VentaUpdate, session: Session = Depends(get_session)):
+def actualizar_venta_parcial(venta_id: UUID, payload: VentaUpdate, session: Session = Depends(get_session)) -> VentaRead:
     venta = venta_service.actualizar_venta(session, venta_id, payload)
     return venta_service.obtener_venta_read(session, venta.id)
 
 
 @ventas_router.get("/{venta_id}", response_model=VentaRead, summary="Obtener venta por ID", responses=COMMON_RESPONSES)
-def obtener_venta(venta_id: UUID, session: Session = Depends(get_session)):
+def obtener_venta(venta_id: UUID, session: Session = Depends(get_session)) -> VentaRead:
     return venta_service.obtener_venta_read(session, venta_id)
 
 
 @ventas_router.post("/{venta_id}/emitir", response_model=VentaRead, summary="Emitir venta", responses=COMMON_RESPONSES)
-def emitir_venta(venta_id: UUID, payload: VentaEmitRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+def emitir_venta(venta_id: UUID, payload: VentaEmitRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)) -> VentaRead:
     venta = venta_service.emitir_venta(
         session,
         venta_id,
@@ -148,7 +154,7 @@ def emitir_venta(venta_id: UUID, payload: VentaEmitRequest, background_tasks: Ba
 
 
 @ventas_router.post("/{venta_id}/anular", response_model=VentaRead, summary="Anular venta", responses=COMMON_RESPONSES)
-def anular_venta(venta_id: UUID, payload: VentaAnularRequest, session: Session = Depends(get_session)):
+def anular_venta(venta_id: UUID, payload: VentaAnularRequest, session: Session = Depends(get_session)) -> VentaRead:
     venta = venta_service.anular_venta(
         session,
         venta_id,
@@ -160,13 +166,13 @@ def anular_venta(venta_id: UUID, payload: VentaAnularRequest, session: Session =
 
 
 @ventas_router.get("/{venta_id}/fe-payload", response_model=FEPayloadRead, summary="Obtener payload FE-EC de venta", responses=COMMON_RESPONSES)
-def obtener_payload_fe_venta(venta_id: UUID, session: Session = Depends(get_session)):
+def obtener_payload_fe_venta(venta_id: UUID, session: Session = Depends(get_session)) -> FacturaPayload:
     venta = venta_service.obtener_venta_read(session, venta_id)
     return fe_mapper_service.venta_to_fe_payload(venta)
 
 
 @retenciones_router.post("", response_model=RetencionRecibidaRead, status_code=status.HTTP_201_CREATED, summary="Registrar retención recibida", responses=COMMON_RESPONSES)
-def crear_retencion_recibida(payload: RetencionRecibidaCreate, session: Session = Depends(get_session)):
+def crear_retencion_recibida(payload: RetencionRecibidaCreate, session: Session = Depends(get_session)) -> RetencionRecibidaRead:
     return retencion_recibida_service.crear_retencion_recibida(session, payload)
 
 
@@ -179,7 +185,7 @@ def listar_retenciones_recibidas(
     fecha_fin: date | None = Query(default=None),
     estado: EstadoRetencionRecibida | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> dict[str, list[RetencionRecibidaListItemRead] | PaginationMeta]:
     items, meta = retencion_recibida_service.listar_retenciones_recibidas(
         session,
         limit=limit,
@@ -193,12 +199,12 @@ def listar_retenciones_recibidas(
 
 
 @retenciones_router.get("/{retencion_id}", response_model=RetencionRecibidaRead, summary="Obtener retención recibida por ID", responses=COMMON_RESPONSES)
-def obtener_retencion_recibida(retencion_id: UUID, session: Session = Depends(get_session)):
+def obtener_retencion_recibida(retencion_id: UUID, session: Session = Depends(get_session)) -> RetencionRecibidaRead:
     return retencion_recibida_service.obtener_retencion_recibida_read(session, retencion_id)
 
 
 @retenciones_router.post("/{retencion_id}/anular", response_model=RetencionRecibidaRead, summary="Anular retención recibida", responses=COMMON_RESPONSES)
-def anular_retencion_recibida(retencion_id: UUID, payload: RetencionRecibidaAnularRequest, session: Session = Depends(get_session)):
+def anular_retencion_recibida(retencion_id: UUID, payload: RetencionRecibidaAnularRequest, session: Session = Depends(get_session)) -> RetencionRecibidaRead:
     return retencion_recibida_service.anular_retencion_recibida(
         session,
         retencion_id,
@@ -208,12 +214,12 @@ def anular_retencion_recibida(retencion_id: UUID, payload: RetencionRecibidaAnul
 
 
 @retenciones_router.post("/{retencion_id}/aplicar", response_model=RetencionRecibidaRead, summary="Aplicar retención recibida", responses=COMMON_RESPONSES)
-def aplicar_retencion_recibida(retencion_id: UUID, session: Session = Depends(get_session)):
+def aplicar_retencion_recibida(retencion_id: UUID, session: Session = Depends(get_session)) -> RetencionRecibidaRead:
     return retencion_recibida_service.aplicar_retencion_recibida(session, retencion_id)
 
 
 @cxc_router.get("/{venta_id}", response_model=CuentaPorCobrarRead, summary="Obtener cuenta por cobrar de venta", responses=COMMON_RESPONSES)
-def obtener_cxc_por_venta(venta_id: UUID, session: Session = Depends(get_session)):
+def obtener_cxc_por_venta(venta_id: UUID, session: Session = Depends(get_session)) -> CuentaPorCobrar:
     return cxc_service.obtener_cxc_por_venta(session, venta_id)
 
 
@@ -225,7 +231,7 @@ def listar_cxc(
     estado: EstadoCuentaPorCobrar | None = Query(default=None),
     texto: str | None = Query(default=None, min_length=1),
     session: Session = Depends(get_session),
-):
+) -> dict[str, list[dict[str, UUID | date | Decimal | str | None]] | PaginationMeta]:
     items, meta = cxc_service.listar_cxc(
         session,
         limit=limit,
@@ -238,7 +244,7 @@ def listar_cxc(
 
 
 @cxc_router.post("/{venta_id}/pagos", response_model=PagoCxCRead, status_code=status.HTTP_201_CREATED, summary="Registrar pago de CxC", responses=COMMON_RESPONSES)
-def registrar_pago_cxc(venta_id: UUID, payload: PagoCxCCreate, session: Session = Depends(get_session)):
+def registrar_pago_cxc(venta_id: UUID, payload: PagoCxCCreate, session: Session = Depends(get_session)) -> PagoCxC:
     cxc = cxc_service.obtener_cxc_por_venta(session, venta_id)
     return cxc_service.registrar_pago_cxc(session, cxc.id, payload)
 

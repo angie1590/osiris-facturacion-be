@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID
 
-from sqlalchemy import JSON, Column, event
+from sqlalchemy import JSON, Column, Table, event
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Mapper
 from sqlmodel import Field
 
 from osiris.domain.base_models import BaseTable
@@ -20,6 +22,7 @@ class AuditAction(str, Enum):
 
 class AuditLog(BaseTable, table=True):
     __tablename__ = "audit_log"
+    __table__: ClassVar[Table]
 
     # Campos canonicos solicitados por E2-2.
     tabla_afectada: str | None = Field(default=None, max_length=100, index=True)
@@ -40,7 +43,7 @@ class AuditLog(BaseTable, table=True):
 
 
 @event.listens_for(AuditLog, "before_insert")
-def _sync_auditlog_legacy_and_standard(_mapper, _connection, target: AuditLog):
+def _sync_auditlog_legacy_and_standard(_mapper: Mapper[AuditLog], _connection: Connection, target: AuditLog) -> None:
     target.tabla_afectada = target.tabla_afectada or target.entidad
     target.registro_id = target.registro_id or str(target.entidad_id)
     target.usuario_id = (

@@ -30,11 +30,11 @@ def new_request_id() -> str:
     return str(uuid4())
 
 
-def set_current_request_id(request_id: str | None) -> Token:
+def set_current_request_id(request_id: str | None) -> Token[str | None]:
     return _current_request_id.set(request_id)
 
 
-def reset_current_request_id(token: Token) -> None:
+def reset_current_request_id(token: Token[str | None]) -> None:
     _current_request_id.reset(token)
 
 
@@ -164,10 +164,10 @@ class _MetricsRegistry:
             for label_key, value in sorted(series.items()):
                 lines.append(f"{name}{_render_labels(label_key)} {value}")
 
-        for name, series in sorted(histograms.items()):
+        for name, histogram_series in sorted(histograms.items()):
             lines.append(f"# TYPE {name}_sum counter")
             lines.append(f"# TYPE {name}_count counter")
-            for label_key, (sum_value, count_value) in sorted(series.items()):
+            for label_key, (sum_value, count_value) in sorted(histogram_series.items()):
                 labels = _render_labels(label_key)
                 lines.append(f"{name}_sum{labels} {sum_value}")
                 lines.append(f"{name}_count{labels} {count_value}")
@@ -225,11 +225,11 @@ def initialize_metrics() -> None:
         )
 
 
-def begin_db_request_tracking() -> Token:
+def begin_db_request_tracking() -> Token[DBRequestStats | None]:
     return _current_db_request_stats.set(DBRequestStats())
 
 
-def reset_db_request_tracking(token: Token) -> None:
+def reset_db_request_tracking(token: Token[DBRequestStats | None]) -> None:
     _current_db_request_stats.reset(token)
 
 

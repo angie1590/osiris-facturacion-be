@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from typing import Any
 from uuid import UUID
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 from fastapi import HTTPException
 
 from osiris.domain.service import BaseService
@@ -13,7 +14,7 @@ from osiris.modules.inventario.bodega.entity import Bodega
 from .repository import ProductoBodegaRepository
 
 
-class ProductoBodegaService(BaseService):
+class ProductoBodegaService(BaseService[ProductoBodega]):
     repo = ProductoBodegaRepository()
 
     # FKs a validar: producto y bodega deben existir y estar activos
@@ -34,7 +35,7 @@ class ProductoBodegaService(BaseService):
         return result
 
     @staticmethod
-    def _validar_producto_y_bodega_activos(session: Session, producto_id: UUID, bodega_id: UUID) -> tuple[Producto, Bodega]:
+    def _validar_producto_y_bodega_activos(session: Session, producto_id: UUID | None, bodega_id: UUID | None) -> tuple[Producto, Bodega]:
         producto = session.get(Producto, producto_id)
         if not producto or not producto.activo:
             raise HTTPException(status_code=404, detail="Producto no encontrado o inactivo.")
@@ -66,9 +67,9 @@ class ProductoBodegaService(BaseService):
             return False
 
         # Soporta enums (TipoProducto.SERVICIO) y strings ("SERVICIO")
-        return getattr(tipo, "value", tipo) == "SERVICIO"
+        return bool(getattr(tipo, "value", tipo) == "SERVICIO")
 
-    def create(self, session: Session, data):
+    def create(self, session: Session, data: dict[str, Any], *, commit: bool = True) -> ProductoBodega:
         """
         Crea una relación producto-bodega.
         Valida que no exista duplicado (constraint único en BD).
@@ -81,8 +82,8 @@ class ProductoBodegaService(BaseService):
         # Validar si ya existe la relación
         existing = session.exec(
             select(ProductoBodega)
-            .where(ProductoBodega.producto_id == producto_id)
-            .where(ProductoBodega.bodega_id == bodega_id)
+            .where(col(ProductoBodega.producto_id) == producto_id)
+            .where(col(ProductoBodega.bodega_id) == bodega_id)
         ).first()
 
         if existing:
@@ -105,7 +106,7 @@ class ProductoBodegaService(BaseService):
         if self._is_service_product(producto):
             data["cantidad"] = Decimal("0.0000")
 
-        return super().create(session, data)
+        return super().create(session, data, commit=commit)
 
     def update_cantidad(
         self,
@@ -115,7 +116,7 @@ class ProductoBodegaService(BaseService):
         cantidad: Decimal | int | float | str,
         *,
         usuario_auditoria: str | None = None,
-    ):
+    ) -> ProductoBodega:
         """
         Actualiza la cantidad de un producto en una bodega específica.
         Si no existe la relación, la crea.
@@ -130,8 +131,8 @@ class ProductoBodegaService(BaseService):
 
         relacion = session.exec(
             select(ProductoBodega)
-            .where(ProductoBodega.producto_id == producto_id)
-            .where(ProductoBodega.bodega_id == bodega_id)
+            .where(col(ProductoBodega.producto_id) == producto_id)
+            .where(col(ProductoBodega.bodega_id) == bodega_id)
         ).first()
 
         if not relacion:
@@ -160,7 +161,7 @@ class ProductoBodegaService(BaseService):
         *,
         producto_id: UUID | None = None,
         bodega_id: UUID | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, UUID | str | Decimal]]:
         if producto_id is None and bodega_id is None:
             raise HTTPException(
                 status_code=400,
@@ -169,18 +170,18 @@ class ProductoBodegaService(BaseService):
 
         stmt = (
             select(InventarioStock, Producto, Bodega)
-            .join(Producto, Producto.id == InventarioStock.producto_id)
-            .join(Bodega, Bodega.id == InventarioStock.bodega_id)
+            .join(Producto, col(Producto.id) == col(InventarioStock.producto_id))
+            .join(Bodega, col(Bodega.id) == col(InventarioStock.bodega_id))
             .where(
-                InventarioStock.activo.is_(True),
-                Producto.activo.is_(True),
-                Bodega.activo.is_(True),
+                col(InventarioStock.activo).is_(True),
+                col(Producto.activo).is_(True),
+                col(Bodega.activo).is_(True),
             )
         )
         if producto_id is not None:
-            stmt = stmt.where(InventarioStock.producto_id == producto_id)
+            stmt = stmt.where(col(InventarioStock.producto_id) == producto_id)
         if bodega_id is not None:
-            stmt = stmt.where(InventarioStock.bodega_id == bodega_id)
+            stmt = stmt.where(col(InventarioStock.bodega_id) == bodega_id)
 
         relaciones = session.exec(stmt).all()
         return [
@@ -195,15 +196,15 @@ class ProductoBodegaService(BaseService):
             for rel, producto, bodega in relaciones
         ]
 
-    def get_bodegas_by_producto(self, session: Session, producto_id: UUID):
+    def get_bodegas_by_producto(self, session: Session, producto_id: UUID) -> list[dict[str, UUID | str | Decimal]]:
         """Obtiene todas las bodegas donde está un producto"""
         relaciones = session.exec(
             select(ProductoBodega, Bodega)
-            .join(Bodega, Bodega.id == ProductoBodega.bodega_id)
+            .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
             .where(
-                ProductoBodega.producto_id == producto_id,
-                ProductoBodega.activo.is_(True),
-                Bodega.activo.is_(True),
+                col(ProductoBodega.producto_id) == producto_id,
+                col(ProductoBodega.activo).is_(True),
+                col(Bodega.activo).is_(True),
             )
         ).all()
 
@@ -218,15 +219,15 @@ class ProductoBodegaService(BaseService):
             for rel, bodega in relaciones
         ]
 
-    def get_productos_by_bodega(self, session: Session, bodega_id: UUID):
+    def get_productos_by_bodega(self, session: Session, bodega_id: UUID) -> list[dict[str, UUID | str | Decimal]]:
         """Obtiene todos los productos en una bodega"""
         relaciones = session.exec(
             select(ProductoBodega, Producto)
-            .join(Producto, Producto.id == ProductoBodega.producto_id)
+            .join(Producto, col(Producto.id) == col(ProductoBodega.producto_id))
             .where(
-                ProductoBodega.bodega_id == bodega_id,
-                ProductoBodega.activo.is_(True),
-                Producto.activo.is_(True),
+                col(ProductoBodega.bodega_id) == bodega_id,
+                col(ProductoBodega.activo).is_(True),
+                col(Producto.activo).is_(True),
             )
         ).all()
 

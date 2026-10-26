@@ -104,12 +104,12 @@ def test_producto_flow_with_leaf_categories_and_relations():
             assert r.status_code == 201, r.text
 
         # 4) Crear atributos
-        attr1 = {"nombre": f"Color-{uuid.uuid4().hex[:4]}", "tipo_dato": "string", "usuario_auditoria": "ci"}
+        attr1 = {"nombre": f"Color-{uuid.uuid4().hex[:4]}", "tipo_dato": "string", "categoria_id": comp_id, "usuario_auditoria": "ci"}
         r = client.post(f"{BASE}/atributos", json=attr1)
         assert r.status_code == 201, r.text
         attr1_id = r.json()["id"]
 
-        attr2 = {"nombre": f"Peso-{uuid.uuid4().hex[:4]}", "tipo_dato": "decimal", "usuario_auditoria": "ci"}
+        attr2 = {"nombre": f"Peso-{uuid.uuid4().hex[:4]}", "tipo_dato": "decimal", "categoria_id": comp_id, "usuario_auditoria": "ci"}
         r = client.post(f"{BASE}/atributos", json=attr2)
         assert r.status_code == 201, r.text
         attr2_id = r.json()["id"]

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.db import get_session
 from osiris.modules.common.audit_log.entity import AuditLog
@@ -22,17 +22,17 @@ def list_audit_logs(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
-):
+) -> list[AuditLogRead]:
     fecha_expr = func.coalesce(AuditLog.fecha, AuditLog.creado_en)
     stmt = select(AuditLog)
 
     if usuario_id:
         stmt = stmt.where(
             or_(
-                AuditLog.usuario_id == usuario_id,
-                AuditLog.updated_by == usuario_id,
-                AuditLog.created_by == usuario_id,
-                AuditLog.usuario_auditoria == usuario_id,
+                col(AuditLog.usuario_id) == usuario_id,
+                col(AuditLog.updated_by) == usuario_id,
+                col(AuditLog.created_by) == usuario_id,
+                col(AuditLog.usuario_auditoria) == usuario_id,
             )
         )
     if fecha_desde:

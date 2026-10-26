@@ -6,6 +6,7 @@ import time
 from uuid import UUID
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -14,6 +15,23 @@ from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION, get_session
 from osiris.main import app
 from osiris.modules.common.rol.entity import Rol
 from osiris.modules.common.rol.repository import RolRepository
+from osiris.modules.common.rol.router import router as role_router
+
+
+@pytest.fixture
+def isolated_role_access():
+    dependencies = {dependency.dependency for route in role_router.routes for dependency in route.dependencies}
+    previous = {dependency: app.dependency_overrides.get(dependency) for dependency in dependencies}
+    for dependency in dependencies:
+        app.dependency_overrides[dependency] = lambda: None
+    try:
+        yield
+    finally:
+        for dependency, original in previous.items():
+            if original is None:
+                app.dependency_overrides.pop(dependency, None)
+            else:
+                app.dependency_overrides[dependency] = original
 
 
 def _build_fake_jwt(sub: str) -> str:
@@ -54,7 +72,7 @@ def test_audit_mixin_auto_dates():
         assert rol.updated_at > old_updated
 
 
-def test_contextvar_user_injection():
+def test_contextvar_user_injection(isolated_role_access):
     engine = _build_test_engine()
 
     def override_get_session():
@@ -84,7 +102,7 @@ def test_contextvar_user_injection():
         app.dependency_overrides.pop(get_session, None)
 
 
-def test_soft_delete_exclusion():
+def test_soft_delete_exclusion(isolated_role_access):
     engine = _build_test_engine()
 
     def override_get_session():

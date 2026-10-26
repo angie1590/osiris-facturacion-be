@@ -4,9 +4,9 @@ import time
 from typing import Generator
 
 from sqlalchemy import event, true
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import with_loader_criteria
-from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy.engine import Connection, Engine, ExceptionContext, ExecutionContext
+from sqlalchemy.orm import ORMExecuteState, with_loader_criteria
+from sqlmodel import Session, SQLModel, col, create_engine
 
 from osiris.core.observability import record_db_query
 from osiris.core.settings import get_settings
@@ -16,7 +16,7 @@ from osiris.domain.base_models import SoftDeleteMixin
 SOFT_DELETE_INCLUDE_INACTIVE_OPTION = "include_inactive"
 
 
-def get_engine():
+def get_engine() -> Engine:
     settings = get_settings()
     db_engine = create_engine(
         settings.DATABASE_URL,
@@ -40,18 +40,28 @@ def attach_engine_observability(db_engine: Engine, *, slow_query_threshold_ms: i
 
     @event.listens_for(db_engine, "before_cursor_execute")
     def _before_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany  # noqa: ANN001, ARG001
-    ):
+        conn: Connection,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: ExecutionContext | None,
+        executemany: bool,
+    ) -> None:
         _ = (cursor, statement, parameters, context, executemany)
-        query_times = conn.info.setdefault(query_time_stack_key, [])
+        query_times: list[float] = conn.info.setdefault(query_time_stack_key, [])
         query_times.append(time.perf_counter())
 
     @event.listens_for(db_engine, "after_cursor_execute")
     def _after_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany  # noqa: ANN001, ARG001
-    ):
+        conn: Connection,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: ExecutionContext | None,
+        executemany: bool,
+    ) -> None:
         _ = (cursor, parameters, context, executemany)
-        query_times = conn.info.get(query_time_stack_key) or []
+        query_times: list[float] = conn.info.get(query_time_stack_key) or []
         if not query_times:
             return
         started_at = query_times.pop()
@@ -63,11 +73,11 @@ def attach_engine_observability(db_engine: Engine, *, slow_query_threshold_ms: i
         )
 
     @event.listens_for(db_engine, "handle_error")
-    def _handle_error(exception_context):  # noqa: ANN001
-        connection = getattr(exception_context, "connection", None)
+    def _handle_error(exception_context: ExceptionContext) -> None:
+        connection = exception_context.connection
         if connection is None:
             return
-        query_times = connection.info.get(query_time_stack_key) or []
+        query_times: list[float] = connection.info.get(query_time_stack_key) or []
         if query_times:
             query_times.pop()
 
@@ -79,7 +89,7 @@ engine = get_engine()
 
 
 @event.listens_for(Session, "do_orm_execute")
-def _apply_soft_delete_filter(execute_state):
+def _apply_soft_delete_filter(execute_state: ORMExecuteState) -> None:
     if not execute_state.is_select:
         return
     if execute_state.execution_options.get(SOFT_DELETE_INCLUDE_INACTIVE_OPTION, False):
@@ -87,7 +97,7 @@ def _apply_soft_delete_filter(execute_state):
     execute_state.statement = execute_state.statement.options(
         with_loader_criteria(
             SoftDeleteMixin,
-            lambda cls: cls.activo.is_(True) if hasattr(cls, "activo") else true(),
+            lambda cls: col(cls.activo).is_(True) if hasattr(cls, "activo") else true(),
             include_aliases=True,
         )
     )

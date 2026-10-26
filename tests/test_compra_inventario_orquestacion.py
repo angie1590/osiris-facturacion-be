@@ -463,6 +463,26 @@ def test_anular_compra_revierte_cantidad_inventario():
         assert kardex["movimientos"][-1]["saldo_cantidad"] == stock_post_anulacion.cantidad_actual
         assert kardex["movimientos"][-1]["saldo_cantidad"] == Decimal(producto.cantidad).quantize(Decimal("0.0000"))
 
+        compra_repetida = service.anular_compra(
+            session,
+            compra.id,
+            payload=CompraAnularRequest(usuario_auditoria="compras.user"),
+        )
+        assert compra_repetida.estado == EstadoCompra.ANULADA
+        assert session.exec(
+            select(MovimientoInventario).where(
+                MovimientoInventario.referencia_documento == f"ANULACION_COMPRA:{compra.id}",
+                MovimientoInventario.activo.is_(True),
+            )
+        ).all().__len__() == 1
+        stock_despues_de_reintento = session.exec(
+            select(InventarioStock).where(
+                InventarioStock.bodega_id == bodega.id,
+                InventarioStock.producto_id == producto.id,
+            )
+        ).one()
+        assert stock_despues_de_reintento.cantidad_actual == Decimal("0.0000")
+
 
 def test_endpoint_anular_compra_revierte_inventario():
     engine = _build_test_engine()

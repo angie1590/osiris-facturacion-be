@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import sys
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from types import ModuleType
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine
@@ -13,6 +17,10 @@ from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.punto_emision.entity import PuntoEmision
 from osiris.modules.common.sucursal.entity import Sucursal
+from osiris.modules.impresion.strategies.plantilla_preimpresa_strategy import PlantillaPreimpresaStrategy
+from osiris.modules.impresion.strategies.render_strategy import RenderStrategy, checked_html_output
+from osiris.modules.impresion.strategies.ride_a4_strategy import RideA4Strategy
+from osiris.modules.impresion.strategies.ticket_termico_strategy import TicketTermicoStrategy
 from osiris.modules.sri.core_sri.types import (
     EstadoDocumentoElectronico,
     EstadoVenta,
@@ -143,3 +151,46 @@ def test_generar_ride_a4_retorna_pdf():
         assert response.content.startswith(b"%PDF-")
     finally:
         app.dependency_overrides.pop(get_session, None)
+
+
+@pytest.mark.parametrize(
+    "strategy",
+    [
+        RideA4Strategy(),
+        TicketTermicoStrategy(Path(".")),
+        PlantillaPreimpresaStrategy(Path(".")),
+    ],
+    ids=["ride", "ticket", "preimpresa"],
+)
+@pytest.mark.parametrize("output", [b"%PDF-1.4\n", "not bytes", None])
+def test_render_pdf_checks_optional_renderer_output(
+    monkeypatch: pytest.MonkeyPatch,
+    strategy: RenderStrategy,
+    output: object,
+) -> None:
+    class FakeHTML:
+        def __init__(self, *, string: str) -> None:
+            self.html_content = string
+
+        def write_pdf(self) -> object:
+            assert self.html_content == "<p>Prueba</p>"
+            return output
+
+    module = ModuleType("weasyprint")
+    setattr(module, "HTML", FakeHTML)
+    monkeypatch.setitem(sys.modules, "weasyprint", module)
+
+    if isinstance(output, bytes):
+        assert strategy.render_pdf("<p>Prueba</p>") is output
+    else:
+        with pytest.raises(TypeError, match="debe devolver bytes"):
+            strategy.render_pdf("<p>Prueba</p>")
+
+
+@pytest.mark.parametrize("output", ["<p>Prueba</p>", b"not text", None, 123])
+def test_html_renderer_output_requires_text(output: object) -> None:
+    if isinstance(output, str):
+        assert checked_html_output(output) is output
+    else:
+        with pytest.raises(TypeError, match="debe devolver texto"):
+            checked_html_output(output)

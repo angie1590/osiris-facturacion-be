@@ -19,6 +19,12 @@ class AtributoCreate(BaseOSModel):
     max_value: Optional[Decimal] = None
     usuario_auditoria: Optional[str] = None
 
+class AtributoCreateEnCategoria(AtributoCreate):
+    categoria_id: UUID
+    orden: Optional[int] = None
+    obligatorio: bool = False
+    valor_default: Optional[str] = None
+
 class AtributoUpdate(BaseOSModel):
     nombre: Optional[str] = None
     tipo_dato: Optional[TipoDato] = None

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import date
 from uuid import UUID
 from sqlmodel import Session
@@ -11,10 +11,10 @@ from osiris.modules.sri.impuesto_catalogo.repository import ImpuestoCatalogoRepo
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo, TipoImpuesto
 
 
-class ImpuestoCatalogoService(BaseService):
+class ImpuestoCatalogoService(BaseService[ImpuestoCatalogo]):
     repo = ImpuestoCatalogoRepository()
 
-    def create(self, session: Session, data):
+    def create(self, session: Session, data: dict[str, Any], *, commit: bool = True) -> ImpuestoCatalogo:
         """Crea un nuevo impuesto en el catálogo con validaciones."""
         # Validar combinación código SRI + descripción única
         codigo_sri = getattr(data, "codigo_sri", None) or data.get("codigo_sri")
@@ -22,9 +22,9 @@ class ImpuestoCatalogoService(BaseService):
         self.repo.validar_duplicado_codigo_descripcion(session, codigo_sri, descripcion)
 
         # Crear el impuesto
-        return super().create(session, data)
+        return super().create(session, data, commit=commit)
 
-    def update(self, session: Session, item_id: UUID, data):
+    def update(self, session: Session, item_id: UUID, data: Any, *, commit: bool = True) -> ImpuestoCatalogo | None:
         """Actualiza un impuesto existente."""
         impuesto = self.repo.get(session, item_id)
         if not impuesto:
@@ -42,7 +42,7 @@ class ImpuestoCatalogoService(BaseService):
         if (codigo_sri and codigo_sri != impuesto.codigo_sri) or (descripcion and descripcion != impuesto.descripcion):
             self.repo.validar_duplicado_codigo_descripcion(session, codigo_sri_final, descripcion_final, exclude_id=item_id)
 
-        return super().update(session, item_id, data)
+        return super().update(session, item_id, data, commit=commit)
 
     def list_activos_vigentes(self, session: Session, fecha: Optional[date] = None) -> List[ImpuestoCatalogo]:
         """Lista impuestos activos y vigentes."""

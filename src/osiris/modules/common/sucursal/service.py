@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Any, NoReturn, Optional
 from uuid import UUID
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 from sqlalchemy.exc import IntegrityError
 
 from osiris.domain.service import BaseService
+from osiris.utils.pagination import PaginationMeta
 from .repository import SucursalRepository
 from .entity import Sucursal
 from osiris.modules.common.empresa.entity import Empresa
 
 
-class SucursalService(BaseService):
+class SucursalService(BaseService[Sucursal]):
     fk_models = {"empresa_id": Empresa}
     repo = SucursalRepository()
 
@@ -31,7 +32,7 @@ class SucursalService(BaseService):
                 detail=f"El campo '{field_name}' debe ser un decimal valido",
             ) from exc
 
-    def _validate_geo_coordinates(self, data: dict) -> None:
+    def _validate_geo_coordinates(self, data: dict[str, Any]) -> None:
         if "latitud" in data:
             latitud = self._as_decimal(data.get("latitud"), field_name="latitud")
             if latitud is not None and not (Decimal("-90") <= latitud <= Decimal("90")):
@@ -45,7 +46,7 @@ class SucursalService(BaseService):
             data["longitud"] = longitud
 
     @staticmethod
-    def _raise_integrity_error(exc: IntegrityError) -> None:
+    def _raise_integrity_error(exc: IntegrityError) -> NoReturn:
         diag = getattr(getattr(exc, "orig", None), "diag", None)
         constraint_name = getattr(diag, "constraint_name", "") or ""
         lower_error = str(exc).lower()
@@ -78,7 +79,7 @@ class SucursalService(BaseService):
 
         raise HTTPException(status_code=400, detail="Error de integridad al guardar sucursal") from exc
 
-    def create(self, session: Session, data: dict) -> Sucursal:
+    def create(self, session: Session, data: dict[str, Any], *, commit: bool = True) -> Sucursal:
         self.validate_create(data, session)
         self._check_fk_active_and_exists(session, data)
         self._validate_geo_coordinates(data)
@@ -86,16 +87,19 @@ class SucursalService(BaseService):
         obj = Sucursal(**data)
         session.add(obj)
         try:
-            session.commit()
-            session.refresh(obj)
+            if commit:
+                session.commit()
+                session.refresh(obj)
+            else:
+                session.flush()
             self.on_created(obj, session)
             return obj
         except IntegrityError as exc:
             session.rollback()
             self._raise_integrity_error(exc)
 
-    def update(self, session: Session, item_id: UUID, data: dict) -> Optional[Sucursal]:
-        db_obj = self.repo.get(session, item_id)
+    def update(self, session: Session, item_id: UUID, data: dict[str, Any], *, commit: bool = True) -> Optional[Sucursal]:
+        db_obj = self.get(session, item_id)
         if not db_obj:
             return None
 
@@ -109,8 +113,11 @@ class SucursalService(BaseService):
 
         session.add(db_obj)
         try:
-            session.commit()
-            session.refresh(db_obj)
+            if commit:
+                session.commit()
+                session.refresh(db_obj)
+            else:
+                session.flush()
             self.on_updated(db_obj, session)
             return db_obj
         except IntegrityError as exc:
@@ -126,7 +133,7 @@ class SucursalService(BaseService):
         limit: int,
         offset: int,
         only_active: bool = True,
-    ):
+    ) -> tuple[list[Sucursal], PaginationMeta]:
         return self.list_paginated(
             session,
             limit=limit,
@@ -148,5 +155,5 @@ class SucursalService(BaseService):
             Sucursal.codigo == codigo,
         )
         if only_active is True:
-            stmt = stmt.where(Sucursal.activo.is_(True))
+            stmt = stmt.where(col(Sucursal.activo).is_(True))
         return session.exec(stmt).first()

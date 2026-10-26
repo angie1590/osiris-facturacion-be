@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from osiris.domain.repository import BaseRepository
+from osiris.domain.directory_repository import DirectoryRepository
 from .entity import TipoCliente
 
 
-class TipoClienteRepository(BaseRepository):
+class TipoClienteRepository(DirectoryRepository):
     model = TipoCliente
+    search_fields = ("nombre",)
+    sort_fields = ("nombre", "descuento")

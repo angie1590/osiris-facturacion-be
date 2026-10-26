@@ -33,20 +33,30 @@ def test_atributo_crear_y_listar():
     with httpx.Client(timeout=TIMEOUT) as client:
         # Crear atributos con nombres únicos
         unique_suffix = uuid.uuid4().hex[:6]
+        category_response = client.post(f"{BASE}/categorias", json={
+            "nombre": f"Cat_Atributos_{unique_suffix}",
+            "es_padre": False,
+            "usuario_auditoria": "smoke_test",
+        })
+        assert category_response.status_code == 201
+        categoria_id = category_response.json()["id"]
         atributos_data = [
             {
                 "nombre": f"color_{unique_suffix}",
                 "tipo_dato": "string",
+                "categoria_id": categoria_id,
                 "usuario_auditoria": "smoke_test"
             },
             {
                 "nombre": f"peso_{unique_suffix}",
                 "tipo_dato": "decimal",
+                "categoria_id": categoria_id,
                 "usuario_auditoria": "smoke_test"
             },
             {
                 "nombre": f"fecha_caducidad_{unique_suffix}",
                 "tipo_dato": "date",
+                "categoria_id": categoria_id,
                 "usuario_auditoria": "smoke_test"
             }
         ]
@@ -88,11 +98,19 @@ def test_atributo_actualizar_y_eliminar():
     """
     with httpx.Client(timeout=TIMEOUT) as client:
         unique_suffix = uuid.uuid4().hex[:6]
+        category_response = client.post(f"{BASE}/categorias", json={
+            "nombre": f"Cat_AtributoCrud_{unique_suffix}",
+            "es_padre": False,
+            "usuario_auditoria": "smoke_test",
+        })
+        assert category_response.status_code == 201
+        categoria_id = category_response.json()["id"]
 
         # Crear atributo "color"
         color_data = {
             "nombre": f"color_{unique_suffix}",
             "tipo_dato": "string",
+            "categoria_id": categoria_id,
             "usuario_auditoria": "smoke_test"
         }
         r = client.post(f"{BASE}/atributos", json=color_data)
@@ -117,6 +135,7 @@ def test_atributo_actualizar_y_eliminar():
         peso_data = {
             "nombre": f"peso_{unique_suffix}",
             "tipo_dato": "decimal",
+            "categoria_id": categoria_id,
             "usuario_auditoria": "smoke_test"
         }
         r = client.post(f"{BASE}/atributos", json=peso_data)

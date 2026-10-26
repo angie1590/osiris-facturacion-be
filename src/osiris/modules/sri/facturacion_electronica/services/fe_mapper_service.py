@@ -3,6 +3,8 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 from datetime import date
+from importlib import import_module
+from typing import Protocol, TypedDict, cast
 
 from fastapi import HTTPException
 from sqlmodel import Session
@@ -20,8 +22,25 @@ from osiris.modules.sri.core_sri.models import (
 from osiris.modules.sri.core_sri.all_schemas import RetencionRead, VentaRead, q2
 from osiris.modules.sri.medidas_temporales.entity import TipoComponenteTributario
 
+
+class _GeneradorClaveAcceso(Protocol):
+    @staticmethod
+    def generar(
+        fecha_emision: str,
+        tipo_comprobante: str,
+        ruc: str,
+        tipo_ambiente: str,
+        serie: str,
+        secuencial: str,
+        tipo_emision: str = "1",
+    ) -> str: ...
+
+
 try:
-    from src.fe_ec.utils.generador_clave_acceso import GeneradorClaveAcceso
+    GeneradorClaveAcceso: _GeneradorClaveAcceso | None = cast(
+        _GeneradorClaveAcceso,
+        import_module("src.fe_ec.utils.generador_clave_acceso").GeneradorClaveAcceso,
+    )
 except Exception:  # pragma: no cover - fallback cuando no está la librería FE-EC local.
     GeneradorClaveAcceso = None
 
@@ -39,11 +58,25 @@ IDENTIFICACION_SRI_CODE = {
 }
 
 
+class InfoAdicionalPayload(TypedDict):
+    campoAdicional: list[dict[str, str]]
+
+
+class FacturaPayloadBase(TypedDict):
+    infoTributaria: dict[str, str]
+    infoFactura: dict[str, object]
+    detalles: list[dict[str, object]]
+
+
+class FacturaPayload(FacturaPayloadBase, total=False):
+    infoAdicional: InfoAdicionalPayload
+
+
 def _fmt(value: Decimal) -> str:
     return f"{q2(value):.2f}"
 
 
-def _append_unique_campo_adicional(info_adicional: dict, *, nombre: str, valor: str) -> dict:
+def _append_unique_campo_adicional(info_adicional: InfoAdicionalPayload, *, nombre: str, valor: str) -> InfoAdicionalPayload:
     campos = list(info_adicional.get("campoAdicional") or [])
     if not any((campo.get("nombre"), campo.get("valor")) == (nombre, valor) for campo in campos if isinstance(campo, dict)):
         campos.append({"nombre": nombre, "valor": valor})
@@ -106,7 +139,7 @@ class FEMapperService:
         pto_emi: str = "001",
         dir_establecimiento: str | None = None,
         email_cliente: str | None = None,
-    ) -> dict:
+    ) -> FacturaPayload:
         settings = get_settings()
         ambiente_code = "1" if settings.FEEC_AMBIENTE == "pruebas" else "2"
         tipo_emision = settings.FEEC_TIPO_EMISION
@@ -130,7 +163,7 @@ class FEMapperService:
         )
 
         payload_base = self.venta_to_fe_payload(venta)
-        info_adicional = payload_base.get("infoAdicional", {"campoAdicional": []})
+        info_adicional = payload_base.get("infoAdicional", InfoAdicionalPayload(campoAdicional=[]))
         if venta.regimen_emisor == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
             info_adicional = _append_unique_campo_adicional(
                 info_adicional,
@@ -183,9 +216,9 @@ class FEMapperService:
             "infoAdicional": info_adicional,
         }
 
-    def venta_to_fe_payload(self, venta: VentaRead) -> dict:
+    def venta_to_fe_payload(self, venta: VentaRead) -> FacturaPayload:
         total_con_impuestos: dict[tuple[str, str], dict[str, Decimal]] = {}
-        detalles_payload: list[dict] = []
+        detalles_payload: list[dict[str, object]] = []
 
         for detalle in venta.detalles:
             impuestos_payload = []
@@ -257,7 +290,7 @@ class FEMapperService:
                 "Inconsistencia tributaria: subtotal mas impuestos no coincide con el valor total."
             )
 
-        payload = {
+        payload: FacturaPayload = {
             "infoTributaria": {
                 "identificacionComprador": venta.identificacion_comprador,
                 "tipoIdentificacionComprador": IDENTIFICACION_SRI_CODE[venta.tipo_identificacion_comprador],
@@ -278,13 +311,13 @@ class FEMapperService:
         }
         if venta.regimen_emisor == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
             payload["infoAdicional"] = _append_unique_campo_adicional(
-                payload.get("infoAdicional", {"campoAdicional": []}),
+                payload.get("infoAdicional", InfoAdicionalPayload(campoAdicional=[])),
                 nombre="Contribuyente",
                 valor="Contribuyente Negocio Popular - Régimen RIMPE",
             )
         return payload
 
-    def retencion_to_fe_payload(self, retencion: RetencionRead) -> dict:
+    def retencion_to_fe_payload(self, retencion: RetencionRead) -> dict[str, object]:
         impuestos = [
             {
                 "codigoRetencion": detalle.codigo_retencion_sri,

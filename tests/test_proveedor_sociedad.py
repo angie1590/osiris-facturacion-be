@@ -48,7 +48,7 @@ def _mk_session_for_fk(*, persona_exists=True, tc_exists=True, tc_nombre="socied
 
     tc = None
     if tc_exists:
-        tc = TipoContribuyente(codigo="99", nombre=tc_nombre)
+        tc = TipoContribuyente(codigo="99", nombre=tc_nombre, aplica_sociedad=True)
         tc.activo = True
 
     def _side_effect(stmt):
@@ -75,6 +75,26 @@ def _mk_integrity_error(pgcode: str, constraint: str | None = None):
     return sa_exc.IntegrityError("stmt", "params", orig)
 
 
+def test_proveedor_sociedad_applicability_does_not_depend_on_catalog_name():
+    session = _mk_session_for_fk(tc_nombre="Persona Natural: etiqueta editada")
+    ProveedorSociedadService()._validar_tipo_contribuyente_por_codigo(session, "99")
+    catalog = TipoContribuyente(codigo="99", nombre="Sociedad", aplica_sociedad=False)
+    session.exec.side_effect = None
+    session.exec.return_value = _mk_cursor(catalog)
+    with pytest.raises(HTTPException) as exc:
+        ProveedorSociedadService()._validar_tipo_contribuyente_por_codigo(session, "99")
+    assert exc.value.status_code == 400
+
+
+def test_proveedor_sociedad_fk_map_rejects_inactive_contact():
+    session = MagicMock()
+    contact = Persona(identificacion="AB123", nombre="Contacto", apellido="Historico", activo=False)
+    session.exec.return_value = _mk_cursor(contact)
+    with pytest.raises(HTTPException) as exc:
+        ProveedorSociedadService()._check_fk_active_and_exists(session, {"persona_contacto_id": contact.id})
+    assert exc.value.status_code == 409
+
+
 # ---------- tests ----------
 
 def test_proveedor_sociedad_create_ok(monkeypatch):
@@ -89,7 +109,7 @@ def test_proveedor_sociedad_create_ok(monkeypatch):
     )
 
     svc = ProveedorSociedadService()
-    svc.repo = MagicMock()
+    svc.repo = MagicMock(model=ProveedorSociedad)
     svc.repo.create.side_effect = lambda s, d: ProveedorSociedad(
         ruc=d["ruc"],
         razon_social=d["razon_social"],
@@ -136,7 +156,7 @@ def test_proveedor_sociedad_create_tc_no_bloquea(monkeypatch):
     )
 
     svc = ProveedorSociedadService()
-    svc.repo = MagicMock()
+    svc.repo = MagicMock(model=ProveedorSociedad)
 
     payload = {
         "ruc": "0190363902001",
@@ -168,7 +188,7 @@ def test_proveedor_sociedad_create_ruc_invalido(monkeypatch):
     )
 
     svc = ProveedorSociedadService()
-    svc.repo = MagicMock()
+    svc.repo = MagicMock(model=ProveedorSociedad)
 
     with pytest.raises(HTTPException) as exc:
         svc.create(
@@ -199,7 +219,7 @@ def test_proveedor_sociedad_create_telefono_mal(monkeypatch):
     )
 
     svc = ProveedorSociedadService()
-    svc.repo = MagicMock()
+    svc.repo = MagicMock(model=ProveedorSociedad)
 
     with pytest.raises(HTTPException) as exc:
         svc.create(
@@ -238,7 +258,7 @@ def test_proveedor_sociedad_create_unique_violation_propagado(monkeypatch):
     )
 
     svc = ProveedorSociedadService()
-    svc.repo = MagicMock()
+    svc.repo = MagicMock(model=ProveedorSociedad)
 
     def _raise_integrity(_session, data):
         # mismo helper de tus tests
@@ -274,7 +294,7 @@ def test_proveedor_sociedad_create_tc_no_existe(monkeypatch):
     )
 
     svc = ProveedorSociedadService()
-    svc.repo = MagicMock()
+    svc.repo = MagicMock(model=ProveedorSociedad)
 
     with pytest.raises(HTTPException) as exc:
         svc.create(

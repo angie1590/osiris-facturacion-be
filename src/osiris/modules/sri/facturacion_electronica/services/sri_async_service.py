@@ -7,7 +7,8 @@ from typing import Callable, Protocol
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlmodel import Session, select
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, col, select
 
 from osiris.core.db import engine as default_engine
 from osiris.modules.sri.core_sri.models import (
@@ -24,18 +25,18 @@ from osiris.modules.sri.core_sri.all_schemas import RetencionDetalleRead, Retenc
 
 
 class FEECOrquestadorGateway(Protocol):
-    def enviar_documento(self, *, tipo_documento: str, payload: dict) -> dict:
+    def enviar_documento(self, *, tipo_documento: str, payload: dict[str, object]) -> dict[str, object]:
         ...
 
 
 class FEECOrquestadorGatewayDefault:
-    def enviar_documento(self, *, tipo_documento: str, payload: dict) -> dict:
+    def enviar_documento(self, *, tipo_documento: str, payload: dict[str, object]) -> dict[str, object]:
         _ = (tipo_documento, payload)
         return {"estado": "AUTORIZADO", "mensaje": "Autorizado por orquestador FE-EC"}
 
 
 class SriAsyncService:
-    def __init__(self, gateway: FEECOrquestadorGateway | None = None, db_engine=None) -> None:
+    def __init__(self, gateway: FEECOrquestadorGateway | None = None, db_engine: Engine | None = None) -> None:
         self.gateway = gateway or FEECOrquestadorGatewayDefault()
         self.fe_mapper = FEMapperService()
         self.db_engine = db_engine or default_engine
@@ -49,9 +50,9 @@ class SriAsyncService:
                 select(RetencionDetalle)
                 .where(
                     RetencionDetalle.retencion_id == retencion.id,
-                    RetencionDetalle.activo.is_(True),
+                    col(RetencionDetalle.activo).is_(True),
                 )
-                .order_by(RetencionDetalle.creado_en.asc())
+                .order_by(col(RetencionDetalle.creado_en).asc())
             ).all()
         )
         return RetencionRead(
@@ -103,8 +104,8 @@ class SriAsyncService:
             select(DocumentoSriCola).where(
                 DocumentoSriCola.entidad_id == retencion.id,
                 DocumentoSriCola.tipo_documento == "RETENCION",
-                DocumentoSriCola.activo.is_(True),
-                DocumentoSriCola.estado.in_(
+                col(DocumentoSriCola.activo).is_(True),
+                col(DocumentoSriCola.estado).in_(
                     [
                         EstadoColaSri.PENDIENTE,
                         EstadoColaSri.PROCESANDO,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import Request
@@ -49,7 +49,7 @@ def match_sensitive_rule(method: str, path: str) -> SensitiveEndpointRule | None
     return None
 
 
-def parse_attempted_payload(raw_body: bytes) -> dict[str, Any] | str | None:
+def parse_attempted_payload(raw_body: bytes) -> object:
     if not raw_body:
         return None
     text = raw_body.decode("utf-8", errors="replace")
@@ -86,7 +86,7 @@ def log_unauthorized_access(
     *,
     request: Request,
     user_id: str | None,
-    payload: dict[str, Any] | str | None,
+    payload: object,
     reason: str,
     rule: SensitiveEndpointRule,
 ) -> None:

@@ -1,11 +1,16 @@
 # src/domain/service.py
-from typing import Any, Dict, Generic, NoReturn, Type, TypeVar, Union, Tuple
+from __future__ import annotations
+
+from typing import Any, Dict, Generic, List, NoReturn, Type, Union, Tuple, cast
+from typing_extensions import TypeVar
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, SQLModel
 from fastapi import HTTPException
-from osiris.utils.pagination import build_pagination_meta
+from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 
 ModelT = TypeVar("ModelT")
+ReadT = TypeVar("ReadT", default=ModelT)
 # Tipos aceptados para declarar FKs en cada service:
 # - Modelo  -> asume columna 'id', require_activo=True si existe
 # - (Modelo, "columna") -> require_activo=True
@@ -17,7 +22,7 @@ FkSpec = Union[
     Tuple[Type[SQLModel], str, bool],
     Dict[str, Any],
 ]
-class BaseService(Generic[ModelT]):
+class BaseService(Generic[ModelT, ReadT]):
     repo: Any = None  # cada subclase la setea
 
     fk_models: Dict[str, FkSpec] = {}
@@ -26,7 +31,7 @@ class BaseService(Generic[ModelT]):
     def _ensure_dict(data: Any) -> Dict[str, Any]:
         """Acepta dict o DTO/SQLModel y devuelve dict con campos enviados."""
         if hasattr(data, "model_dump"):  # Pydantic/SQLModel v2
-            return data.model_dump(exclude_unset=True)  # type: ignore[attr-defined]
+            return cast(Dict[str, Any], data.model_dump(exclude_unset=True))
         if isinstance(data, dict):
             return data
         # Último recurso: __dict__ sin privados
@@ -78,7 +83,9 @@ class BaseService(Generic[ModelT]):
                     detail=f"Configuración inválida: {model.__name__}.{field} no existe"
                 )
 
-            stmt = select(model).where(getattr(model, field) == data[field_name])
+            stmt = select(model).where(getattr(model, field) == data[field_name]).execution_options(
+                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
+            )
             obj = session.exec(stmt).first()
             if not obj:
                 raise HTTPException(status_code=404, detail=f"{model.__name__} no encontrado")
@@ -86,11 +93,11 @@ class BaseService(Generic[ModelT]):
             if require_active and hasattr(obj, "activo") and getattr(obj, "activo") is False:
                 raise HTTPException(status_code=409, detail=f"{model.__name__} inactivo")
 
-    def list(self, session: Session, *, only_active=True, limit=50, offset=0, **kw):
-        return self.repo.list(session, only_active=only_active, limit=limit, offset=offset, **kw)
+    def list(self, session: Session, *, only_active: bool = True, limit: int = 50, offset: int = 0, **kw: Any) -> tuple[List[ReadT], int]:
+        return cast(tuple[List[ReadT], int], self.repo.list(session, only_active=only_active, limit=limit, offset=offset, **kw))
 
-    def list_paginated(self, session: Session, *, only_active=True, limit=50, offset=0, **kw):
-        items, total = self.repo.list(session, only_active=only_active, limit=limit, offset=offset, **kw)
+    def list_paginated(self, session: Session, *, only_active: bool = True, limit: int = 50, offset: int = 0, **kw: Any) -> tuple[List[ReadT], PaginationMeta]:
+        items, total = self.list(session, only_active=only_active, limit=limit, offset=offset, **kw)
         meta = build_pagination_meta(total=total, limit=limit, offset=offset)
         return items, meta
 
@@ -112,7 +119,7 @@ class BaseService(Generic[ModelT]):
         try:
             self.validate_create(data, session)
             self._check_fk_active_and_exists(session, data)
-            obj = self.repo.create(session, data)
+            obj = cast(ModelT, self.repo.create(session, data))
             self.on_created(obj, session)
             if commit:
                 session.commit()
@@ -121,16 +128,16 @@ class BaseService(Generic[ModelT]):
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
-    def get(self, session: Session, item_id: Any):
-        return self.repo.get(session, item_id)
+    def get(self, session: Session, item_id: Any) -> ModelT | None:
+        return cast(ModelT | None, self.repo.get(session, item_id))
 
-    def update(self, session: Session, item_id: Any, data: Any, *, commit: bool = True):
+    def update(self, session: Session, item_id: Any, data: Any, *, commit: bool = True) -> ModelT | None:
         try:
             db_obj = self.repo.get(session, item_id)
             if not db_obj:
                 return None
             self._check_fk_active_and_exists(session, data)
-            updated = self.repo.update(session, db_obj, data)
+            updated = cast(ModelT, self.repo.update(session, db_obj, data))
             self.on_updated(updated, session)
             if commit:
                 session.commit()
@@ -144,7 +151,7 @@ class BaseService(Generic[ModelT]):
             db_obj = self.repo.get(session, item_id)
             if not db_obj:
                 return None
-            deleted = self.repo.delete(session, db_obj)
+            deleted = cast(bool, self.repo.delete(session, db_obj))
             self.on_deleted(db_obj, session)
             if commit:
                 session.commit()

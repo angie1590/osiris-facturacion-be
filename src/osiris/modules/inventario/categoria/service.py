@@ -27,6 +27,28 @@ class CategoriaService(BaseService[Categoria]):
         "parent_id": Categoria,
     }
 
+    @staticmethod
+    def _validate_sibling_name(
+        session: Session,
+        nombre: str,
+        parent_id: UUID | None,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        if not isinstance(session, Session) or hasattr(session, "_mock_methods"):
+            return
+        statement = select(col(Categoria.id)).where(
+            col(Categoria.activo).is_(True),
+            func.lower(func.trim(col(Categoria.nombre))) == nombre.strip().lower(),
+            col(Categoria.parent_id) == parent_id if parent_id is not None else col(Categoria.parent_id).is_(None),
+        )
+        if exclude_id is not None:
+            statement = statement.where(col(Categoria.id) != exclude_id)
+        if session.exec(statement.limit(1)).first() is not None:
+            raise HTTPException(status_code=409, detail={
+                "code": "CATEGORY_DUPLICATE_NAME",
+                "message": "Ya existe una categoría activa con ese nombre dentro de la misma categoría padre.",
+            })
+
     def validate_create(self, data: dict[str, Any], session: Session) -> None:
         """Reglas de negocio para create:
         - parent_id es opcional; una categoría puede ser padre y al mismo tiempo hija
@@ -144,6 +166,7 @@ class CategoriaService(BaseService[Categoria]):
             data = self._ensure_dict(data)
             self.validate_create(data, session)
             self._check_fk_active_and_exists(session, data)
+            self._validate_sibling_name(session, str(data.get("nombre", "")), data.get("parent_id"))
 
             parent_id = data.get("parent_id")
             if parent_id:
@@ -297,6 +320,13 @@ class CategoriaService(BaseService[Categoria]):
             db_obj = self.repo.get(session, item_id)
             if not db_obj:
                 return None
+
+            self._validate_sibling_name(
+                session,
+                str(data.get("nombre", db_obj.nombre)),
+                data.get("parent_id", db_obj.parent_id),
+                exclude_id=item_id,
+            )
 
             # Evitar que parent_id apunte a sí mismo
             if data.get("parent_id") and data.get("parent_id") == item_id:

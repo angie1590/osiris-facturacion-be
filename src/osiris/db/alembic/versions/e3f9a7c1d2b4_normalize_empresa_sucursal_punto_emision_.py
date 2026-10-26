@@ -12,6 +12,8 @@ from typing import Sequence, Union
 from uuid import uuid4
 
 import sqlalchemy as sa
+from sqlalchemy.sql.elements import ColumnClause
+from sqlalchemy.sql.selectable import TableClause
 from alembic import context
 from alembic import op
 
@@ -28,16 +30,17 @@ def _table_columns(table_name: str) -> set[str]:
     return {column["name"] for column in inspector.get_columns(table_name)}
 
 
-def _table_clause(table_name: str) -> sa.Table:
-    columns = [sa.column(column_name) for column_name in _table_columns(table_name)]
+def _table_clause(table_name: str) -> TableClause:
+    columns: list[ColumnClause[object]] = [sa.column(column_name) for column_name in _table_columns(table_name)]
     return sa.table(table_name, *columns)
 
 
 def _drop_fk_for_column(table_name: str, column_name: str) -> None:
     inspector = sa.inspect(op.get_bind())
     for fk in inspector.get_foreign_keys(table_name):
-        if column_name in fk.get("constrained_columns", []) and fk.get("name"):
-            op.drop_constraint(fk["name"], table_name, type_="foreignkey")
+        constraint_name = fk.get("name")
+        if column_name in fk.get("constrained_columns", []) and constraint_name:
+            op.drop_constraint(constraint_name, table_name, type_="foreignkey")
 
 
 def _drop_unique_if_exists(table_name: str, constraint_name: str) -> None:
@@ -54,7 +57,7 @@ def _unique_exists(table_name: str, constraint_name: str) -> bool:
     }
 
 
-def _next_sucursal_codigo(bind: sa.Connection, sucursal: sa.Table, empresa_id: object) -> str:
+def _next_sucursal_codigo(bind: sa.Connection, sucursal: TableClause, empresa_id: object) -> str:
     existing_codes = {
         code
         for code in bind.execute(
@@ -186,7 +189,7 @@ def upgrade() -> None:
                 now = datetime.utcnow()
                 target_sucursal_id = uuid4()
                 fallback_codigo = _next_sucursal_codigo(bind, sucursal, row.empresa_id)
-                values: dict[str, object] = {
+                values = {
                     "id": target_sucursal_id,
                     "codigo": fallback_codigo,
                     "nombre": f"Sucursal migracion {fallback_codigo}",

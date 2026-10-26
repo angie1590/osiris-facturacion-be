@@ -13,7 +13,7 @@ from osiris.modules.impresion.schemas import ReimpresionRequest
 from osiris.modules.impresion.services.impresion_service import ImpresionService
 
 
-COMMON_RESPONSES = {
+COMMON_RESPONSES: dict[int | str, dict[str, object]] = {
     400: {"description": "Solicitud inválida para el formato de impresión."},
     403: {"description": "Usuario sin permisos para la operación de impresión."},
     404: {"description": "Documento no encontrado o no disponible para impresión."},
@@ -24,7 +24,7 @@ impresion_service = ImpresionService()
 
 
 @router.get("/documento/{documento_id}/a4", summary="Generar RIDE A4", responses=COMMON_RESPONSES, response_class=Response)
-def generar_ride_a4(documento_id: UUID, session: Session = Depends(get_session)):
+def generar_ride_a4(documento_id: UUID, session: Session = Depends(get_session)) -> Response:
     pdf_bytes = impresion_service.generar_ride_a4(session, documento_id=documento_id)
     headers = {"Content-Disposition": f'inline; filename="ride-{documento_id}.pdf"'}
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
@@ -35,7 +35,7 @@ def generar_ticket_termico(
     documento_id: UUID,
     ancho: Literal["58mm", "80mm"] = Query(default="80mm"),
     session: Session = Depends(get_session),
-):
+) -> HTMLResponse:
     html = impresion_service.generar_ticket_termico_html(session, documento_id=documento_id, ancho=ancho)
     return HTMLResponse(content=html)
 
@@ -45,20 +45,20 @@ def generar_preimpresa_nota_venta(
     documento_id: UUID,
     formato: Literal["HTML", "PDF"] = Query(default="HTML"),
     session: Session = Depends(get_session),
-):
+) -> Response:
     formato_normalizado = formato.upper()
     if formato_normalizado == "PDF":
-        resultado = impresion_service.generar_preimpresa_pdf(session, documento_id=documento_id)
+        resultado_pdf = impresion_service.generar_preimpresa_pdf(session, documento_id=documento_id)
         headers = {"Content-Disposition": f'inline; filename="nota-preimpresa-{documento_id}.pdf"'}
-        if resultado["warning"]:
-            headers["X-Impresion-Warning"] = str(resultado["warning"])
-        return Response(content=resultado["pdf"], media_type="application/pdf", headers=headers)
+        if resultado_pdf["warning"]:
+            headers["X-Impresion-Warning"] = str(resultado_pdf["warning"])
+        return Response(content=resultado_pdf["pdf"], media_type="application/pdf", headers=headers)
 
-    resultado = impresion_service.generar_preimpresa_html(session, documento_id=documento_id)
-    headers: dict[str, str] = {}
-    if resultado["warning"]:
-        headers["X-Impresion-Warning"] = str(resultado["warning"])
-    return HTMLResponse(content=str(resultado["html"]), headers=headers)
+    resultado_html = impresion_service.generar_preimpresa_html(session, documento_id=documento_id)
+    headers = {}
+    if resultado_html["warning"]:
+        headers["X-Impresion-Warning"] = str(resultado_html["warning"])
+    return HTMLResponse(content=str(resultado_html["html"]), headers=headers)
 
 
 @router.post("/documento/{documento_id}/reimprimir", summary="Solicitar reimpresión", responses=COMMON_RESPONSES)
@@ -66,7 +66,7 @@ def reimprimir_documento(
     documento_id: UUID,
     payload: ReimpresionRequest,
     session: Session = Depends(get_session),
-):
+) -> Response:
     resultado = impresion_service.reimprimir_documento(
         session,
         documento_id=documento_id,

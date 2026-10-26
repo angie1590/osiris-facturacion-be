@@ -21,6 +21,7 @@ class CategoriaAtributoUpdate(BaseModel):
     orden: Optional[int] = None
     obligatorio: Optional[bool] = None
     valor_default: Optional[str] = None
+    aplicar_default_a_existentes: Optional[bool] = None
     usuario_auditoria: Optional[str] = None
 
 class AtributoRead(BaseModel):

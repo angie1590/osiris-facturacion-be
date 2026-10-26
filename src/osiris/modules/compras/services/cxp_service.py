@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.core_sri.models import Compra, CuentaPorPagar, EstadoCuentaPorPagar, PagoCxP
 from osiris.modules.sri.core_sri.all_schemas import PagoCxPCreate, q2
-from osiris.utils.pagination import build_pagination_meta
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 
 
 class CuentaPorPagarService:
@@ -39,45 +40,45 @@ class CuentaPorPagarService:
         only_active: bool = True,
         estado: EstadoCuentaPorPagar | None = None,
         texto: str | None = None,
-    ):
-        stmt = select(CuentaPorPagar, Compra).join(Compra, Compra.id == CuentaPorPagar.compra_id)
+    ) -> tuple[list[dict[str, UUID | date | Decimal | str]], PaginationMeta]:
+        stmt = select(CuentaPorPagar, Compra).join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
         empresa_scope = self._empresa_scope()
 
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(
-                Sucursal.activo.is_(True),
-                Sucursal.empresa_id == empresa_scope,
+            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                col(Sucursal.activo).is_(True),
+                col(Sucursal.empresa_id) == empresa_scope,
             )
 
         if only_active:
             stmt = stmt.where(
-                CuentaPorPagar.activo.is_(True),
-                Compra.activo.is_(True),
+                col(CuentaPorPagar.activo).is_(True),
+                col(Compra.activo).is_(True),
             )
         else:
             stmt = stmt.execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
 
         if estado is not None:
-            stmt = stmt.where(CuentaPorPagar.estado == estado)
+            stmt = stmt.where(col(CuentaPorPagar.estado) == estado)
 
         if texto:
             pattern = f"%{texto.strip()}%"
             stmt = stmt.where(
                 or_(
-                    Compra.identificacion_proveedor.ilike(pattern),
-                    Compra.secuencial_factura.ilike(pattern),
+                    col(Compra.identificacion_proveedor).ilike(pattern),
+                    col(Compra.secuencial_factura).ilike(pattern),
                 )
             )
 
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         rows = list(
             session.exec(
-                stmt.order_by(Compra.fecha_emision.desc(), CuentaPorPagar.creado_en.desc())
+                stmt.order_by(col(Compra.fecha_emision).desc(), col(CuentaPorPagar.creado_en).desc())
                 .offset(offset)
                 .limit(limit)
             ).all()
         )
-        items = [
+        items: list[dict[str, UUID | date | Decimal | str]] = [
             {
                 "id": cxp.id,
                 "compra_id": cxp.compra_id,
@@ -98,11 +99,11 @@ class CuentaPorPagarService:
     def obtener_cxp_por_compra(self, session: Session, compra_id: UUID) -> CuentaPorPagar:
         row = session.exec(
             select(CuentaPorPagar, Compra)
-            .join(Compra, Compra.id == CuentaPorPagar.compra_id)
+            .join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
             .where(
-                CuentaPorPagar.compra_id == compra_id,
-                CuentaPorPagar.activo.is_(True),
-                Compra.activo.is_(True),
+                col(CuentaPorPagar.compra_id) == compra_id,
+                col(CuentaPorPagar.activo).is_(True),
+                col(Compra.activo).is_(True),
             )
         ).one_or_none()
         if not row:
@@ -123,11 +124,11 @@ class CuentaPorPagarService:
         try:
             row = session.exec(
                 select(CuentaPorPagar, Compra)
-                .join(Compra, Compra.id == CuentaPorPagar.compra_id)
+                .join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
                 .where(
-                    CuentaPorPagar.id == cuenta_por_pagar_id,
-                    CuentaPorPagar.activo.is_(True),
-                    Compra.activo.is_(True),
+                    col(CuentaPorPagar.id) == cuenta_por_pagar_id,
+                    col(CuentaPorPagar.activo).is_(True),
+                    col(Compra.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()

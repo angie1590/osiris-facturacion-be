@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy
+from osiris.modules.impresion.strategies.render_strategy import (
+    RenderStrategy,
+    checked_html_output,
+    checked_pdf_output,
+)
 from osiris.modules.impresion.strategies.ride_a4_strategy import _build_minimal_pdf
 
 
@@ -14,7 +18,7 @@ class TicketTermicoStrategy(RenderStrategy):
     def _template_name(ancho: str) -> str:
         return "ticket_termico_58mm.html" if ancho == "58mm" else "ticket_termico_80mm.html"
 
-    def render_ticket_html(self, context: dict, *, ancho: str = "80mm") -> str:
+    def render_ticket_html(self, context: dict[str, str], *, ancho: str = "80mm") -> str:
         template_name = self._template_name(ancho)
         template_path = self.templates_dir / template_name
         if not template_path.exists():
@@ -28,7 +32,7 @@ class TicketTermicoStrategy(RenderStrategy):
                 autoescape=select_autoescape(["html", "xml"]),
             )
             template = env.get_template(template_name)
-            return template.render(**context)
+            return checked_html_output(template.render(**context))
         except ModuleNotFoundError:
             # Fallback simple para entornos sin Jinja2.
             html = template_path.read_text(encoding="utf-8")
@@ -40,7 +44,7 @@ class TicketTermicoStrategy(RenderStrategy):
         try:
             from weasyprint import HTML  # type: ignore
 
-            return HTML(string=html_content).write_pdf()
+            return checked_pdf_output(HTML(string=html_content).write_pdf())
         except ModuleNotFoundError:
             plain = " ".join(html_content.split())
             lines = [plain[i : i + 90] for i in range(0, max(len(plain), 1), 90)] or ["TICKET TERMICO"]

@@ -9,3 +9,5 @@ class TipoContribuyente(SQLModel, table=True):
     nombre: str = Field(nullable=False, max_length=120)
     descripcion: Optional[str] = Field(default=None, max_length=255)
     activo: bool = Field(default=True, nullable=False)
+    aplica_persona_natural: bool = Field(default=False, nullable=False)
+    aplica_sociedad: bool = Field(default=False, nullable=False)

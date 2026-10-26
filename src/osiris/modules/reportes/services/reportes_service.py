@@ -4,8 +4,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import String, cast, func
-from sqlmodel import Session, select
+from sqlalchemy import String, cast, func, select as sa_select
+from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement, Label
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.sri.core_sri.models import EstadoVenta, Venta, VentaDetalle
@@ -53,20 +55,20 @@ class ReportesVentasService:
         raise ValueError("No se pudo convertir el periodo de tendencia a fecha")
 
     @staticmethod
-    def _bucket_expr(session: Session, agrupacion: AgrupacionTendencia):
+    def _bucket_expr(session: Session, agrupacion: AgrupacionTendencia) -> ColumnElement[date | datetime | str]:
         bind = session.get_bind()
         dialect = bind.dialect.name if bind is not None else ""
         if dialect == "postgresql":
             if agrupacion == AgrupacionTendencia.ANUAL:
-                return func.date_trunc("year", Venta.fecha_emision)
+                return func.date_trunc("year", col(Venta.fecha_emision))
             if agrupacion == AgrupacionTendencia.MENSUAL:
-                return func.date_trunc("month", Venta.fecha_emision)
-            return func.date_trunc("day", Venta.fecha_emision)
+                return func.date_trunc("month", col(Venta.fecha_emision))
+            return func.date_trunc("day", col(Venta.fecha_emision))
         if agrupacion == AgrupacionTendencia.ANUAL:
-            return func.strftime("%Y-01-01", Venta.fecha_emision)
+            return func.strftime("%Y-01-01", col(Venta.fecha_emision))
         if agrupacion == AgrupacionTendencia.MENSUAL:
-            return func.strftime("%Y-%m-01", Venta.fecha_emision)
-        return func.date(Venta.fecha_emision)
+            return func.strftime("%Y-%m-01", col(Venta.fecha_emision))
+        return func.date(col(Venta.fecha_emision))
 
     @staticmethod
     def _ref_venta(venta_id: UUID) -> str:
@@ -83,27 +85,27 @@ class ReportesVentasService:
 
         refs = [self._ref_venta(venta_id) for venta_id in venta_ids]
         costo_expr = func.coalesce(
-            func.sum(MovimientoInventarioDetalle.cantidad * MovimientoInventarioDetalle.costo_unitario),
+            func.sum(col(MovimientoInventarioDetalle.cantidad) * col(MovimientoInventarioDetalle.costo_unitario)),
             0,
         )
         stmt = (
             select(
-                MovimientoInventario.referencia_documento,
+                col(MovimientoInventario.referencia_documento),
                 costo_expr.label("costo_total"),
             )
             .select_from(MovimientoInventario)
             .join(
                 MovimientoInventarioDetalle,
-                MovimientoInventarioDetalle.movimiento_inventario_id == MovimientoInventario.id,
+                col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
             )
             .where(
-                MovimientoInventario.activo.is_(True),
-                MovimientoInventarioDetalle.activo.is_(True),
-                MovimientoInventario.estado == EstadoMovimientoInventario.CONFIRMADO,
-                MovimientoInventario.tipo_movimiento == TipoMovimientoInventario.EGRESO,
-                MovimientoInventario.referencia_documento.in_(refs),
+                col(MovimientoInventario.activo).is_(True),
+                col(MovimientoInventarioDetalle.activo).is_(True),
+                col(MovimientoInventario.estado) == EstadoMovimientoInventario.CONFIRMADO,
+                col(MovimientoInventario.tipo_movimiento) == TipoMovimientoInventario.EGRESO,
+                col(MovimientoInventario.referencia_documento).in_(refs),
             )
-            .group_by(MovimientoInventario.referencia_documento)
+            .group_by(col(MovimientoInventario.referencia_documento))
         )
 
         by_ref: dict[str, Decimal] = {
@@ -126,29 +128,29 @@ class ReportesVentasService:
     ) -> ReporteVentasResumenRead:
         empresa_scope = self._empresa_scope()
         filtros = [
-            Venta.activo.is_(True),
-            Venta.estado != EstadoVenta.ANULADA,
-            Venta.fecha_emision >= fecha_inicio,
-            Venta.fecha_emision <= fecha_fin,
+            col(Venta.activo).is_(True),
+            col(Venta.estado) != EstadoVenta.ANULADA,
+            col(Venta.fecha_emision) >= fecha_inicio,
+            col(Venta.fecha_emision) <= fecha_fin,
         ]
         if empresa_scope is not None:
-            filtros.append(Venta.empresa_id == empresa_scope)
+            filtros.append(col(Venta.empresa_id) == empresa_scope)
         if punto_emision_id is not None:
-            filtros.append(Venta.punto_emision_id == punto_emision_id)
+            filtros.append(col(Venta.punto_emision_id) == punto_emision_id)
         if sucursal_id is not None:
-            filtros.append(PuntoEmision.sucursal_id == sucursal_id)
+            filtros.append(col(PuntoEmision.sucursal_id) == sucursal_id)
 
-        stmt = select(
-            func.coalesce(func.sum(Venta.subtotal_0), 0),
-            func.coalesce(func.sum(Venta.subtotal_12), 0),
-            func.coalesce(func.sum(Venta.monto_iva), 0),
-            func.coalesce(func.sum(Venta.valor_total), 0),
-            func.count(Venta.id),
+        stmt = sa_select(
+            func.coalesce(func.sum(col(Venta.subtotal_0)), 0),
+            func.coalesce(func.sum(col(Venta.subtotal_12)), 0),
+            func.coalesce(func.sum(col(Venta.monto_iva)), 0),
+            func.coalesce(func.sum(col(Venta.valor_total)), 0),
+            func.count(col(Venta.id)),
         ).select_from(Venta)
         if sucursal_id is not None:
-            stmt = stmt.join(PuntoEmision, PuntoEmision.id == Venta.punto_emision_id)
+            stmt = stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
         stmt = stmt.where(*filtros)
-        subtotal_0, subtotal_12, monto_iva, total, total_ventas = session.exec(stmt).one()
+        subtotal_0, subtotal_12, monto_iva, total, total_ventas = session.execute(stmt).one()
 
         return ReporteVentasResumenRead(
             fecha_inicio=fecha_inicio,
@@ -174,59 +176,59 @@ class ReportesVentasService:
         empresa_scope = self._empresa_scope()
         limite_efectivo = max(1, min(limite, 100))
         filtros = [
-            Venta.activo.is_(True),
-            VentaDetalle.activo.is_(True),
-            Producto.activo.is_(True),
-            Venta.estado != EstadoVenta.ANULADA,
+            col(Venta.activo).is_(True),
+            col(VentaDetalle.activo).is_(True),
+            col(Producto.activo).is_(True),
+            col(Venta.estado) != EstadoVenta.ANULADA,
         ]
         if empresa_scope is not None:
-            filtros.append(Venta.empresa_id == empresa_scope)
+            filtros.append(col(Venta.empresa_id) == empresa_scope)
         if fecha_inicio is not None:
-            filtros.append(Venta.fecha_emision >= fecha_inicio)
+            filtros.append(col(Venta.fecha_emision) >= fecha_inicio)
         if fecha_fin is not None:
-            filtros.append(Venta.fecha_emision <= fecha_fin)
+            filtros.append(col(Venta.fecha_emision) <= fecha_fin)
         if punto_emision_id is not None:
-            filtros.append(Venta.punto_emision_id == punto_emision_id)
+            filtros.append(col(Venta.punto_emision_id) == punto_emision_id)
 
         costo_promedio_subq = (
             select(
-                InventarioStock.producto_id.label("producto_id"),
-                func.coalesce(func.avg(InventarioStock.costo_promedio_vigente), 0).label("costo_promedio"),
+                col(InventarioStock.producto_id).label("producto_id"),
+                func.coalesce(func.avg(col(InventarioStock.costo_promedio_vigente)), 0).label("costo_promedio"),
             )
-            .where(InventarioStock.activo.is_(True))
-            .group_by(InventarioStock.producto_id)
+            .where(col(InventarioStock.activo).is_(True))
+            .group_by(col(InventarioStock.producto_id))
             .subquery()
         )
 
-        ingreso_bruto_expr = func.coalesce(func.sum(VentaDetalle.precio_unitario * VentaDetalle.cantidad), 0)
-        cantidad_expr = func.coalesce(func.sum(VentaDetalle.cantidad), 0)
+        ingreso_bruto_expr = func.coalesce(func.sum(col(VentaDetalle.precio_unitario) * col(VentaDetalle.cantidad)), 0)
+        cantidad_expr = func.coalesce(func.sum(col(VentaDetalle.cantidad)), 0)
 
         stmt = (
-            select(
-                Producto.id,
-                Producto.nombre,
+            sa_select(
+                col(Producto.id),
+                col(Producto.nombre),
                 cantidad_expr.label("cantidad_vendida"),
                 ingreso_bruto_expr.label("total_dolares_vendido"),
                 func.coalesce(costo_promedio_subq.c.costo_promedio, 0).label("costo_promedio"),
             )
             .select_from(VentaDetalle)
-            .join(Venta, Venta.id == VentaDetalle.venta_id)
-            .join(Producto, Producto.id == VentaDetalle.producto_id)
+            .join(Venta, col(Venta.id) == col(VentaDetalle.venta_id))
+            .join(Producto, col(Producto.id) == col(VentaDetalle.producto_id))
             .outerjoin(
                 costo_promedio_subq,
-                costo_promedio_subq.c.producto_id == Producto.id,
+                costo_promedio_subq.c.producto_id == col(Producto.id),
             )
             .where(*filtros)
             .group_by(
-                Producto.id,
-                Producto.nombre,
+                col(Producto.id),
+                col(Producto.nombre),
                 costo_promedio_subq.c.costo_promedio,
             )
             .order_by(cantidad_expr.desc())
             .limit(limite_efectivo)
         )
 
-        rows = session.exec(stmt).all()
+        rows = session.execute(stmt).all()
         items: list[ReporteTopProductoRead] = []
         for producto_id, nombre, cantidad, total_vendido, costo_promedio in rows:
             cantidad_d = self._d(cantidad, default="0.0000")
@@ -257,20 +259,20 @@ class ReportesVentasService:
         stmt = (
             select(
                 bucket.label("periodo"),
-                func.coalesce(func.sum(Venta.valor_total), 0).label("total"),
-                func.count(Venta.id).label("total_ventas"),
+                func.coalesce(func.sum(col(Venta.valor_total)), 0).label("total"),
+                func.count(col(Venta.id)).label("total_ventas"),
             )
             .where(
-                Venta.activo.is_(True),
-                Venta.estado != EstadoVenta.ANULADA,
-                Venta.fecha_emision >= fecha_inicio,
-                Venta.fecha_emision <= fecha_fin,
+                col(Venta.activo).is_(True),
+                col(Venta.estado) != EstadoVenta.ANULADA,
+                col(Venta.fecha_emision) >= fecha_inicio,
+                col(Venta.fecha_emision) <= fecha_fin,
             )
             .group_by(bucket)
             .order_by(bucket.asc())
         )
         if empresa_scope is not None:
-            stmt = stmt.where(Venta.empresa_id == empresa_scope)
+            stmt = stmt.where(col(Venta.empresa_id) == empresa_scope)
         rows = session.exec(stmt).all()
         return [
             ReporteVentasTendenciaRead(
@@ -290,33 +292,34 @@ class ReportesVentasService:
     ) -> list[ReporteVentasPorVendedorRead]:
         empresa_scope = self._empresa_scope()
         filtros = [
-            Venta.activo.is_(True),
-            Venta.estado != EstadoVenta.ANULADA,
+            col(Venta.activo).is_(True),
+            col(Venta.estado) != EstadoVenta.ANULADA,
         ]
         if empresa_scope is not None:
-            filtros.append(Venta.empresa_id == empresa_scope)
+            filtros.append(col(Venta.empresa_id) == empresa_scope)
         if fecha_inicio is not None:
-            filtros.append(Venta.fecha_emision >= fecha_inicio)
+            filtros.append(col(Venta.fecha_emision) >= fecha_inicio)
         if fecha_fin is not None:
-            filtros.append(Venta.fecha_emision <= fecha_fin)
+            filtros.append(col(Venta.fecha_emision) <= fecha_fin)
 
-        join_cond = cast(Usuario.id, String) == Venta.created_by
-        vendedor_expr = func.coalesce(Usuario.username, Venta.created_by, "SIN_USUARIO")
+        join_cond = cast(col(Usuario.id), String) == col(Venta.created_by)
+        vendedor_expr = func.coalesce(col(Usuario.username), col(Venta.created_by), "SIN_USUARIO")
+        usuario_id_expr: Label[UUID] = col(Usuario.id).label("usuario_id")
 
-        stmt = (
-            select(
-                Usuario.id.label("usuario_id"),
+        stmt: Select[tuple[UUID, str, Decimal, int]] = (
+            sa_select(
+            usuario_id_expr,
                 vendedor_expr.label("vendedor"),
-                func.coalesce(func.sum(Venta.valor_total), 0).label("total_vendido"),
-                func.count(Venta.id).label("facturas_emitidas"),
+                func.coalesce(func.sum(col(Venta.valor_total)), 0).label("total_vendido"),
+                func.count(col(Venta.id)).label("facturas_emitidas"),
             )
             .select_from(Venta)
             .outerjoin(Usuario, join_cond)
             .where(*filtros)
-            .group_by(Usuario.id, vendedor_expr)
-            .order_by(func.sum(Venta.valor_total).desc(), vendedor_expr.asc())
+            .group_by(col(Usuario.id), vendedor_expr)
+            .order_by(func.sum(col(Venta.valor_total)).desc(), vendedor_expr.asc())
         )
-        rows = session.exec(stmt).all()
+        rows = session.execute(stmt).all()
         return [
             ReporteVentasPorVendedorRead(
                 usuario_id=usuario_id,
@@ -337,13 +340,13 @@ class ReportesVentasService:
         empresa_scope = self._empresa_scope()
         ventas = list(
             session.exec(
-                select(Venta.id, Venta.cliente_id, Venta.subtotal_sin_impuestos)
+                select(col(Venta.id), col(Venta.cliente_id), col(Venta.subtotal_sin_impuestos))
                 .where(
-                    Venta.activo.is_(True),
-                    Venta.estado != EstadoVenta.ANULADA,
-                    Venta.fecha_emision >= fecha_inicio,
-                    Venta.fecha_emision <= fecha_fin,
-                    *( [Venta.empresa_id == empresa_scope] if empresa_scope is not None else [] ),
+                    col(Venta.activo).is_(True),
+                    col(Venta.estado) != EstadoVenta.ANULADA,
+                    col(Venta.fecha_emision) >= fecha_inicio,
+                    col(Venta.fecha_emision) <= fecha_fin,
+                    *( [col(Venta.empresa_id) == empresa_scope] if empresa_scope is not None else [] ),
                 )
             ).all()
         )
@@ -395,15 +398,15 @@ class ReportesVentasService:
         empresa_scope = self._empresa_scope()
         ventas = list(
             session.exec(
-                select(Venta.id, Venta.cliente_id, Venta.fecha_emision, Venta.subtotal_sin_impuestos)
+                select(col(Venta.id), col(Venta.cliente_id), col(Venta.fecha_emision), col(Venta.subtotal_sin_impuestos))
                 .where(
-                    Venta.activo.is_(True),
-                    Venta.estado != EstadoVenta.ANULADA,
-                    Venta.fecha_emision >= fecha_inicio,
-                    Venta.fecha_emision <= fecha_fin,
-                    *( [Venta.empresa_id == empresa_scope] if empresa_scope is not None else [] ),
+                    col(Venta.activo).is_(True),
+                    col(Venta.estado) != EstadoVenta.ANULADA,
+                    col(Venta.fecha_emision) >= fecha_inicio,
+                    col(Venta.fecha_emision) <= fecha_fin,
+                    *( [col(Venta.empresa_id) == empresa_scope] if empresa_scope is not None else [] ),
                 )
-                .order_by(Venta.fecha_emision.asc(), Venta.creado_en.asc())
+                .order_by(col(Venta.fecha_emision).asc(), col(Venta.creado_en).asc())
             ).all()
         )
         venta_ids = [venta_id for venta_id, _, _, _ in ventas]

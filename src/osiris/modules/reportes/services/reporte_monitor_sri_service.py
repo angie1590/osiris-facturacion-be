@@ -4,7 +4,7 @@ from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.punto_emision.entity import PuntoEmision
@@ -39,69 +39,69 @@ class ReporteMonitorSRIService:
         dt_inicio, dt_fin_exclusivo = self._rango_fechas(fecha_inicio, fecha_fin)
 
         filtros_base = [
-            DocumentoElectronico.activo.is_(True),
-            DocumentoElectronico.creado_en >= dt_inicio,
-            DocumentoElectronico.creado_en < dt_fin_exclusivo,
+            col(DocumentoElectronico.activo).is_(True),
+            col(DocumentoElectronico.creado_en) >= dt_inicio,
+            col(DocumentoElectronico.creado_en) < dt_fin_exclusivo,
         ]
 
-        total_expr = func.count(DocumentoElectronico.id)
+        total_expr = func.count(col(DocumentoElectronico.id))
 
         stmt_facturas = (
             select(
-                DocumentoElectronico.estado_sri,
-                DocumentoElectronico.tipo_documento,
+                col(DocumentoElectronico.estado_sri),
+                col(DocumentoElectronico.tipo_documento),
                 total_expr.label("cantidad"),
             )
             .select_from(DocumentoElectronico)
             .where(
                 *filtros_base,
-                DocumentoElectronico.tipo_documento == TipoDocumentoElectronico.FACTURA,
+                col(DocumentoElectronico.tipo_documento) == TipoDocumentoElectronico.FACTURA,
             )
         )
         if sucursal_id is not None or empresa_scope is not None:
             stmt_facturas = (
-                stmt_facturas.join(Venta, Venta.id == DocumentoElectronico.venta_id)
+                stmt_facturas.join(Venta, col(Venta.id) == col(DocumentoElectronico.venta_id))
             )
             if empresa_scope is not None:
-                stmt_facturas = stmt_facturas.where(Venta.empresa_id == empresa_scope)
+                stmt_facturas = stmt_facturas.where(col(Venta.empresa_id) == empresa_scope)
             if sucursal_id is not None:
                 stmt_facturas = (
                     stmt_facturas
-                    .join(PuntoEmision, PuntoEmision.id == Venta.punto_emision_id)
-                    .where(PuntoEmision.sucursal_id == sucursal_id)
+                    .join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
+                    .where(col(PuntoEmision.sucursal_id) == sucursal_id)
                 )
         stmt_facturas = stmt_facturas.group_by(
-            DocumentoElectronico.estado_sri,
-            DocumentoElectronico.tipo_documento,
+            col(DocumentoElectronico.estado_sri),
+            col(DocumentoElectronico.tipo_documento),
         )
 
         stmt_retenciones = (
             select(
-                DocumentoElectronico.estado_sri,
-                DocumentoElectronico.tipo_documento,
+                col(DocumentoElectronico.estado_sri),
+                col(DocumentoElectronico.tipo_documento),
                 total_expr.label("cantidad"),
             )
             .select_from(DocumentoElectronico)
             .where(
                 *filtros_base,
-                DocumentoElectronico.tipo_documento == TipoDocumentoElectronico.RETENCION,
+                col(DocumentoElectronico.tipo_documento) == TipoDocumentoElectronico.RETENCION,
             )
         )
         if sucursal_id is not None or empresa_scope is not None:
             stmt_retenciones = (
-                stmt_retenciones.join(Retencion, Retencion.id == DocumentoElectronico.referencia_id)
-                .join(Compra, Compra.id == Retencion.compra_id)
+                stmt_retenciones.join(Retencion, col(Retencion.id) == col(DocumentoElectronico.referencia_id))
+                .join(Compra, col(Compra.id) == col(Retencion.compra_id))
             )
             if empresa_scope is not None:
-                stmt_retenciones = stmt_retenciones.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(
-                    Sucursal.activo.is_(True),
-                    Sucursal.empresa_id == empresa_scope,
+                stmt_retenciones = stmt_retenciones.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                    col(Sucursal.activo).is_(True),
+                    col(Sucursal.empresa_id) == empresa_scope,
                 )
             if sucursal_id is not None:
-                stmt_retenciones = stmt_retenciones.where(Compra.sucursal_id == sucursal_id)
+                stmt_retenciones = stmt_retenciones.where(col(Compra.sucursal_id) == sucursal_id)
         stmt_retenciones = stmt_retenciones.group_by(
-            DocumentoElectronico.estado_sri,
-            DocumentoElectronico.tipo_documento,
+            col(DocumentoElectronico.estado_sri),
+            col(DocumentoElectronico.tipo_documento),
         )
 
         rows = list(session.exec(stmt_facturas).all()) + list(session.exec(stmt_retenciones).all())

@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from sqlmodel import Field
-from sqlalchemy import CheckConstraint, Column
+from sqlalchemy import CheckConstraint, Column, Index, text
 from sqlalchemy.types import Numeric
 
 from osiris.domain.base_models import BaseTable, AuditMixin, SoftDeleteMixin
@@ -25,4 +25,5 @@ class TipoCliente(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     )
     __table_args__ = (
         CheckConstraint("descuento >= 0 AND descuento <= 100", name="ck_descuento_rango"),
+        Index("uq_tbl_tipo_cliente_nombre_normalizado", text("lower(trim(nombre))"), unique=True),
     )

@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.sucursal.entity import Sucursal
@@ -37,39 +37,39 @@ class ReporteComprasService:
     ) -> list[ReporteComprasPorProveedorRead]:
         empresa_scope = self._empresa_scope()
         filtros = [
-            Compra.activo.is_(True),
-            Compra.estado != EstadoCompra.ANULADA,
-            Compra.fecha_emision >= fecha_inicio,
-            Compra.fecha_emision <= fecha_fin,
+            col(Compra.activo).is_(True),
+            col(Compra.estado) != EstadoCompra.ANULADA,
+            col(Compra.fecha_emision) >= fecha_inicio,
+            col(Compra.fecha_emision) <= fecha_fin,
         ]
         if sucursal_id is not None:
-            filtros.append(Compra.sucursal_id == sucursal_id)
+            filtros.append(col(Compra.sucursal_id) == sucursal_id)
 
         razon_social_expr = func.coalesce(
-            ProveedorSociedad.razon_social,
-            Compra.identificacion_proveedor,
+            col(ProveedorSociedad.razon_social),
+            col(Compra.identificacion_proveedor),
             "SIN_RAZON_SOCIAL",
         )
-        total_expr = func.coalesce(func.sum(Compra.valor_total), 0)
-        facturas_expr = func.count(Compra.id)
+        total_expr = func.coalesce(func.sum(col(Compra.valor_total)), 0)
+        facturas_expr = func.count(col(Compra.id))
 
         stmt = (
             select(
-                Compra.proveedor_id,
+                col(Compra.proveedor_id),
                 razon_social_expr.label("razon_social"),
                 total_expr.label("total_compras"),
                 facturas_expr.label("cantidad_facturas"),
             )
             .select_from(Compra)
-            .outerjoin(ProveedorSociedad, ProveedorSociedad.id == Compra.proveedor_id)
+            .outerjoin(ProveedorSociedad, col(ProveedorSociedad.id) == col(Compra.proveedor_id))
             .where(*filtros)
-            .group_by(Compra.proveedor_id, razon_social_expr)
+            .group_by(col(Compra.proveedor_id), razon_social_expr)
             .order_by(total_expr.desc(), razon_social_expr.asc())
         )
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(
-                Sucursal.activo.is_(True),
-                Sucursal.empresa_id == empresa_scope,
+            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                col(Sucursal.activo).is_(True),
+                col(Sucursal.empresa_id) == empresa_scope,
             )
 
         rows = session.exec(stmt).all()

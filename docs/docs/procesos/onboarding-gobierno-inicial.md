@@ -114,19 +114,24 @@ sidebar_position: 2
 
 **Precondiciones:**
 
-- Persona registrada para cada usuario.
+- Persona natural activa existente o borrador para cada Usuario; no exige Empleado.
 - Rol activo con permisos definidos.
 
 **Flujo de Eventos Básico:**
 
 1. Crear/ajustar roles.
 2. Asignar permisos por módulo al rol.
-3. Registrar usuario y vincular rol.
+3. Buscar/crear Persona como borrador y registrar Usuario en un solo POST (`persona_id` XOR `persona_nueva`), con Rol activo y contraseña de ocho o más caracteres; omitir actor de auditoría, que deriva del JWT.
 4. Verificar menú/permisos efectivos del usuario.
+
+El bootstrap `a9c3d6e41f82` crea módulos `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES`, `PROVEEDORES_PERSONA`, `PROVEEDORES_SOCIEDAD`, `EMPLEADOS`, `USUARIOS` y añade asignaciones CRUD faltantes solo a roles activos `Administrador`/`Admin`. No sobrescribe concesiones existentes ni concede acceso inicial al resto. Posteriormente se autoriza por permisos efectivos, no por nombre de rol. El alta requiere `USUARIOS.crear`, `PERSONAS.leer` y `PERSONAS.crear` si inserta identidad.
 
 **Flujos Alternativos:**
 
 - Username duplicado o persona ya vinculada: creación rechazada.
+- Username usa trim/lowercase y unicidad SQL global incluyendo inactivos. Cambio efectivo de username o Persona: `409`; Rol activo sí es editable.
+- Cuenta inactiva requiere POST de reactivación, no duplicación. Con Empleado inactivo requiere confirmación administrativa explícita; reactivar Empleado no restaura Usuario.
+- Reset devuelve temporal solo en respuesta autorizada, marca cambio obligatorio e invalida access/refresh anteriores. Baja e invalidación de sesión revocan acceso sin borrar historia.
 
 **Postcondiciones:**
 
@@ -137,6 +142,9 @@ sidebar_position: 2
 - `POST /api/v1/roles` ([doc API](../api/common/seguridad-accesos))
 - `POST /api/v1/roles-modulos-permisos` ([doc API](../api/common/seguridad-accesos))
 - `POST /api/v1/usuarios` ([doc API](../api/common/seguridad-accesos))
+- `GET /api/v1/usuarios/{usuario_id}/permisos` ([doc API](../api/common/seguridad-accesos)): autenticación para consulta propia; `USUARIOS.leer` para otro Usuario.
+- `POST /api/v1/usuarios/{usuario_id}/reactivar` ([doc API](../api/common/seguridad-accesos))
+- `POST /api/v1/usuarios/{usuario_id}/invalidar-sesion` ([doc API](../api/common/seguridad-accesos))
 - `GET /api/v1/usuarios/{usuario_id}/menu` ([doc API](../api/common/seguridad-accesos))
 
 ---
@@ -145,7 +153,7 @@ sidebar_position: 2
 
 **Actores:** Todos los usuarios operativos.
 
-**Descripción:** Definir empresa activa en sesión para aislar datos y procesos.
+**Descripción:** Definir empresa activa en sesión para delimitar operaciones que tienen ámbito empresarial; no convierte el Directorio comercial global en un tenant aislado.
 
 **Precondiciones:**
 
@@ -156,7 +164,7 @@ sidebar_position: 2
 
 1. El usuario selecciona empresa al iniciar sesión.
 2. Frontend actualiza token/contexto con `empresa_id`.
-3. Todas las operaciones posteriores se ejecutan sobre esa empresa.
+3. Las operaciones con ámbito empresarial validan esa Empresa. Persona, Cliente, proveedores y TipoCliente siguen globales; Empleado valida Empresa y unicidad global por Persona.
 
 **Flujos Alternativos:**
 
@@ -164,7 +172,7 @@ sidebar_position: 2
 
 **Postcondiciones:**
 
-- Operación multiempresa aislada por sesión.
+- Contexto empresarial activo para recursos que lo implementan. Habilitación comercial por Empresa, multiempleo y portal requieren cambios posteriores.
 
 **APIs involucradas:**
 

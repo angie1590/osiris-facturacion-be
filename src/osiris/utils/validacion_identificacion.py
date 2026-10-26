@@ -9,6 +9,10 @@ class TipoIdentificacionEnum(Enum):
 
 class ValidacionCedulaRucService:
     @staticmethod
+    def normalizar_identificacion(identificacion: str) -> str:
+        return identificacion.strip().upper()
+
+    @staticmethod
     def es_identificacion_valida(identificacion: str) -> bool:
         if not identificacion:
             return False
@@ -95,7 +99,7 @@ class ValidacionCedulaRucService:
         )
 
     @staticmethod
-    def _obtener_coeficientes(tipo: TipoIdentificacionEnum):
+    def _obtener_coeficientes(tipo: TipoIdentificacionEnum) -> list[int]:
         if tipo in (TipoIdentificacionEnum.CEDULA, TipoIdentificacionEnum.RUC_PERSONA_NATURAL):
             return [2, 1, 2, 1, 2, 1, 2, 1, 2]
         elif tipo == TipoIdentificacionEnum.RUC_SOCIEDAD_PRIVADA:

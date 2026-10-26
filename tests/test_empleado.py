@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import uuid4
 from unittest.mock import MagicMock
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -28,6 +29,16 @@ def _mk_session():
     s.add = MagicMock()
     s.commit = MagicMock()
     s.refresh = MagicMock()
+    def execute(statement):
+        result = MagicMock()
+        sql = str(statement)
+        parameters = statement.compile().params
+        if "FROM tbl_persona" in sql or "FROM tbl_empresa" in sql:
+            result.first.return_value = SimpleNamespace(id=parameters.get("id_1"), activo=True)
+        else:
+            result.first.return_value = None
+        return result
+    s.exec.side_effect = execute
     return s
 
 
@@ -76,8 +87,13 @@ def test_empleado_create_crea_usuario_y_empleado(monkeypatch):
 
     # Strategy creada usuario
     strategy.create_user_for_persona.assert_called_once()
+    assert strategy.create_user_for_persona.call_args.kwargs["persona_id"] == persona_id
+    assert strategy.create_user_for_persona.call_args.kwargs["commit"] is False
     # Se creó empleado por repo
     svc.repo.create.assert_called_once()
+    assert svc.repo.create.call_args.args[1]["persona_id"] == persona_id
+    assert "usuario" not in svc.repo.create.call_args.args[1]
+    session.commit.assert_called_once()
     assert isinstance(emp, Empleado)
     assert getattr(emp, "foto", None) is None
 
@@ -198,17 +214,11 @@ def test_empleado_update_no_cambia_persona_id(monkeypatch):
 
     svc.repo.update.return_value = current
 
-    res = svc.update(session, current.id, data_dict)
-
-    # Service debe haber eliminado persona_id de la actualización
-    assert res is current
+    with pytest.raises(HTTPException) as exc:
+        svc.update(session, current.id, data_dict)
+    assert exc.value.status_code == 409
     assert current.persona_id != new_persona_id
-
-    svc.repo.update.assert_called_once()
-    args, kwargs = svc.repo.update.call_args
-    update_payload = args[2] if len(args) >= 3 else kwargs.get("data", {})
-    assert "persona_id" not in update_payload
-    assert update_payload.get("foto") == "https://cdn.example.com/fotos/emp999.jpg"
+    svc.repo.update.assert_not_called()
 
 
 def test_empleado_update_valida_fecha_salida_vs_ingreso():
@@ -240,9 +250,14 @@ def test_empleado_create_valida_rol_en_strategy(monkeypatch):
     session = _mk_session()
 
     # Simular que select(Rol.id) -> first() = None => 404
-    cursor = MagicMock()
-    cursor.first.return_value = None
-    session.exec.return_value = cursor
+    original_execute = session.exec.side_effect
+    def execute(statement):
+        if "FROM tbl_rol" in str(statement):
+            cursor = MagicMock()
+            cursor.first.return_value = None
+            return cursor
+        return original_execute(statement)
+    session.exec.side_effect = execute
 
     svc = EmpleadoService()  # usa estrategia real con validación de rol
 

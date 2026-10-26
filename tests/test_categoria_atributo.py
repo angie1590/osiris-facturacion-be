@@ -313,7 +313,62 @@ def test_categoria_atributo_backfill_idempotente_respeta_valor_existente():
         assert rows_por_producto[producto_2.id].valor_string == "Negro"
 
 
-def test_atributos_duplicados_se_rechazan_solo_dentro_de_la_rama():
+@pytest.mark.parametrize("apply_default, expected_rows", [(True, 2), (False, 1)])
+def test_update_optional_assignment_can_backfill_only_missing_product_values(apply_default, expected_rows):
+    engine = _build_test_engine()
+    service = CategoriaAtributoService()
+
+    with Session(engine) as session:
+        category = Categoria(nombre="Categoría default", es_padre=False, activo=True, usuario_auditoria="test")
+        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
+        products = [
+            Producto(nombre=f"Producto-default-{index}-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN, pvp=Decimal("10"), activo=True, usuario_auditoria="test")
+            for index in range(2)
+        ]
+        session.add_all([category, attribute, *products])
+        session.flush()
+        assignment = CategoriaAtributo(
+            categoria_id=category.id,
+            atributo_id=attribute.id,
+            obligatorio=False,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add(assignment)
+        session.add_all(ProductoCategoria(producto_id=product.id, categoria_id=category.id) for product in products)
+        session.add(ProductoAtributoValor(
+            producto_id=products[0].id,
+            atributo_id=attribute.id,
+            valor_string="Valor existente",
+            activo=True,
+            usuario_auditoria="test",
+        ))
+        session.commit()
+
+        service.update(
+            session,
+            assignment.id,
+            CategoriaAtributoUpdate(
+                obligatorio=True,
+                valor_default="Valor por defecto",
+                aplicar_default_a_existentes=apply_default,
+            ),
+            usuario_auditoria="test",
+        )
+
+        values = session.exec(
+            select(ProductoAtributoValor).where(ProductoAtributoValor.atributo_id == attribute.id)
+        ).all()
+        assert len(values) == expected_rows
+        values_by_product = {row.producto_id: row.valor_string for row in values}
+        assert values_by_product[products[0].id] == "Valor existente"
+        if apply_default:
+            assert values_by_product[products[1].id] == "Valor por defecto"
+        else:
+            assert products[1].id not in values_by_product
+
+
+def test_atributos_duplicados_se_rechazan_globalmente_entre_categorias():
     engine = _build_test_engine()
     service = CategoriaAtributoService()
 
@@ -325,9 +380,7 @@ def test_atributos_duplicados_se_rechazan_solo_dentro_de_la_rama():
         session.flush()
         child_a.parent_id = root_a.id
         attribute_root = Atributo(nombre="Color", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
-        attribute_conflict = Atributo(nombre=" color ", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
-        attribute_other_branch = Atributo(nombre="Color", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
-        session.add_all([attribute_root, attribute_conflict, attribute_other_branch])
+        session.add(attribute_root)
         session.commit()
 
         service.create(
@@ -336,7 +389,19 @@ def test_atributos_duplicados_se_rechazan_solo_dentro_de_la_rama():
             usuario_auditoria="test",
         )
 
-        with pytest.raises(HTTPException, match="rama efectiva") as exc_info:
+        override = service.create(
+            session,
+            CategoriaAtributoCreate(categoria_id=child_a.id, atributo_id=attribute_root.id),
+            usuario_auditoria="test",
+        )
+        assert override.atributo_id == attribute_root.id
+
+        attribute_conflict = Atributo(nombre=" color ", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
+        attribute_other_branch = Atributo(nombre="Color", tipo_dato=TipoDato.STRING, activo=True, usuario_auditoria="test")
+        session.add_all([attribute_conflict, attribute_other_branch])
+        session.commit()
+
+        with pytest.raises(HTTPException, match="otra categoría") as exc_info:
             service.create(
                 session,
                 CategoriaAtributoCreate(categoria_id=child_a.id, atributo_id=attribute_conflict.id),
@@ -344,16 +409,11 @@ def test_atributos_duplicados_se_rechazan_solo_dentro_de_la_rama():
             )
         assert exc_info.value.status_code == 409
 
-        independent = service.create(
-            session,
-            CategoriaAtributoCreate(categoria_id=root_b.id, atributo_id=attribute_other_branch.id),
-            usuario_auditoria="test",
-        )
-        override = service.create(
-            session,
-            CategoriaAtributoCreate(categoria_id=child_a.id, atributo_id=attribute_root.id),
-            usuario_auditoria="test",
-        )
+        with pytest.raises(HTTPException, match="otra categoría") as exc_info:
+            service.create(
+                session,
+                CategoriaAtributoCreate(categoria_id=root_b.id, atributo_id=attribute_other_branch.id),
+                usuario_auditoria="test",
+            )
+        assert exc_info.value.status_code == 409
 
-        assert independent.atributo_id == attribute_other_branch.id
-        assert override.atributo_id == attribute_root.id

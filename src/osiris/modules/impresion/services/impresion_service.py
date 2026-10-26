@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.settings import get_settings
 from osiris.modules.common.audit_log.entity import AuditLog
@@ -23,10 +24,15 @@ from osiris.modules.sri.core_sri.models import (
 )
 from osiris.modules.sri.core_sri.types import FormaPagoSRI
 from osiris.modules.ventas.models import CuentaPorCobrar, PagoCxC
+from osiris.modules.impresion.schemas import (
+    PreimpresaHTMLResult,
+    PreimpresaPDFResult,
+    ReimpresionResult,
+)
 from osiris.modules.impresion.strategies.plantilla_preimpresa_strategy import (
     PlantillaPreimpresaStrategy,
 )
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy
+from osiris.modules.impresion.strategies.render_strategy import RenderStrategy, checked_html_output
 from osiris.modules.impresion.strategies.ride_a4_strategy import RideA4Strategy
 from osiris.modules.impresion.strategies.ticket_termico_strategy import TicketTermicoStrategy
 
@@ -64,7 +70,7 @@ class ImpresionService:
         encoded = base64.b64encode(svg_bytes).decode("ascii")
         return f"data:image/svg+xml;base64,{encoded}"
 
-    def _render_html(self, context: dict) -> str:
+    def _render_html(self, context: dict[str, str]) -> str:
         template_path = self.templates_dir / "ride_a4.html"
         if not template_path.exists():
             raise HTTPException(status_code=500, detail="Plantilla RIDE A4 no encontrada.")
@@ -77,7 +83,7 @@ class ImpresionService:
                 autoescape=select_autoescape(["html", "xml"]),
             )
             template = env.get_template("ride_a4.html")
-            return template.render(**context)
+            return checked_html_output(template.render(**context))
         except ModuleNotFoundError:
             # Fallback para entornos sin Jinja2 instalado.
             template = template_path.read_text(encoding="utf-8")
@@ -94,7 +100,9 @@ class ImpresionService:
             html = html.replace("{{ logo_url }}", str(context["logo_url"]))
             return html
 
-    def _payload_from_documento(self, session: Session, documento: DocumentoElectronico) -> dict:
+    def _payload_from_documento(
+        self, session: Session, documento: DocumentoElectronico
+    ) -> dict[str, str]:
         venta = None
         if documento.tipo_documento == TipoDocumentoElectronico.FACTURA:
             venta_id = documento.referencia_id or documento.venta_id
@@ -168,7 +176,7 @@ class ImpresionService:
         cxc = session.exec(
             select(CuentaPorCobrar).where(
                 CuentaPorCobrar.venta_id == venta.id,
-                CuentaPorCobrar.activo.is_(True),
+                col(CuentaPorCobrar.activo).is_(True),
             )
         ).first()
         pagos = []
@@ -177,7 +185,7 @@ class ImpresionService:
                 session.exec(
                     select(PagoCxC).where(
                         PagoCxC.cuenta_por_cobrar_id == cxc.id,
-                        PagoCxC.activo.is_(True),
+                        col(PagoCxC.activo).is_(True),
                     )
                 ).all()
             )
@@ -187,7 +195,7 @@ class ImpresionService:
             (pago.monto for pago in pagos if pago.forma_pago_sri == FormaPagoSRI.EFECTIVO),
             start=0,
         )
-        cambio = total_efectivo - venta.valor_total
+        cambio: Decimal | int = total_efectivo - venta.valor_total
         if cambio < 0:
             cambio = 0
 
@@ -243,7 +251,7 @@ class ImpresionService:
         session: Session,
         *,
         documento_id: UUID,
-    ) -> dict[str, str | None]:
+    ) -> PreimpresaHTMLResult:
         documento = session.get(DocumentoElectronico, documento_id)
         if not documento or not documento.activo:
             raise HTTPException(status_code=404, detail="Documento electrónico no encontrado.")
@@ -266,9 +274,9 @@ class ImpresionService:
                 select(VentaDetalle)
                 .where(
                     VentaDetalle.venta_id == venta.id,
-                    VentaDetalle.activo.is_(True),
+                    col(VentaDetalle.activo).is_(True),
                 )
-                .order_by(VentaDetalle.creado_en.asc())
+                .order_by(col(VentaDetalle.creado_en).asc())
             ).all()
         )
         if not detalles:
@@ -310,7 +318,7 @@ class ImpresionService:
         session: Session,
         *,
         documento_id: UUID,
-    ) -> dict[str, bytes | str | None]:
+    ) -> PreimpresaPDFResult:
         resultado_html = self.generar_preimpresa_html(session, documento_id=documento_id)
         return {
             "pdf": self.preimpresa_strategy.render_pdf(str(resultado_html["html"])),
@@ -328,11 +336,11 @@ class ImpresionService:
 
         row = session.exec(
             select(Usuario, Rol)
-            .join(Rol, Rol.id == Usuario.rol_id)
+            .join(Rol, col(Rol.id) == col(Usuario.rol_id))
             .where(
                 Usuario.id == user_uuid,
-                Usuario.activo.is_(True),
-                Rol.activo.is_(True),
+                col(Usuario.activo).is_(True),
+                col(Rol.activo).is_(True),
             )
         ).first()
         if not row:
@@ -351,7 +359,7 @@ class ImpresionService:
         motivo: str,
         formato: str,
         user_id: str | None,
-    ) -> dict:
+    ) -> ReimpresionResult:
         user_uuid = self._require_cajero_admin(session, user_id)
 
         documento = session.get(DocumentoElectronico, documento_id)

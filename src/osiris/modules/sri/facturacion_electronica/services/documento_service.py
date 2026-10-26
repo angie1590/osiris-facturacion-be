@@ -4,7 +4,7 @@ from html import escape
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 
 from osiris.modules.common.empleado.entity import Empleado
 from osiris.modules.common.usuario.entity import Usuario
@@ -52,7 +52,7 @@ class DocumentoElectronicoService:
             session.exec(
                 select(Empleado).where(
                     Empleado.persona_id == usuario.persona_id,
-                    Empleado.activo.is_(True),
+                    col(Empleado.activo).is_(True),
                 )
             ).all()
         )

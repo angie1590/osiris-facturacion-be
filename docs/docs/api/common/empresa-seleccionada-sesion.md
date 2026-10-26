@@ -15,7 +15,7 @@ Este apartado define el contrato obligatorio para frontend cuando un usuario tra
 
 - El usuario inicia sesión.
 - Selecciona una empresa activa.
-- Desde ese momento, el backend restringe operaciones y listados a la empresa seleccionada.
+- Desde ese momento, los recursos con ámbito empresarial restringen operaciones y listados a la empresa seleccionada.
 - Si intenta operar recursos de otra empresa, responde `403`.
 
 ## Fuentes de Contexto de Empresa
@@ -46,10 +46,16 @@ En `production`, el backend ignora `X-User-Id` y `X-Empresa-Id`; se debe usar `A
 
 ## Regla de Seguridad Aplicada por Backend
 
+### Límite del Directorio Global
+
+Persona natural, Cliente, TipoCliente, Proveedor Persona y Proveedor Sociedad siguen globales. La Empresa seleccionada no agrega aislamiento ni habilitación comercial por tenant a estos maestros. Sociedad es una identidad jurídica separada con contacto natural mutable; no equivale a Cliente Sociedad. No declarar B2B ni aislamiento comercial completos.
+
+Empleado valida `empresa_id`, Empresa activa y contexto autorizado en listados/escrituras/acciones, pero mantiene un único Empleado global por Persona: no soporta multiempleo. Usuario es una cuenta global por Persona/Rol; la baja Empleado revoca la cuenta asociada y sus sesiones sin desactivar Persona o roles comerciales. Reactivar Empleado no restablece Usuario. Habilitación comercial por Empresa, relaciones laborales múltiples y portal son deuda posterior.
+
 Cuando existe empresa seleccionada en sesión:
 
 1. Los listados filtrados por empresa se acotan automáticamente al contexto actual.
-2. Cualquier operación sobre recursos de otra empresa retorna `403`.
+2. Las operaciones sobre recursos con ámbito empresarial de otra empresa retornan `403`; no aplicar esta promesa a maestros globales.
 3. Si el request intenta forzar una empresa distinta a la seleccionada, retorna `403`.
 
 Cuando no existe empresa seleccionada en sesión:

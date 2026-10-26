@@ -456,3 +456,27 @@ def test_anulacion_reversa_inventario():
         assert cxc is not None
         assert cxc.estado == EstadoCuentaPorCobrar.ANULADA
         assert cxc.saldo_pendiente == Decimal("0.00")
+
+        with pytest.raises(HTTPException, match="ya está ANULADA"):
+            service.anular_venta(
+                session,
+                emitted.id,
+                usuario_auditoria="tester",
+                motivo="Reintento de anulación",
+                confirmado_portal_sri=False,
+            )
+
+        stock_tras_reintento = session.exec(
+            select(InventarioStock).where(
+                InventarioStock.bodega_id == bodega.id,
+                InventarioStock.producto_id == producto.id,
+            )
+        ).one()
+        assert stock_tras_reintento.cantidad_actual == Decimal("15.0000")
+        reversos = session.exec(
+            select(MovimientoInventario).where(
+                MovimientoInventario.referencia_documento == f"ANULACION_VENTA:{venta.id}",
+                MovimientoInventario.activo.is_(True),
+            )
+        ).all()
+        assert len(reversos) == 1

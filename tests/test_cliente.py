@@ -11,6 +11,8 @@ from osiris.modules.common.cliente.service import ClienteService
 from osiris.modules.common.cliente.repository import ClienteRepository
 from osiris.modules.common.cliente.models import ClienteCreate
 from osiris.modules.common.cliente.entity import Cliente
+from osiris.modules.common.persona.entity import Persona, TipoIdentificacion
+from osiris.modules.common.tipo_cliente.entity import TipoCliente
 
 
 # -----------------------
@@ -64,6 +66,18 @@ def test_cliente_create_unique_persona_mapea_a_409_con_mensaje_claro():
         tipo_cliente_id=uuid4(),
         usuario_auditoria="admin",
     )
+
+    persona = Persona(id=dto.persona_id, identificacion="ABC123", tipo_identificacion=TipoIdentificacion.PASAPORTE,
+                      nombre="Ana", apellido="Perez")
+    catalog = TipoCliente(id=dto.tipo_cliente_id, nombre="Regular", descuento=0)
+
+    def query(statement):
+        cursor = MagicMock()
+        text = str(statement)
+        cursor.first.return_value = persona if "tbl_persona" in text else catalog if "tbl_tipo_cliente" in text else None
+        return cursor
+
+    session.exec.side_effect = query
 
     with pytest.raises(HTTPException) as exc:
         service.create(session, dto)

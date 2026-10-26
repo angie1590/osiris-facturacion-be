@@ -24,4 +24,6 @@ class ProveedorPersona(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     persona_id: UUID = Field(
         max_length=13,
         foreign_key="tbl_persona.id",
+        unique=True,
+        index=True,
     )

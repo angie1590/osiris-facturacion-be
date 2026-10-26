@@ -33,6 +33,14 @@ Los cambios de tipo convierten automáticamente los valores compatibles. Los no 
 - `GET /api/v1/atributos/remapeos/pendientes`
 - `POST /api/v1/atributos/remapeos/resolver` con `assignments: [{"id": "<remapeo UUID>", "valor": "<valor válido>"}]`
 
+La definición de un atributo se puede actualizar conservando su ID. Antes del PUT, la UI puede solicitar `POST /api/v1/atributos/{id}/previsualizar` con el mismo payload parcial de `PUT /api/v1/atributos/{id}`. El preview no escribe ni crea/reactiva catálogos y devuelve los valores activos, productos/asignaciones afectados, conversiones posibles e incompatibles y remapeos pendientes.
+
+Cada actualización efectiva y baja lógica agrega un snapshot append-only con estado anterior/posterior de la definición, asignaciones, valores EAV y remapeos. `GET /api/v1/atributos/{id}/reversion` informa si la última operación no revertida sigue intacta, su fecha, alcance y motivo si ya no es segura. `POST /api/v1/atributos/{id}/revertir` restaura solo esa última operación y responde `409` sin escrituras si cambió cualquier estado capturado. Los remapeos pendientes creados por la operación revertida se conservan inactivos; los resueltos bloquean la reversión.
+
+`DELETE /api/v1/atributos/{id}` desactiva el atributo junto con asignaciones y valores EAV activos, sin borrar filas. Se bloquea con `409` si hay remapeos pendientes. `POST /api/v1/atributos/{id}/reactivar` restaura la baja solo si su snapshot sigue intacto; atributos legacy inactivos sin snapshot requieren recuperación administrativa.
+
+Todas estas escrituras requieren rol `admin` o `supervisor`. Los snapshots se retienen; no existe borrado físico ni purga en esta API.
+
 Catálogos configurables:
 
 - `GET /api/v1/catalogos`

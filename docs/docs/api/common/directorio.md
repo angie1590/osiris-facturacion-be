@@ -15,18 +15,79 @@ El módulo **Directorio** gestiona el registro centralizado de personas naturale
 
 - El frontend debe usar por defecto `only_active=true` para mostrar registros vigentes.
 - Los registros inactivos corresponden a **borrado lógico** y deben verse solo en vistas administrativas.
-- `only_active=false` retorna registros inactivos.
+- `only_active=false` incluye activos e inactivos; para solo inactivos se usa `estado=inactivo`.
 
 ## Estructura General
 
-El Directorio está compuesto por 6 entidades principales:
+El Directorio está compuesto por estas entidades y la cuenta Usuario, documentada en [Seguridad y Accesos](./seguridad-accesos):
 
-1. **Persona** - Registro central de personas naturales con validaciones SRI Ecuador.
+1. **Persona** - Identidad natural global con validación local de identificación, sin certificar existencia o estado SRI.
 2. **Cliente** - Asociación entre una Persona y un Tipo de Cliente.
 3. **Tipo de Cliente** - Catálogo de categorías de cliente con descuentos.
 4. **Proveedor Persona** - Registro de proveedores que son personas naturales.
 5. **Proveedor Sociedad** - Registro de proveedores que son empresas.
-6. **Empleado** - Vinculación de personas como empleados de una sucursal.
+6. **Empleado** - Vinculación de personas como empleados de una Empresa, con Usuario creado en la misma transacción.
+
+Persona es global y exclusivamente natural. Cliente, Proveedor Persona, Empleado y Usuario tienen una FK `persona_id` única (1:1 por rol); los roles pueden coexistir. Sociedad guarda identidad jurídica propia y contacto natural mutable (1:N). No hay herencia ORM ni identidad duplicada en los roles.
+
+### Contrato compuesto y Search-or-Create
+
+| Operación | Alternativas excluyentes | Datos adicionales |
+|---|---|---|
+| POST /api/v1/clientes | `persona_id` XOR `persona_nueva` | `tipo_cliente_id` activo |
+| POST /api/v1/proveedores-persona | `persona_id` XOR `persona_nueva` | RUC natural y TipoContribuyente compatible activo |
+| POST /api/v1/empleados | `persona_id` XOR `persona_nueva` | Empresa activa/autorizada, datos laborales y bloque `usuario` obligatorio |
+| POST /api/v1/usuarios | `persona_id` XOR `persona_nueva` | `rol_id`, `username`, `password`; no exige Empleado |
+| POST /api/v1/proveedores-sociedad | `persona_contacto_id` XOR `persona_contacto_nueva` | Identidad jurídica, dirección, email y catálogo activo |
+| PUT /api/v1/proveedores-sociedad/{id} | Como máximo una alternativa de contacto | Omitir ambas conserva el contacto; no admite contacto nulo |
+
+En POST debe existir exactamente una alternativa no nula: ambas o ninguna producen `422`. `persona_nueva` y `persona_contacto_nueva` usan PersonaCreate. Su `usuario_auditoria` es opcional por compatibilidad técnica, no un input de producción: el actor autoritativo es el JWT. Los ejemplos por ID siguen vigentes; los ejemplos Read muestran campos base, no la proyección completa.
+
+Ejemplo de alta contextual, sin guardar Persona previamente:
+
+```json
+{
+  "persona_nueva": {
+    "tipo_identificacion": "PASAPORTE",
+    "identificacion": "AB12345",
+    "nombre": "Ana",
+    "apellido": "Perez"
+  },
+  "tipo_cliente_id": "660e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+El resolver normaliza y busca incluyendo inactivos. Reutiliza Persona activa sin sobrescribir sus datos; una inactiva devuelve `409` con `persona_id` y acción `reactivar`. Si falta, inserta dentro de la unidad de trabajo del rol. Un único commit exterior guarda Persona y rol (también Usuario al crear Empleado); cualquier fallo revierte la operación, sin Persona huérfana. Ante carrera por la restricción específica de identificación, un savepoint permite reutilizar la ganadora activa sin sobrescribirla; otras violaciones no se tratan como coincidencia. El rol duplicado devuelve `409`, incluso si está inactivo, y requiere acción explícita.
+
+La UI común conserva el borrador y los campos del formulario padre ante cancelación de Persona o errores. Completar Persona no persiste: el submit del rol envía una sola petición compuesta, nunca POST Persona seguido de POST rol. El maestro Personas sí permite alta independiente.
+
+### Permisos efectivos y consultas
+
+Cada entidad tiene módulo propio: `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES`, `PROVEEDORES_PERSONA`, `PROVEEDORES_SOCIEDAD`, `EMPLEADOS`, `USUARIOS`. GET exige `leer`, POST de alta `crear`, PUT y reactivación `actualizar`, DELETE `eliminar`. El resolver exige además `PERSONAS.leer` y, solo si inserta Persona, `PERSONAS.crear`. Alta Empleado exige también `USUARIOS.crear`. Un nombre de rol no autoriza una llamada; el backend comprueba los permisos efectivos.
+
+Los listados admiten `q`, `estado`, `sort_by` y dirección permitida, además de `limit`, `offset`, `only_active`; Persona y roles con identidad admiten `identificacion` exacta normalizada. Persona usa `sort_direction`; comerciales y Usuario admiten `sort_order`/`sort_direction`, Empleado expone `sort_order`. No asumir que todos comparten los mismos campos ordenables: se aplica whitelist por recurso y un orden inválido devuelve `422`. `items` y `meta.total` proceden del servidor; no filtrar una página local como si fuera el directorio completo.
+
+- GET /api/v1/personas/contrato: devuelve OpenAPI de la aplicación por el prefijo API autenticado; exige `PERSONAS.leer`. La UI verifica allí soporte compuesto antes de habilitar el submit.
+- GET /api/v1/personas/{id}/vinculos: exige `PERSONAS.leer`; devuelve `persona_id`, `cliente`, `proveedor_persona`, `empleado`, `usuario`, `proveedores_sociedad` y `dependencias_activas`. Cada rol visible contiene `id`/`activo`; sociedades incluyen `razon_social`. Sin permiso de lectura del módulo correspondiente se ocultan sus detalles, pero se conserva la dependencia bloqueante con ID nulo.
+
+Las proyecciones Read comerciales incluyen `persona` (también el contacto de Sociedad), nombre del catálogo y metadatos `created_by`, `updated_by`, `created_at`, `updated_at`, además de los campos base. Cliente incluye `tipo_cliente_nombre` y `descuento`; proveedores, `tipo_contribuyente_nombre`. Empleado incluye `persona`; Usuario incluye `persona`, `rol_nombre`, `tiene_codigo_aprobacion` y alias `codigo_aprobacion_configurado`. No asumir metadatos adicionales en PersonaRead, EmpleadoRead o UsuarioRead, ni hashes/secretos en ningún Read.
+
+### Baja y reactivación explícitas
+
+DELETE Persona devuelve `409` mientras exista Cliente, Proveedor Persona, Empleado, Usuario o Sociedad-contacto activo; TipoCliente también bloquea baja con Clientes activos. Bajar Cliente/proveedores no baja Persona ni contacto. Los cambios efectivos de `persona_id` en Cliente, Proveedor Persona, Empleado y Usuario, y de `username` en Usuario, devuelven `409`; no se ignoran. `rol_id` de Usuario puede cambiar a un Rol activo. `activo` no es un bypass aceptado por PUT.
+
+| Acción | Endpoint | Resultado |
+|---|---|---|
+| Reactivar Persona | POST /api/v1/personas/{id}/reactivar | Mismo ID, revalidación y auditoría |
+| Reactivar TipoCliente | POST /api/v1/tipos-cliente/{id}/reactivar | Mismo ID y validación del catálogo |
+| Reactivar Cliente | POST /api/v1/clientes/{id}/reactivar | Persona y TipoCliente activos |
+| Reactivar Proveedor Persona | POST /api/v1/proveedores-persona/{id}/reactivar | Persona activa, RUC natural y catálogo compatible |
+| Reactivar Sociedad | POST /api/v1/proveedores-sociedad/{id}/reactivar | Contacto activo, RUC jurídico y catálogo compatible |
+| Reactivar Empleado | POST /api/v1/empleados/{id}/reactivar | Empresa/Persona activas; no reactiva Usuario |
+
+DELETE Empleado desactiva Empleado y Usuario asociado e invalida access/refresh mediante `sesion_invalidada_en` en una transacción; no altera Persona ni roles comerciales. Usuario previo al alta Empleado produce conflicto administrativo: no se duplican cuentas ni sobrescriben credenciales. Restaurar acceso requiere la acción separada descrita en [Seguridad](./seguridad-accesos).
+
+Errores transversales: `400` regla funcional, `401` autenticación, `403` permiso/contexto, `404` referencia ausente, `409` duplicado/inactivo/dependencia/inmutabilidad, `422` DTO/filtro inválido. `detail` puede ser texto, objeto o lista de errores; conservarlo y no sustituir conflictos por un error genérico.
 
 ---
 
@@ -34,7 +95,7 @@ El Directorio está compuesto por 6 entidades principales:
 
 ### Descripción
 
-Tabla central de personas naturales con validación integrada de documentos de identificación según el SRI Ecuador:
+Tabla central de personas naturales con validación local de documentos de identificación:
 - **Cédula (10 dígitos)**: Identidad personal ecuatoriana.
 - **RUC (13 dígitos)**: Registro Único de Contribuyente. Para personas naturales el RUC contiene los 10 dígitos de la cédula más 3 dígitos de secuencia.
 - **Pasaporte**: Documento internacional (mínimo 5 caracteres).
@@ -124,7 +185,7 @@ Obtiene los detalles de una persona específica.
 
 **POST** `/api/v1/personas`
 
-Crea una nueva persona con validación automática de identificación según SRI Ecuador.
+Crea una nueva persona con validación local de identificación; no consulta existencia o estado tributario SRI.
 
 **Request Body:**
 ```json
@@ -136,8 +197,7 @@ Crea una nueva persona con validación automática de identificación según SRI
   "direccion": "Calle Principal 123, Quito",
   "telefono": "+593 98 123 4567",
   "ciudad": "Quito",
-  "email": "juan.perez@ejemplo.com",
-  "usuario_auditoria": "admin"
+  "email": "juan.perez@ejemplo.com"
 }
 ```
 
@@ -160,7 +220,7 @@ Crea una nueva persona con validación automática de identificación según SRI
 }
 ```
 
-**Response 400 (Validación SRI fallida):**
+**Response 422 (Validación local del DTO fallida):**
 ```json
 {
   "detail": [
@@ -180,7 +240,7 @@ Crea una nueva persona con validación automática de identificación según SRI
 
 **PUT** `/api/v1/personas/{id}`
 
-Actualiza parcialmente una persona. Si se cambia la identificación, must incluir el tipo de identificación.
+Actualiza parcialmente una persona. Al enviar identificación o tipo, se deben enviar ambos para revalidar la combinación completa.
 
 **Parámetros de Path:**
 - `id` (UUID) - ID de la persona
@@ -190,8 +250,7 @@ Actualiza parcialmente una persona. Si se cambia la identificación, must inclui
 {
   "nombre": "Juan Carlos",
   "apellido": "Pérez Rodríguez",
-  "email": "juan.carlos@ejemplo.com",
-  "usuario_auditoria": "admin"
+  "email": "juan.carlos@ejemplo.com"
 }
 ```
 
@@ -249,7 +308,7 @@ Realiza un borrado lógico (soft delete) marcando la persona como inactiva.
 | Campo | Tipo | Restricción | Descripción |
 |-------|------|-----------|-------------|
 | `id` | UUID | PK, Auto | Identificador único de la persona |
-| `identificacion` | String(50) | Unique, Not Null | Documento de identidad. **Validación SRI**: Si `tipo_identificacion=CEDULA`, debe ser 10 dígitos válidos según algoritmo SRI. Si `RUC` (persona natural), debe ser 13 dígitos donde los primeros 10 son la cédula + 3 dígitos. |
+| `identificacion` | String(50) | Unique, Not Null | Documento normalizado, con validación local de cédula o RUC natural; no certifica estado SRI. |
 | `tipo_identificacion` | Enum | Not Null | Tipo: `CEDULA` (10 dígitos), `RUC` (13 dígitos persona natural), `PASAPORTE` (mín. 5 caracteres) |
 | `nombre` | String(120) | Not Null | Nombre de la persona |
 | `apellido` | String(120) | Not Null | Apellido de la persona |
@@ -348,8 +407,7 @@ Crea una nueva categoría de cliente.
 ```json
 {
   "nombre": "Cliente Especial",
-  "descuento": 20.00,
-  "usuario_auditoria": "admin"
+  "descuento": 20.00
 }
 ```
 
@@ -366,7 +424,7 @@ Crea una nueva categoría de cliente.
 }
 ```
 
-**Response 400 (Descuento fuera de rango):**
+**Response 422 (Descuento fuera de rango en DTO):**
 ```json
 {
   "detail": [
@@ -391,8 +449,7 @@ Actualiza parcialmente un tipo de cliente.
 **Request Body:**
 ```json
 {
-  "descuento": 18.00,
-  "usuario_auditoria": "admin"
+  "descuento": 18.00
 }
 ```
 
@@ -511,8 +568,7 @@ Crea una asociación entre una Persona y un Tipo de Cliente.
 ```json
 {
   "persona_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tipo_cliente_id": "660e8400-e29b-41d4-a716-446655440000",
-  "usuario_auditoria": "admin"
+  "tipo_cliente_id": "660e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -529,10 +585,10 @@ Crea una asociación entre una Persona y un Tipo de Cliente.
 }
 ```
 
-**Response 409 (FK violada - persona_id no existe):**
+**Response 404 (Persona referenciada no existe):**
 ```json
 {
-  "detail": "Foreign key violation: persona_id does not exist in tbl_persona"
+  "detail": "Persona no encontrada"
 }
 ```
 
@@ -547,8 +603,7 @@ Actualiza el tipo de cliente asociado. No se puede cambiar la persona.
 **Request Body:**
 ```json
 {
-  "tipo_cliente_id": "770e8400-e29b-41d4-a716-446655440000",
-  "usuario_auditoria": "admin"
+  "tipo_cliente_id": "770e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -601,8 +656,8 @@ Registro de proveedores que son personas naturales. Debe estar vinculado a una P
 Reglas de negocio backend (importantes para frontend):
 - `persona_id` debe apuntar a una Persona con `tipo_identificacion = RUC`.
 - El RUC de la persona debe ser de persona natural válido (no sociedad).
-- `tipo_contribuyente_id` no puede corresponder a categorías de sociedad o gran contribuyente.
-- En `PUT`, `persona_id` es inmutable y cualquier valor enviado se ignora.
+- El catálogo debe estar activo y tener `aplica_persona_natural=true`; no se infiere por nombre ni se excluye `04` cuando su flag aprobado permite natural.
+- En `PUT`, un cambio efectivo de `persona_id` devuelve `409`; no se ignora silenciosamente.
 
 ### Endpoints
 
@@ -676,8 +731,7 @@ Crea un nuevo proveedor persona.
 {
   "nombre_comercial": "Distribuidora Pérez y Cía",
   "tipo_contribuyente_id": "01",
-  "persona_id": "550e8400-e29b-41d4-a716-446655440000",
-  "usuario_auditoria": "admin"
+  "persona_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -706,8 +760,7 @@ Actualiza un proveedor persona. No se puede cambiar la persona_id.
 **Request Body:**
 ```json
 {
-  "nombre_comercial": "Distribuidora Pérez, López y Asociados",
-  "usuario_auditoria": "admin"
+  "nombre_comercial": "Distribuidora Pérez, López y Asociados"
 }
 ```
 
@@ -745,7 +798,7 @@ Realiza un borrado lógico del proveedor persona.
 | `id` | UUID | PK, Auto | Identificador único |
 | `nombre_comercial` | String(255) | Optional | Nombre bajo el cual opera comercialmente el proveedor |
 | `tipo_contribuyente_id` | String(2) | FK (aux_tipo_contribuyente.codigo), Not Null | Clasificación SRI del contribuyente (ej: "01" = Persona Natural, "02" = Empresa) |
-| `persona_id` | UUID | FK (tbl_persona.id), Not Null | Referencia a la Persona vinculada como proveedor |
+| `persona_id` | UUID | FK (tbl_persona.id), Unique, Not Null | Una sola asociación Proveedor Persona por identidad, incluyendo inactivos |
 | `activo` | Boolean | Default: true | Indicador de estado |
 | `creado_en` | DateTime | Auto | Timestamp de creación |
 | `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
@@ -761,10 +814,10 @@ Registro de proveedores que son empresas (sociedades). Contiene información det
 
 Reglas de negocio backend (importantes para frontend):
 - El `ruc` debe ser válido y no puede ser RUC de persona natural.
-- `tipo_contribuyente_id` no admite códigos `01` ni `03`.
+- El catálogo debe estar activo y tener `aplica_sociedad=true`.
 - `telefono`, si se envía, debe tener exactamente 10 dígitos numéricos.
 - `email` debe cumplir formato válido.
-- En `PUT`, `persona_contacto_id` es inmutable y cualquier valor enviado se ignora.
+- En `PUT`, el contacto es mutable: enviar `persona_contacto_id` o `persona_contacto_nueva`, nunca ambos. Sin alternativa se conserva el contacto; el cambio y el contacto nuevo se guardan juntos.
 
 ### Endpoints
 
@@ -853,8 +906,7 @@ Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
   "telefono": "0222222222",
   "email": "ventas@distnac.com",
   "tipo_contribuyente_id": "02",
-  "persona_contacto_id": "550e8400-e29b-41d4-a716-446655440000",
-  "usuario_auditoria": "admin"
+  "persona_contacto_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -877,7 +929,7 @@ Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
 }
 ```
 
-**Response 400 (RUC inválido):**
+**Response 422 (RUC inválido en DTO):**
 ```json
 {
   "detail": [
@@ -897,14 +949,13 @@ Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
 
 **PUT** `/api/v1/proveedores-sociedad/{id}`
 
-Actualiza un proveedor sociedad. No se puede cambiar persona_contacto_id.
+Actualiza un proveedor sociedad; permite cambiar el contacto natural existente o crear uno nuevo en la misma transacción, sin modificar la Persona anterior.
 
 **Request Body:**
 ```json
 {
   "razon_social": "Distribuidora Nacional de Productos S.A.",
-  "nombre_comercial": "DistNac Premium",
-  "usuario_auditoria": "admin"
+  "nombre_comercial": "DistNac Premium"
 }
 ```
 
@@ -916,7 +967,7 @@ Actualiza un proveedor sociedad. No se puede cambiar persona_contacto_id.
   "razon_social": "Distribuidora Nacional de Productos S.A.",
   "nombre_comercial": "DistNac Premium",
   "direccion": "Avenida Colón 501, Quito",
-  "telefono": "+593 2 2222222",
+  "telefono": "0222222222",
   "email": "ventas@distnac.com",
   "tipo_contribuyente_id": "02",
   "persona_contacto_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -945,14 +996,14 @@ Realiza un borrado lógico del proveedor sociedad.
 | Campo | Tipo | Restricción | Descripción |
 |-------|------|-----------|-------------|
 | `id` | UUID | PK, Auto | Identificador único |
-| `ruc` | String(13) | Unique, Not Null, Exactly 13 | RUC de la empresa según SRI Ecuador (13 dígitos exactos). Formato: 10 primeros dígitos + 3 dígitos de secuencia. |
+| `ruc` | String(13) | Unique, Not Null, Exactly 13 | RUC jurídico validado localmente; no es la cédula del contacto ni certifica estado SRI. |
 | `razon_social` | String(255) | Not Null | Nombre legal de la empresa registrado en SRI |
 | `nombre_comercial` | String(255) | Optional | Nombre comercial bajo el que opera |
 | `direccion` | String(255) | Not Null | Domicilio principal de la empresa |
 | `telefono` | String | Optional | Si se envía, debe tener exactamente 10 dígitos numéricos. |
 | `email` | Email | Not Null | Correo electrónico principal (formato válido) |
-| `tipo_contribuyente_id` | String(2) | FK (aux_tipo_contribuyente.codigo), Not Null | Clasificación SRI. Restricción de negocio: no se permite `01` ni `03` para proveedor sociedad. |
-| `persona_contacto_id` | UUID | FK (tbl_persona.id), Not Null | Referencia a una Persona como contacto. **Restricción**: No se puede cambiar en actualización. |
+| `tipo_contribuyente_id` | String(2) | FK (aux_tipo_contribuyente.codigo), Not Null | Catálogo activo con `aplica_sociedad=true`. |
+| `persona_contacto_id` | UUID | FK (tbl_persona.id), Not Null | Contacto natural activo y mutable; una Persona puede contactar varias sociedades. |
 | `activo` | Boolean | Default: true | Indicador de estado |
 | `creado_en` | DateTime | Auto | Timestamp de creación |
 | `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
@@ -964,7 +1015,7 @@ Realiza un borrado lógico del proveedor sociedad.
 
 ### Descripción
 
-Vinculación de una Persona como Empleado de una Empresa. Incluye información laboral (salario, fechas) y puede crear automáticamente un Usuario asociado al empleado.
+Vinculación única global de una Persona como Empleado de una Empresa. Incluye datos laborales y exige crear Usuario asociado en la misma unidad de trabajo.
 
 Reglas de negocio backend (importantes para frontend):
 - `POST /empleados` exige el bloque `usuario` para crear la cuenta en la misma transacción.
@@ -1059,10 +1110,8 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
   "usuario": {
     "username": "jperez",
     "password": "MiContraseñaSegura123!",
-    "rol_id": "eee0e8400-e29b-41d4-a716-446655440000",
-    "usuario_auditoria": "admin"
-  },
-  "usuario_auditoria": "admin"
+    "rol_id": "eee0e8400-e29b-41d4-a716-446655440000"
+  }
 }
 ```
 
@@ -1084,7 +1133,7 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
 }
 ```
 
-**Response 400 (Edad mínima no cumplida, default EMP_MIN_AGE=16):**
+**Response 422 (Edad mínima no cumplida en DTO, default EMP_MIN_AGE=16):**
 ```json
 {
   "detail": [
@@ -1098,7 +1147,7 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
 }
 ```
 
-**Response 400 (Fecha de salida anterior a ingreso):**
+**Response 422 (Fecha de salida anterior a ingreso en DTO):**
 ```json
 {
   "detail": [
@@ -1124,8 +1173,7 @@ Actualiza parcialmente un empleado. No se puede cambiar persona_id.
 ```json
 {
   "salario": 1800.00,
-  "fecha_salida": "2024-12-31",
-  "usuario_auditoria": "admin"
+  "fecha_salida": "2024-12-31"
 }
 ```
 
@@ -1153,7 +1201,7 @@ Actualiza parcialmente un empleado. No se puede cambiar persona_id.
 
 **DELETE** `/api/v1/empleados/{id}`
 
-Realiza un borrado lógico del empleado.
+Realiza la baja lógica de Empleado y Usuario asociado e invalida sus sesiones en una transacción, sin desactivar Persona.
 
 **Response 204:** No content
 
@@ -1167,7 +1215,7 @@ Realiza un borrado lógico del empleado.
 | `id` | UUID | PK, Auto | Identificador único |
 | `persona_id` | UUID | FK (tbl_persona.id), Unique, Not Null | Referencia a la Persona vinculada. Cada persona solo puede ser empleado una vez. |
 | `empresa_id` | UUID | FK (tbl_empresa.id), Not Null | Referencia a la Empresa que lo emplea |
-| `salario` | Decimal(10,2) | Not Null | Salario mensual en USD |
+| `salario` | Decimal(10,2) | Not Null, no negativo | Salario mensual en USD, hasta dos decimales |
 | `fecha_ingreso` | Date | Not Null | Fecha de inicio laboral. No puede ser futura. |
 | `fecha_nacimiento` | Date | Optional | Fecha de nacimiento. Si se proporciona, se valida **edad mínima** (default EMP_MIN_AGE=16, configurable por env var). |
 | `fecha_salida` | Date | Optional | Fecha de cese laboral. Si está presente, debe ser posterior a fecha_ingreso. |
@@ -1179,37 +1227,43 @@ Realiza un borrado lógico del empleado.
 
 ---
 
-## Validaciones SRI Ecuador - Resumen
+## Validación Local y Aplicabilidad Tributaria
 
 ### Persona: Tipos de Identificación
 
 1. **CEDULA** (10 dígitos)
-   - Identificación personal única emitida por el SRI
-   - Algoritmo de validación: módulo 11 aplicado a los 9 primeros dígitos
-   - Ejemplo válido: `1234567890`
+  - Identidad natural, con algoritmo local vigente de cédula; no se modifica en este refactor.
+  - Los números de los ejemplos JSON son ilustrativos, no documentos certificados ni necesariamente aceptados por el validador.
 
 2. **RUC** (13 dígitos, para personas naturales)
    - Compuesto por: 10 primeros dígitos (cédula) + 3 dígitos de secuencia
    - Aplicable a personas naturales que son contribuyentes
-   - Ejemplo válido: `1234567890001` (cédula + "001")
+  - Se valida con la política local vigente de RUC natural, no como RUC jurídico.
 
 3. **PASAPORTE** (mín. 5 caracteres)
    - Documento internacional
-   - Validación: mínimo 5 caracteres
+  - Normalización: trim y mayúsculas; mínimo 5 caracteres.
 
 ### Proveedor Sociedad: RUC Empresas
 
 - **RUC** (13 dígitos exactos)
 - Aplicable a empresas/sociedades comerciales
-- Formato: 10 primeros dígitos de cédula del representante + 3 dígitos de secuencia de empresa (generalmente 001)
-- Ejemplo válido: `1234567890001`
+- No se deriva de la identificación de la Persona contacto; se valida como RUC no natural según la política local vigente.
+
+La normalización compartida aplica trim, elimina espacios y convierte a mayúsculas; cédula/RUC deben cumplir la estructura numérica del validador, sin convertir letras o signos en dígitos. Pasar estructura/algoritmo local no prueba existencia, actividad o inscripción SRI. Las reglas de cada comprobante y su autorización son una capa separada; no se cambian algoritmos tributarios ni FE-EC.
 
 ### Tipo Contribuyente
 
-Campo `tipo_contribuyente_id` (2 caracteres) clasifica según SRI:
-- `"01"` - Persona Natural
-- `"02"` - Empresa/Sociedad
-- Otros códigos SRI según catálogo
+TipoContribuyente expone `aplica_persona_natural` y `aplica_sociedad`. Backfill aprobado de `f8b2c5d30e71`:
+
+| Código | Natural | Sociedad |
+|---|---|---|
+| `01`, `03` | Sí | No |
+| `02`, `05` | No | Sí |
+| `04` | Sí | Sí |
+| Desconocido | No | No |
+
+Los servicios consultan flags y `activo`, no el texto del nombre ni una inferencia libre de códigos.
 
 ---
 
@@ -1227,7 +1281,7 @@ Todas las entidades del módulo Directorio implementan **borrado lógico** (soft
 Todas las entidades registran:
 - `creado_en`: Timestamp de creación (auto)
 - `actualizado_en`: Timestamp de última actualización (auto)
-- `usuario_auditoria`: Usuario que realizó la acción (campo requerido en POST/PUT)
+- `usuario_auditoria`: actor derivado del contexto autenticado; no se solicita en formularios productivos. Su aceptación opcional para scripts/tests confiables no permite suplantar el JWT.
 
 ### Relaciones Críticas
 
@@ -1245,6 +1299,24 @@ Todas las entidades registran:
 - `proveedor_sociedad.ruc` debe ser único
 - `persona.identificacion` debe ser único
 
+### Preflight y migraciones
+
+Antes de migrar datos existentes, ejecutar el preflight de solo lectura en un entorno autorizado:
+
+```bash
+PYTHONPATH=src poetry run python scripts/audit_directory_integrity.py --host 127.0.0.1 --port 5435 --summary
+```
+
+No modifica settings ni datos. Incluye activos e inactivos, flags de estado y referencias históricas detectadas por FKs; `--summary` omite claves e IDs. Las únicas opciones CLI son `--summary`, `--host`, `--port`: no hay flags de reparación, actor o exclusión de inactivos. Un conflicto da salida `1` y bloquea la migración; resolver administrativamente sin borrar/fusionar automáticamente ni perder referencias de compras, ventas o cartera. Repetir el preflight tras la resolución autorizada.
+
+Cadena del cambio: `e7a1b4c29d60` (unicidad Proveedor Persona, identificación normalizada, `lower(trim(username))` y nombre TipoCliente) -> `f8b2c5d30e71` (flags semánticos) -> `a9c3d6e41f82` (bootstrap de siete módulos y permisos). Aplicación y upgrade/downgrade requieren verificación separada; esta guía no certifica migraciones aplicadas ni pruebas PostgreSQL/E2E.
+
+### Límites y deuda posterior
+
+Consumidor Final sigue con `cliente_id=null`, sin registro falso. Cliente Sociedad no existe en este alcance: no se declara venta B2B completa. Persona/maestros comerciales son globales, no un directorio comercial aislado por tenant; solo Empleado valida su Empresa/contexto. Stock, referencias históricas, cartera y FE-EC no se modifican por este refactor.
+
+Capacidades futuras propuestas para planificar en OpenSpec (no implementadas ni registradas por esta actualización documental): `customer-society` (Cliente jurídico y ventas B2B), `directory-company-enablement` (habilitación/visibilidad comercial por Empresa), `employee-multiemployment` (relaciones laborales múltiples), `customer-portal` (acceso externo delimitado), `foreign-identification-and-fiscal-plate` (identificación exterior/placa y reglas por comprobante). Su registro y priorización requieren cambios posteriores; esta documentación no cierra esa deuda.
+
 ---
 
 ## Matriz de Errores por Endpoint
@@ -1255,12 +1327,12 @@ Todas las entidades registran:
 | `GET /api/v1/personas/{id}` | `200`, `404` |
 | `POST /api/v1/personas` | `201`, `400`, `409`, `422` |
 | `PUT /api/v1/personas/{id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/personas/{id}` | `204`, `404` |
+| `DELETE /api/v1/personas/{id}` | `204`, `404`, `409` |
 | `GET /api/v1/tipos-cliente` | `200`, `422` |
 | `GET /api/v1/tipos-cliente/{id}` | `200`, `404` |
 | `POST /api/v1/tipos-cliente` | `201`, `409`, `422` |
 | `PUT /api/v1/tipos-cliente/{id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/tipos-cliente/{id}` | `204`, `404` |
+| `DELETE /api/v1/tipos-cliente/{id}` | `204`, `404`, `409` |
 | `GET /api/v1/clientes` | `200`, `422` |
 | `GET /api/v1/clientes/{id}` | `200`, `404` |
 | `POST /api/v1/clientes` | `201`, `404`, `409`, `422` |

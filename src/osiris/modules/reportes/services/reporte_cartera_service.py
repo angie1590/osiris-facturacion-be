@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.sucursal.entity import Sucursal
@@ -33,29 +34,29 @@ class ReporteCarteraService:
         empresa_scope = self._empresa_scope()
         stmt = (
             select(
-                Venta.cliente_id,
-                func.coalesce(func.sum(CuentaPorCobrar.saldo_pendiente), 0).label("saldo"),
+                col(Venta.cliente_id),
+                func.coalesce(func.sum(col(CuentaPorCobrar.saldo_pendiente)), 0).label("saldo"),
             )
             .select_from(CuentaPorCobrar)
-            .join(Venta, Venta.id == CuentaPorCobrar.venta_id)
+            .join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
             .where(
-                CuentaPorCobrar.activo.is_(True),
-                Venta.activo.is_(True),
-                CuentaPorCobrar.saldo_pendiente > Decimal("0"),
-                CuentaPorCobrar.estado.in_(
+                col(CuentaPorCobrar.activo).is_(True),
+                col(Venta.activo).is_(True),
+                col(CuentaPorCobrar.saldo_pendiente) > Decimal("0"),
+                col(CuentaPorCobrar.estado).in_(
                     [EstadoCuentaPorCobrar.PENDIENTE, EstadoCuentaPorCobrar.PARCIAL]
                 ),
-                Venta.cliente_id.is_not(None),
+                col(Venta.cliente_id).is_not(None),
             )
-            .group_by(Venta.cliente_id)
-            .order_by(func.sum(CuentaPorCobrar.saldo_pendiente).desc())
+            .group_by(col(Venta.cliente_id))
+            .order_by(func.sum(col(CuentaPorCobrar.saldo_pendiente)).desc())
         )
         if empresa_scope is not None:
-            stmt = stmt.where(Venta.empresa_id == empresa_scope)
+            stmt = stmt.where(col(Venta.empresa_id) == empresa_scope)
         rows = session.exec(stmt).all()
         return [
             ReporteCarteraCobrarItemRead(
-                cliente_id=cliente_id,
+                cliente_id=cast(UUID, cliente_id),
                 saldo_pendiente=q2(self._d(saldo)),
             )
             for cliente_id, saldo in rows
@@ -65,26 +66,26 @@ class ReporteCarteraService:
         empresa_scope = self._empresa_scope()
         stmt = (
             select(
-                Compra.proveedor_id,
-                func.coalesce(func.sum(CuentaPorPagar.saldo_pendiente), 0).label("saldo"),
+                col(Compra.proveedor_id),
+                func.coalesce(func.sum(col(CuentaPorPagar.saldo_pendiente)), 0).label("saldo"),
             )
             .select_from(CuentaPorPagar)
-            .join(Compra, Compra.id == CuentaPorPagar.compra_id)
+            .join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
             .where(
-                CuentaPorPagar.activo.is_(True),
-                Compra.activo.is_(True),
-                CuentaPorPagar.saldo_pendiente > Decimal("0"),
-                CuentaPorPagar.estado.in_(
+                col(CuentaPorPagar.activo).is_(True),
+                col(Compra.activo).is_(True),
+                col(CuentaPorPagar.saldo_pendiente) > Decimal("0"),
+                col(CuentaPorPagar.estado).in_(
                     [EstadoCuentaPorPagar.PENDIENTE, EstadoCuentaPorPagar.PARCIAL]
                 ),
             )
-            .group_by(Compra.proveedor_id)
-            .order_by(func.sum(CuentaPorPagar.saldo_pendiente).desc())
+            .group_by(col(Compra.proveedor_id))
+            .order_by(func.sum(col(CuentaPorPagar.saldo_pendiente)).desc())
         )
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(
-                Sucursal.activo.is_(True),
-                Sucursal.empresa_id == empresa_scope,
+            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                col(Sucursal.activo).is_(True),
+                col(Sucursal.empresa_id) == empresa_scope,
             )
         rows = session.exec(stmt).all()
         return [

@@ -5,7 +5,9 @@ from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, select, col
+from sqlmodel.sql.expression import SelectOfScalar
 
 from osiris.core.db import engine as default_engine
 from osiris.modules.sri.core_sri.models import (
@@ -37,7 +39,7 @@ class OrquestadorFEService:
     def __init__(
         self,
         *,
-        db_engine=None,
+        db_engine: Engine | None = None,
         venta_sri_service: VentaSriAsyncService | None = None,
         retencion_sri_service: SriAsyncService | None = None,
     ) -> None:
@@ -48,7 +50,7 @@ class OrquestadorFEService:
     @staticmethod
     def _backoff_minutes(intentos: int) -> int:
         # 1er retry: 2min, luego 4, 8, 16...
-        return 2 ** max(intentos, 1)
+        return int(2 ** max(intentos, 1))
 
     @staticmethod
     def _obtener_documento_activo(
@@ -61,7 +63,7 @@ class OrquestadorFEService:
             select(DocumentoElectronico).where(
                 DocumentoElectronico.tipo_documento == tipo_documento,
                 DocumentoElectronico.referencia_id == referencia_id,
-                DocumentoElectronico.activo.is_(True),
+                col(DocumentoElectronico.activo).is_(True),
             )
         ).first()
 
@@ -77,9 +79,9 @@ class OrquestadorFEService:
             .where(
                 DocumentoSriCola.entidad_id == referencia_id,
                 DocumentoSriCola.tipo_documento == tipo_documento_cola,
-                DocumentoSriCola.activo.is_(True),
+                col(DocumentoSriCola.activo).is_(True),
             )
-            .order_by(DocumentoSriCola.creado_en.desc())
+            .order_by(col(DocumentoSriCola.creado_en).desc())
         ).first()
 
     def encolar_documento(
@@ -114,8 +116,8 @@ class OrquestadorFEService:
             if documento is None:
                 documento = session.exec(
                     select(DocumentoElectronico).where(
-                        DocumentoElectronico.venta_id == referencia_id,
-                        DocumentoElectronico.activo.is_(True),
+                        col(DocumentoElectronico.venta_id) == referencia_id,
+                        col(DocumentoElectronico.activo).is_(True),
                     )
                 ).first()
                 if documento is None:
@@ -291,7 +293,7 @@ class OrquestadorFEService:
                     now=now_dt,
                     incluir_no_vencidos=False,
                     tipo_documento=None,
-                ).order_by(DocumentoElectronico.creado_en.asc())
+                ).order_by(col(DocumentoElectronico.creado_en).asc())
             ).all()
         )
         ids = [doc.id for doc in documentos]
@@ -305,18 +307,18 @@ class OrquestadorFEService:
         now: datetime | None = None,
         incluir_no_vencidos: bool = True,
         tipo_documento: TipoDocumentoElectronico | None = None,
-    ):
+    ) -> SelectOfScalar[DocumentoElectronico]:
         now_dt = now or datetime.utcnow()
         stmt = select(DocumentoElectronico).where(
-            DocumentoElectronico.activo.is_(True),
-            DocumentoElectronico.estado_sri.in_(
+            col(DocumentoElectronico.activo).is_(True),
+            col(DocumentoElectronico.estado_sri).in_(
                 [EstadoDocumentoElectronico.EN_COLA, EstadoDocumentoElectronico.RECIBIDO]
             ),
             DocumentoElectronico.intentos < 5,
         )
         if not incluir_no_vencidos:
             stmt = stmt.where(
-                or_(DocumentoElectronico.next_retry_at.is_(None), DocumentoElectronico.next_retry_at <= now_dt)
+                or_(col(DocumentoElectronico.next_retry_at).is_(None), col(DocumentoElectronico.next_retry_at) <= now_dt)
             )
         if tipo_documento is not None:
             stmt = stmt.where(DocumentoElectronico.tipo_documento == tipo_documento)
@@ -330,7 +332,7 @@ class OrquestadorFEService:
         offset: int,
         incluir_no_vencidos: bool = True,
         tipo_documento: TipoDocumentoElectronico = TipoDocumentoElectronico.FACTURA,
-    ):
+    ) -> tuple[list[DocumentoElectronico], int]:
         stmt = self._stmt_documentos_pendientes(
             incluir_no_vencidos=incluir_no_vencidos,
             tipo_documento=tipo_documento,
@@ -338,7 +340,7 @@ class OrquestadorFEService:
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         items = list(
             session.exec(
-                stmt.order_by(DocumentoElectronico.creado_en.asc())
+                stmt.order_by(col(DocumentoElectronico.creado_en).asc())
                 .offset(offset)
                 .limit(limit)
             ).all()
@@ -374,7 +376,7 @@ class OrquestadorFEService:
                 self._stmt_documentos_pendientes(
                     incluir_no_vencidos=incluir_no_vencidos,
                     tipo_documento=tipo_documento,
-                ).order_by(DocumentoElectronico.creado_en.asc())
+                ).order_by(col(DocumentoElectronico.creado_en).asc())
             ).all()
         )
         return self.procesar_documentos_ids([doc.id for doc in documentos])

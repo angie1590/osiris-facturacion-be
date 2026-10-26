@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, List
 from datetime import date
 from uuid import UUID
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 from fastapi import HTTPException
 
 from osiris.domain.repository import BaseRepository
@@ -27,13 +27,13 @@ class ImpuestoCatalogoRepository(BaseRepository):
             fecha = date.today()
 
         stmt = select(ImpuestoCatalogo).where(
-            ImpuestoCatalogo.activo.is_(True),
-            ImpuestoCatalogo.vigente_desde <= fecha,
+            col(ImpuestoCatalogo.activo).is_(True),
+            col(ImpuestoCatalogo.vigente_desde) <= fecha,
         )
 
         # vigente_hasta puede ser null (vigencia indefinida) o >= fecha
         stmt = stmt.where(
-            (ImpuestoCatalogo.vigente_hasta.is_(None)) | (ImpuestoCatalogo.vigente_hasta >= fecha)
+            (col(ImpuestoCatalogo.vigente_hasta).is_(None)) | (col(ImpuestoCatalogo.vigente_hasta) >= fecha)
         )
 
         return list(session.exec(stmt).all())
@@ -47,16 +47,16 @@ class ImpuestoCatalogoRepository(BaseRepository):
     ) -> List[ImpuestoCatalogo]:
         """Lista impuestos por tipo, opcionalmente filtrando por vigencia."""
         stmt = select(ImpuestoCatalogo).where(
-            ImpuestoCatalogo.tipo_impuesto == tipo,
-            ImpuestoCatalogo.activo.is_(True)
+            col(ImpuestoCatalogo.tipo_impuesto) == tipo,
+            col(ImpuestoCatalogo.activo).is_(True)
         )
 
         if solo_vigentes:
             if fecha is None:
                 fecha = date.today()
             stmt = stmt.where(
-                ImpuestoCatalogo.vigente_desde <= fecha,
-                (ImpuestoCatalogo.vigente_hasta.is_(None)) | (ImpuestoCatalogo.vigente_hasta >= fecha)
+                col(ImpuestoCatalogo.vigente_desde) <= fecha,
+                (col(ImpuestoCatalogo.vigente_hasta).is_(None)) | (col(ImpuestoCatalogo.vigente_hasta) >= fecha)
             )
 
         return list(session.exec(stmt).all())
@@ -80,8 +80,8 @@ class ImpuestoCatalogoRepository(BaseRepository):
     def validar_duplicado_codigo_descripcion(
         self,
         session: Session,
-        codigo_sri: str,
-        descripcion: str,
+        codigo_sri: str | None,
+        descripcion: str | None,
         exclude_id: Optional[UUID] = None
     ) -> None:
         """Valida que no exista otro impuesto con la misma combinación de código SRI y descripción."""
@@ -91,7 +91,7 @@ class ImpuestoCatalogoRepository(BaseRepository):
         )
 
         if exclude_id:
-            stmt = stmt.where(ImpuestoCatalogo.id != exclude_id)
+            stmt = stmt.where(col(ImpuestoCatalogo.id) != exclude_id)
 
         existente = session.exec(stmt).first()
         if existente:

@@ -45,10 +45,18 @@ def test_categoria_atributo_crud_completo():
         assert r.status_code == 201, f"Failed to create categoria: {r.text}"
         categoria_id = r.json()["id"]
 
+        owner_response = client.post(f"{BASE}/categorias", json={
+            "nombre": f"Cat_AtributoOrigen_{unique_suffix}",
+            "es_padre": False,
+            "usuario_auditoria": "smoke_test",
+        })
+        assert owner_response.status_code == 201
+
         # 2. Crear atributo
         atributo_data = {
             "nombre": f"atrib_test_{unique_suffix}",
             "tipo_dato": "string",
+            "categoria_id": owner_response.json()["id"],
             "usuario_auditoria": "smoke_test"
         }
         r = client.post(f"{BASE}/atributos", json=atributo_data)
@@ -158,12 +166,21 @@ def test_categoria_atributo_herencia_de_atributos():
         assert r.status_code == 201
         hoja_id = r.json()["id"]
 
+        owner_response = client.post(f"{BASE}/categorias", json={
+            "nombre": f"Cat_AtributosOrigen_{unique_suffix}",
+            "es_padre": False,
+            "usuario_auditoria": "smoke_test",
+        })
+        assert owner_response.status_code == 201
+        owner_id = owner_response.json()["id"]
+
         # Crear 3 atributos
         atributos = []
         for i, nivel in enumerate(["raiz", "padre", "hoja"]):
             atributo_data = {
                 "nombre": f"atrib_{nivel}_{unique_suffix}",
                 "tipo_dato": "string",
+                "categoria_id": owner_id,
                 "usuario_auditoria": "smoke_test"
             }
             r = client.post(f"{BASE}/atributos", json=atributo_data)

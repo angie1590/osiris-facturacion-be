@@ -1,8 +1,10 @@
 # src/domain/base_models.py
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 from sqlalchemy import event
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Mapper
 from sqlmodel import SQLModel, Field
 
 from osiris.core.audit_context import get_current_user_id
@@ -47,7 +49,7 @@ class BaseTable(SQLModel, table=False):
 
 
 @event.listens_for(BaseTable, "before_insert", propagate=True)
-def _audit_before_insert(_mapper, _connection, target):
+def _audit_before_insert(_mapper: Mapper[Any], _connection: Connection, target: Any) -> None:
     now = datetime.utcnow()
     if hasattr(target, "creado_en"):
         target.creado_en = getattr(target, "creado_en", None) or now
@@ -67,7 +69,7 @@ def _audit_before_insert(_mapper, _connection, target):
 
 
 @event.listens_for(BaseTable, "before_update", propagate=True)
-def _audit_before_update(_mapper, _connection, target):
+def _audit_before_update(_mapper: Mapper[Any], _connection: Connection, target: Any) -> None:
     if hasattr(target, "actualizado_en"):
         target.actualizado_en = datetime.utcnow()
 

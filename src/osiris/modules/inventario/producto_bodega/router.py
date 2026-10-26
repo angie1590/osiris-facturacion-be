@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from uuid import UUID
+from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from osiris.core.db import get_session
+from osiris.modules.inventario.producto.entity import ProductoBodega
 from osiris.modules.inventario.producto_bodega.models import (
     ProductoBodegaAsignarRequest,
     ProductoBodegaRead,
@@ -15,7 +18,7 @@ from osiris.modules.inventario.producto_bodega.models import (
 from osiris.modules.inventario.producto_bodega.service import ProductoBodegaService
 
 
-COMMON_RESPONSES = {
+COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Solicitud inválida para la operación de inventario."},
     404: {"description": "Recurso no encontrado."},
     409: {"description": "Conflicto de negocio o recurso inactivo."},
@@ -37,7 +40,7 @@ def asignar_producto_a_bodega(
     bodega_id: UUID,
     payload: ProductoBodegaAsignarRequest,
     session: Session = Depends(get_session),
-):
+) -> ProductoBodega:
     """Crea la relación producto-bodega validando bodega activa y reglas de fracciones."""
     return service.create(
         session,
@@ -61,7 +64,7 @@ def actualizar_cantidad_producto_bodega(
     bodega_id: UUID,
     payload: ProductoBodegaUpdate,
     session: Session = Depends(get_session),
-):
+) -> ProductoBodega:
     """Actualiza (o crea) la cantidad de un producto en una bodega."""
     return service.update_cantidad(
         session,
@@ -80,7 +83,7 @@ def actualizar_cantidad_producto_bodega(
 def listar_bodegas_por_producto(
     producto_id: UUID,
     session: Session = Depends(get_session),
-):
+) -> list[dict[str, UUID | str | Decimal]]:
     """Devuelve el inventario referencial del producto por bodega activa."""
     return service.get_bodegas_by_producto(session, producto_id)
 
@@ -93,7 +96,7 @@ def listar_bodegas_por_producto(
 def listar_productos_por_bodega(
     bodega_id: UUID,
     session: Session = Depends(get_session),
-):
+) -> list[dict[str, UUID | str | Decimal]]:
     """Devuelve los productos activos asignados a la bodega."""
     return service.get_productos_by_bodega(session, bodega_id)
 
@@ -108,7 +111,7 @@ def consultar_stock_disponible(
     producto_id: UUID | None = Query(default=None),
     bodega_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> list[dict[str, UUID | str | Decimal]]:
     """Consulta rápida de stock por producto/bodega para reducir carga de consultas complejas."""
     return service.get_stock_disponible(
         session,

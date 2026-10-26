@@ -3,11 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
+from sqlalchemy import Index, text
 from sqlmodel import Field
 from osiris.domain.base_models import BaseTable, AuditMixin, SoftDeleteMixin
 
 class Usuario(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     __tablename__ = "tbl_usuario"
+    __table_args__ = (
+        Index("uq_tbl_usuario_username_normalizado", text("lower(trim(username))"), unique=True),
+    )
 
     persona_id: UUID = Field(foreign_key="tbl_persona.id", nullable=False, unique=True)
     rol_id: UUID = Field(foreign_key="tbl_rol.id", nullable=False)

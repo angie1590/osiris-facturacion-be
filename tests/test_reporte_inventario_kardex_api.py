@@ -167,6 +167,10 @@ def test_kardex_default_dates_calcula_un_anio():
             tracked_statements.append(statement)
             return super().exec(statement, *args, **kwargs)
 
+        def execute(self, statement, *args, **kwargs):
+            tracked_statements.append(statement)
+            return super().execute(statement, *args, **kwargs)
+
     def override_get_session():
         with TrackingSession(engine) as session:
             yield session

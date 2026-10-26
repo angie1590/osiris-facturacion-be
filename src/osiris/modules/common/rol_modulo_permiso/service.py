@@ -1,6 +1,6 @@
 from typing import List
 from uuid import UUID
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 from osiris.domain.service import BaseService
 from .repository import RolModuloPermisoRepository
 from .entity import RolModuloPermiso
@@ -8,7 +8,7 @@ from .models import ModuloPermisoRead
 from osiris.modules.common.modulo.entity import Modulo
 
 
-class RolModuloPermisoService(BaseService):
+class RolModuloPermisoService(BaseService[RolModuloPermiso]):
     repo = RolModuloPermisoRepository()
 
     def obtener_permisos_por_rol(self, session: Session, rol_id: UUID) -> List[ModuloPermisoRead]:
@@ -20,12 +20,12 @@ class RolModuloPermisoService(BaseService):
             select(Modulo, RolModuloPermiso)
             .outerjoin(
                 RolModuloPermiso,
-                (Modulo.id == RolModuloPermiso.modulo_id)
-                & (RolModuloPermiso.rol_id == rol_id)
-                & (RolModuloPermiso.activo.is_(True))
+                (col(Modulo.id) == RolModuloPermiso.modulo_id)
+                & (col(RolModuloPermiso.rol_id) == rol_id)
+                & (col(RolModuloPermiso.activo).is_(True))
             )
-            .where(Modulo.activo.is_(True))
-            .order_by(Modulo.orden, Modulo.nombre)
+            .where(col(Modulo.activo).is_(True))
+            .order_by(col(Modulo.orden), Modulo.nombre)
         )
 
         results = session.exec(statement).all()

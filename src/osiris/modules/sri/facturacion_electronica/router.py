@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from uuid import UUID
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, Response
@@ -23,7 +24,7 @@ from osiris.modules.sri.facturacion_electronica.services.venta_sri_async_service
 from osiris.utils.pagination import build_pagination_meta
 
 
-COMMON_RESPONSES = {
+COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Solicitud inválida para estado del documento."},
     403: {"description": "Usuario sin autorización para el documento solicitado."},
     404: {"description": "Documento o recurso relacionado no encontrado."},
@@ -40,7 +41,7 @@ orquestador_fe_service = OrquestadorFEService(
 
 
 @fe_router.post("/procesar-cola", response_model=FEProcesarColaRead, summary="Procesar cola SRI", responses=COMMON_RESPONSES)
-def procesar_cola_fe(session: Session = Depends(get_session)):
+def procesar_cola_fe(session: Session = Depends(get_session)) -> dict[str, int]:
     """Procesa documentos electrónicos pendientes en cola aplicando reglas de reintentos y contingencia."""
     procesados = orquestador_fe_service.procesar_cola(session)
     return {"procesados": procesados}
@@ -53,7 +54,7 @@ def listar_cola_fe(
     incluir_no_vencidos: bool = Query(True),
     tipo_documento: TipoDocumentoElectronico = Query(default=TipoDocumentoElectronico.FACTURA),
     session: Session = Depends(get_session),
-):
+) -> dict[str, object]:
     """Lista documentos en cola FE pendientes por procesar para operación manual o monitoreo."""
     items, total = orquestador_fe_service.listar_documentos_pendientes(
         session,
@@ -71,7 +72,7 @@ def listar_cola_fe(
     summary="Procesar un documento FE manualmente",
     responses=COMMON_RESPONSES,
 )
-def procesar_documento_manual(documento_id: UUID):
+def procesar_documento_manual(documento_id: UUID) -> dict[str, int | list[UUID] | list[str]]:
     """Fuerza el procesamiento inmediato de un documento puntual de facturación electrónica."""
     procesados, ids_procesados, errores = orquestador_fe_service.procesar_documentos_ids([documento_id])
     return {"procesados": procesados, "ids_procesados": ids_procesados, "errores": errores}
@@ -83,7 +84,7 @@ def procesar_documento_manual(documento_id: UUID):
     summary="Procesar varios/todos los documentos FE manualmente",
     responses=COMMON_RESPONSES,
 )
-def procesar_documentos_manual(payload: FEProcesarDocumentosRequest, session: Session = Depends(get_session)):
+def procesar_documentos_manual(payload: FEProcesarDocumentosRequest, session: Session = Depends(get_session)) -> dict[str, int | list[UUID] | list[str]]:
     """Procesa manualmente varios documentos o toda la cola FE según criterios enviados."""
     if payload.documento_ids:
         procesados, ids_procesados, errores = orquestador_fe_service.procesar_documentos_ids(payload.documento_ids)
@@ -101,14 +102,14 @@ def procesar_documentos_manual(payload: FEProcesarDocumentosRequest, session: Se
 
 
 @documentos_router.get("/{documento_id}/xml", summary="Descargar XML autorizado", responses=COMMON_RESPONSES, response_class=Response)
-def descargar_xml_documento(documento_id: UUID, session: Session = Depends(get_session)):
+def descargar_xml_documento(documento_id: UUID, session: Session = Depends(get_session)) -> Response:
     """Devuelve el XML autorizado de un documento electrónico si ya fue aceptado por el SRI."""
     xml = documento_service.obtener_xml_autorizado(session, documento_id=documento_id, user_id=get_current_user_id())
     return Response(content=xml, media_type="application/xml")
 
 
 @documentos_router.get("/{documento_id}/ride", summary="Descargar RIDE", responses=COMMON_RESPONSES, response_class=HTMLResponse)
-def descargar_ride_documento(documento_id: UUID, session: Session = Depends(get_session)):
+def descargar_ride_documento(documento_id: UUID, session: Session = Depends(get_session)) -> HTMLResponse:
     """Genera una representación HTML del RIDE para visualización y descarga controlada."""
     html = documento_service.obtener_ride_html(session, documento_id=documento_id, user_id=get_current_user_id())
     return HTMLResponse(content=html)

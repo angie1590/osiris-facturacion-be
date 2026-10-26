@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
+from typing import Callable
 
 from dotenv import dotenv_values
 from pydantic import Field, ValidationError, field_validator, model_validator
@@ -29,6 +31,7 @@ class Settings(BaseSettings):
     FEEC_P12_PASSWORD: str | None = None
     FEEC_XSD_PATH: Path | None = None
     FEEC_AMBIENTE: str = Field(default="pruebas")  # pruebas | produccion
+    FEEC_MOCK_ENABLED: bool = False
     SRI_MODO_EMISION: str = Field(default="ELECTRONICO")
     FEEC_TIPO_EMISION: str
     FEEC_REGIMEN: str
@@ -53,6 +56,11 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
 
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    @classmethod
+    def from_env_values(cls, values: Mapping[str, str | None]) -> Settings:
+        constructor: Callable[..., Settings] = cls
+        return constructor(**values)
 
     @field_validator("FEEC_AMBIENTE")
     @classmethod
@@ -124,7 +132,7 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def _validate_feec_files(self):
+    def _validate_feec_files(self) -> Settings:
         if self.SRI_MODO_EMISION == "ELECTRONICO":
             missing_fields = []
             if not self.FEEC_XSD_PATH:
@@ -153,9 +161,9 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL", "DB_URL_ALEMBIC", mode="before")
     @classmethod
-    def _normalize_postgres_driver(cls, value):
+    def _normalize_postgres_driver(cls, value: object) -> str | None:
         if value in (None, ""):
-            return value
+            return None if value is None else ""
 
         db_url = str(value)
         if db_url.startswith("postgresql+psycopg2://"):
@@ -185,7 +193,7 @@ def load_settings() -> Settings:
 
     try:
         # Mismo comportamiento local y docker: .env.<ENV> + override por entorno real.
-        return Settings(**merged_values)
+        return Settings.from_env_values(merged_values)
     except ValidationError as exc:
         lines = [f"Error de configuracion ({env_file.name}):"]
         for err in exc.errors():

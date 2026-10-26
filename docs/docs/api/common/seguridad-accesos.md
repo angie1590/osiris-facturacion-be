@@ -9,6 +9,20 @@ import TabItem from '@theme/TabItem';
 
 # Common - Seguridad y Accesos
 
+## Gobierno de la matriz de permisos
+
+Las consultas de Roles y Modulos requieren autenticacion. Las escrituras de
+Roles/Modulos y las asignaciones de Roles-Modulos-Permisos requieren
+`USUARIOS.puede_actualizar`; consultar asignaciones requiere
+`USUARIOS.puede_leer`. Proteger solo el CRUD del Directorio sin proteger esa
+matriz permitiria evadir el RBAC. La consulta de permisos/menu propios exige
+autenticacion; consultar los de otra cuenta exige permiso de lectura de Usuarios.
+
+Las denegaciones del Directorio se auditan despues de revertir cualquier trabajo
+pendiente, sin guardar el cuerpo del request, passwords, tokens ni codigos de
+aprobacion. Persona, credenciales y los roles siguen validandose en backend aunque
+el frontend oculte las acciones.
+
 ## Esquema de Autenticación Recomendado
 
 Según la arquitectura actual (`main.py` + `audit_context.py`):
@@ -28,7 +42,41 @@ Según la arquitectura actual (`main.py` + `audit_context.py`):
 ## Política de Registros Activos (Frontend)
 
 - El frontend debe consultar por defecto con `only_active=true` para mostrar cuentas y catálogos vigentes.
-- `only_active=false` retorna registros inactivos (borrado lógico) para módulos administrativos.
+- En Usuarios, `only_active=false` incluye activos e inactivos; `estado=inactivo` selecciona solo inactivos.
+
+## Contrato de Seguridad del Directorio
+
+Los módulos autorizados son `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES`, `PROVEEDORES_PERSONA`, `PROVEEDORES_SOCIEDAD`, `EMPLEADOS`, `USUARIOS`, con permisos efectivos `leer`, `crear`, `actualizar`, `eliminar`. GET de cuentas exige `USUARIOS.leer`, alta `crear`, PUT/reactivación/reset/verificación/invalidación `actualizar`, baja `eliminar`. El backend valida cada llamada y el Rol activo; ocultar controles o usar un nombre de rol no autoriza.
+
+Bootstrap aprobado: la migración `a9c3d6e41f82`, posterior a `f8b2c5d30e71` (y esta a `e7a1b4c29d60`), crea los siete módulos y concede CRUD completo a roles activos cuyo nombre normalizado es `administrador` o `admin`, solo si falta la asignación. No sobrescribe permisos administrados existentes. El resto no recibe acceso inicial y requiere concesión explícita. Esta identificación por nombre es la excepción de bootstrap, no una regla de autorización en runtime ni un bypass permanente de Administrador.
+
+El actor de escrituras proviene del JWT. `usuario_auditoria` opcional conserva compatibilidad con scripts/tests confiables, pero no debe enviarse en payloads productivos ni sustituye al actor autenticado. Los ejemplos de lectura pueden mostrarlo; no es un campo editable de cuenta.
+
+Usuario es una composición 1:1 global con Persona natural, independiente de Empleado. POST admite exactamente `persona_id` o `persona_nueva`; el resolver exige `PERSONAS.leer` y añade `PERSONAS.crear` solo si inserta. Persona, Rol y credenciales se validan antes del commit exterior; no hacer POST Persona y después POST Usuario. El alta devuelve conflicto si la Persona ya tiene cuenta activa o inactiva.
+
+`username` se guarda con trim/lowercase, longitud 3..120 y unicidad global incluyendo inactivos, protegida por el índice SQL `lower(trim(username))`. Un cambio efectivo de `persona_id` o `username` devuelve `409`; el mismo valor puede ser idempotente. `rol_id` sí puede cambiar a un Rol activo. PUT no acepta `activo` como sustituto de acciones explícitas.
+
+Todas las escrituras de contraseñas exigen ocho o más caracteres: Usuario, Usuario embebido de Empleado, PUT, change-password y reset. El login no rechaza contraseñas históricas solo por su longitud. Alta/reset marcan cambio obligatorio; el cambio correcto lo elimina. PUT de contraseña y reset invalidan sesiones previas. La baja de Usuario, la baja de Empleado asociado, logout e invalidación administrativa revocan access/refresh mediante `sesion_invalidada_en`.
+
+UsuarioRead proyecta `persona`, `rol_nombre`, `requiere_cambio_password`, `tiene_codigo_aprobacion` y alias `codigo_aprobacion_configurado`, además de los campos base. No incluye `password`, hashes, código de aprobación ni tokens. Reset devuelve `password_temporal` solo en esa respuesta autorizada: no recuperarla por GET, ni guardarla en cache, storage, URL o logs. El frontend la descarta al cerrar el resultado.
+
+### POST /api/v1/usuarios/{usuario_id}/reactivar
+
+Exige `USUARIOS.actualizar`, Persona activa (y `PERSONAS.leer`) y Rol activo. Conserva el ID y no crea cuenta nueva. Si hay Empleado inactivo, devuelve `409` salvo decisión administrativa explícita:
+
+```json
+{
+  "confirmar_empleado_inactivo": true
+}
+```
+
+Reactivar Empleado no reactiva Usuario; restaurar cuenta es una acción separada auditada. El cuerpo es opcional cuando no se necesita esa confirmación. No automatizar la confirmación tras un conflicto.
+
+### POST /api/v1/usuarios/{usuario_id}/invalidar-sesion
+
+Exige `USUARIOS.actualizar`; responde `204` sin cuerpo y actualiza la marca de invalidación, sin dar de baja la cuenta. Tokens access/refresh anteriores no deben reutilizarse.
+
+Los listados Usuarios aceptan `q`, `identificacion`, `estado`, `sort_by`, `sort_order` y alias `sort_direction`, con whitelist y paginación del servidor. Errores: `401` autenticación, `403` permiso, `404` inexistente, `409` duplicado/inactivo/inmutabilidad, `422` DTO/filtro inválido y `400` regla funcional.
 
 ## GET /api/v1/usuarios
 Lista usuarios de forma paginada para administración de accesos y gobierno de cuentas.
@@ -75,7 +123,7 @@ Lista usuarios de forma paginada para administración de accesos y gobierno de c
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 422">
 
 ```json
 {
@@ -132,7 +180,7 @@ Obtiene el detalle de una cuenta para auditoría, soporte y validación de asign
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 404">
 
 ```json
 {
@@ -161,8 +209,7 @@ Crea un usuario operativo, valida referencias activas y almacena la contraseña 
   "rol_id": "7ebca6cc-5c68-4600-bf7f-0a64b482f6e8",
   "username": "j.perez",
   "password": "ClaveSegura2026",
-  "requiere_cambio_password": true,
-  "usuario_auditoria": "admin"
+  "requiere_cambio_password": true
 }
 ```
 
@@ -184,11 +231,17 @@ Crea un usuario operativo, valida referencias activas y almacena la contraseña 
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 422">
 
 ```json
 {
-  "detail": "La contraseña es obligatoria"
+  "detail": [
+    {
+      "loc": ["body", "password"],
+      "msg": "Field required",
+      "type": "missing"
+    }
+  ]
 }
 ```
 
@@ -199,15 +252,16 @@ Diccionario de Datos
 
 | Campo | Tipo | Obligatorio | Descripción y Restricciones |
 |---|---|---|---|
-| persona_id | UUID | Sí | Debe existir y estar activa; además es única por usuario. |
+| persona_id | UUID | Alternativa | Persona activa; excluyente con `persona_nueva` y única por Usuario. |
+| persona_nueva | PersonaCreate | Alternativa | Borrador natural guardado junto con Usuario; excluyente con `persona_id`. |
 | rol_id | UUID | Sí | Debe existir y estar activo. |
-| username | string | Sí | Único a nivel sistema. Máximo 120 caracteres en persistencia. |
-| password | string | Sí | Mínimo 6 caracteres; se transforma a `password_hash`. |
+| username | string | Sí | Trim/lowercase, 3..120 caracteres, único incluyendo cuentas inactivas. |
+| password | string | Sí | Mínimo 8 caracteres; se transforma a `password_hash`. |
 | requiere_cambio_password | bool | No | Default `true`. Fuerza cambio en primer ingreso. |
-| usuario_auditoria | string | Sí | Usuario que registra la operación. |
+| usuario_auditoria | string | No | Compatibilidad técnica; en producción se omite y prevalece el JWT. |
 
 ## PUT /api/v1/usuarios/\{item_id\}
-Actualiza solo rol, contraseña o auditoría de una cuenta sin cambiar identidad base del usuario.
+Actualiza rol activo o contraseña de una cuenta sin cambiar identidad base; el actor se deriva del contexto autenticado.
 
 <Tabs>
 <TabItem value="request" label="Request">
@@ -219,8 +273,7 @@ Actualiza solo rol, contraseña o auditoría de una cuenta sin cambiar identidad
   },
   "body": {
     "rol_id": "9ee25f03-4760-4b7a-a3bf-4f48f93f4cc7",
-    "password": "NuevaClaveFuerte2026",
-    "usuario_auditoria": "seguridad"
+    "password": "NuevaClaveFuerte2026"
   }
 }
 ```
@@ -243,14 +296,14 @@ Actualiza solo rol, contraseña o auditoría de una cuenta sin cambiar identidad
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 422">
 
 ```json
 {
   "detail": [
     {
       "loc": ["body", "password"],
-      "msg": "String should have at least 6 characters",
+      "msg": "String should have at least 8 characters",
       "type": "string_too_short"
     }
   ]
@@ -266,8 +319,8 @@ Diccionario de Datos
 |---|---|---|---|
 | item_id | UUID | Sí | Identificador del usuario a actualizar. |
 | rol_id | UUID | No | Si se envía, debe existir y estar activo. |
-| password | string | No | Si se envía, mínimo 6 caracteres; se guarda como hash. |
-| usuario_auditoria | string | No | Usuario que ejecuta la modificación. |
+| password | string | No | Si se envía, mínimo 8 caracteres; se guarda como hash e invalida sesiones previas. |
+| usuario_auditoria | string | No | Compatibilidad técnica; no enviar desde frontend productivo. |
 
 ## DELETE /api/v1/usuarios/\{item_id\}
 Aplica baja lógica de usuario para bloquear su operación sin perder trazabilidad histórica.
@@ -291,7 +344,7 @@ null
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 404">
 
 ```json
 {
@@ -310,6 +363,8 @@ Diccionario de Datos
 
 ## GET /api/v1/usuarios/\{usuario_id\}/permisos
 Retorna el conjunto de permisos por módulo según el rol del usuario para decisiones de autorización en frontend y backend.
+
+El usuario autenticado puede consultar sus propios permisos sin `USUARIOS.leer`; consultar los de otro Usuario exige `USUARIOS.leer`. No es un endpoint público ni requiere permiso de lectura de Usuarios para cargar los permisos propios.
 
 <Tabs>
 <TabItem value="request" label="Request">
@@ -347,7 +402,7 @@ Retorna el conjunto de permisos por módulo según el rol del usuario para decis
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 404">
 
 ```json
 {
@@ -366,6 +421,8 @@ Diccionario de Datos
 
 ## GET /api/v1/usuarios/\{usuario_id\}/menu
 Retorna únicamente módulos visibles en menú para el usuario (solo permisos con lectura habilitada).
+
+La consulta propia requiere autenticación; consultar el menú ajeno exige `USUARIOS.leer`.
 
 <Tabs>
 <TabItem value="request" label="Request">
@@ -395,7 +452,7 @@ Retorna únicamente módulos visibles en menú para el usuario (solo permisos co
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 404">
 
 ```json
 {
@@ -415,6 +472,8 @@ Diccionario de Datos
 ## POST /api/v1/usuarios/\{usuario_id\}/reset-password
 Regenera una contraseña temporal para recuperación segura y marca la cuenta para cambio obligatorio al siguiente inicio de sesión.
 
+Exige `USUARIOS.actualizar`, invalida sesiones anteriores y devuelve `409` si Usuario está inactivo. El cuerpo es opcional; no enviar actor desde producción.
+
 <Tabs>
 <TabItem value="request" label="Request">
 
@@ -423,9 +482,7 @@ Regenera una contraseña temporal para recuperación segura y marca la cuenta pa
   "path": {
     "usuario_id": "b7ec7d8d-1a3f-4a90-a84f-5d9b73a5ed58"
   },
-  "body": {
-    "usuario_auditoria": "soporte"
-  }
+  "body": {}
 }
 ```
 
@@ -442,7 +499,7 @@ Regenera una contraseña temporal para recuperación segura y marca la cuenta pa
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 409">
 
 ```json
 {
@@ -458,7 +515,7 @@ Diccionario de Datos
 | Campo | Tipo | Obligatorio | Descripción y Restricciones |
 |---|---|---|---|
 | usuario_id | UUID | Sí | Identificador del usuario a resetear. |
-| usuario_auditoria | string | No | Usuario que deja evidencia de la operación. |
+| usuario_auditoria | string | No | Compatibilidad técnica; el actor autenticado manda. |
 
 ## POST /api/v1/usuarios/\{usuario_id\}/verify-password
 Verifica si una clave en texto plano coincide con la contraseña actual del usuario.
@@ -485,7 +542,7 @@ true
 ```
 
 </TabItem>
-<TabItem value="error" label="Error 400">
+<TabItem value="error" label="Error 404">
 
 ```json
 {

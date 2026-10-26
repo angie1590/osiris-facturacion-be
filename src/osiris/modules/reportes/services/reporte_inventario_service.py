@@ -4,8 +4,8 @@ from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
-from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlalchemy import func, select as sa_select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.inventario.movimientos.models import (
@@ -51,35 +51,35 @@ class ReporteInventarioService:
 
     def obtener_valoracion_inventario(self, session: Session) -> ReporteInventarioValoracionRead:
         empresa_scope = self._empresa_scope()
-        cantidad_expr = func.coalesce(func.sum(InventarioStock.cantidad_actual), 0)
+        cantidad_expr = func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), 0)
         valor_expr = func.coalesce(
-            func.sum(InventarioStock.cantidad_actual * InventarioStock.costo_promedio_vigente),
+            func.sum(col(InventarioStock.cantidad_actual) * col(InventarioStock.costo_promedio_vigente)),
             0,
         )
 
         stmt = (
             select(
-                Producto.id,
-                Producto.nombre,
+                col(Producto.id),
+                col(Producto.nombre),
                 cantidad_expr.label("cantidad_actual"),
                 valor_expr.label("valor_total"),
             )
             .select_from(Producto)
             .join(
                 InventarioStock,
-                (InventarioStock.producto_id == Producto.id) & (InventarioStock.activo.is_(True)),
+                (col(InventarioStock.producto_id) == col(Producto.id)) & (col(InventarioStock.activo).is_(True)),
                 isouter=True,
             )
-            .where(Producto.activo.is_(True))
-            .group_by(Producto.id, Producto.nombre)
-            .order_by(Producto.nombre.asc())
+            .where(col(Producto.activo).is_(True))
+            .group_by(col(Producto.id), col(Producto.nombre))
+            .order_by(col(Producto.nombre).asc())
         )
         if empresa_scope is not None:
             stmt = (
-                stmt.join(Bodega, Bodega.id == InventarioStock.bodega_id)
+                stmt.join(Bodega, col(Bodega.id) == col(InventarioStock.bodega_id))
                 .where(
-                    Bodega.activo.is_(True),
-                    Bodega.empresa_id == empresa_scope,
+                    col(Bodega.activo).is_(True),
+                    col(Bodega.empresa_id) == empresa_scope,
                 )
             )
 
@@ -112,7 +112,7 @@ class ReporteInventarioService:
         self,
         session: Session,
         *,
-        producto_id,
+        producto_id: UUID,
         fecha_inicio: date | None = None,
         fecha_fin: date | None = None,
         sucursal_id: UUID | None = None,
@@ -125,37 +125,37 @@ class ReporteInventarioService:
             raise ValueError("fecha_inicio no puede ser mayor que fecha_fin.")
 
         stmt = (
-            select(
-                MovimientoInventario.fecha,
-                MovimientoInventario.tipo_movimiento,
-                MovimientoInventario.referencia_documento,
-                MovimientoInventarioDetalle.cantidad,
-                MovimientoInventarioDetalle.costo_unitario,
+            sa_select(
+                col(MovimientoInventario.fecha),
+                col(MovimientoInventario.tipo_movimiento),
+                col(MovimientoInventario.referencia_documento),
+                col(MovimientoInventarioDetalle.cantidad),
+                col(MovimientoInventarioDetalle.costo_unitario),
             )
             .select_from(MovimientoInventarioDetalle)
-            .join(MovimientoInventario, MovimientoInventario.id == MovimientoInventarioDetalle.movimiento_inventario_id)
+            .join(MovimientoInventario, col(MovimientoInventario.id) == col(MovimientoInventarioDetalle.movimiento_inventario_id))
             .where(
-                MovimientoInventarioDetalle.activo.is_(True),
-                MovimientoInventario.activo.is_(True),
-                MovimientoInventario.estado == EstadoMovimientoInventario.CONFIRMADO,
-                MovimientoInventarioDetalle.producto_id == producto_id,
-                MovimientoInventario.fecha >= inicio,
-                MovimientoInventario.fecha <= fin,
+                col(MovimientoInventarioDetalle.activo).is_(True),
+                col(MovimientoInventario.activo).is_(True),
+                col(MovimientoInventario.estado) == EstadoMovimientoInventario.CONFIRMADO,
+                col(MovimientoInventarioDetalle.producto_id) == producto_id,
+                col(MovimientoInventario.fecha) >= inicio,
+                col(MovimientoInventario.fecha) <= fin,
             )
             .order_by(
-                MovimientoInventario.fecha.asc(),
-                MovimientoInventario.creado_en.asc(),
-                MovimientoInventarioDetalle.id.asc(),
+                col(MovimientoInventario.fecha).asc(),
+                col(MovimientoInventario.creado_en).asc(),
+                col(MovimientoInventarioDetalle.id).asc(),
             )
         )
         if sucursal_id is not None or empresa_scope is not None:
-            stmt = stmt.join(Bodega, Bodega.id == MovimientoInventario.bodega_id).where(Bodega.activo.is_(True))
+            stmt = stmt.join(Bodega, col(Bodega.id) == col(MovimientoInventario.bodega_id)).where(col(Bodega.activo).is_(True))
             if empresa_scope is not None:
-                stmt = stmt.where(Bodega.empresa_id == empresa_scope)
+                stmt = stmt.where(col(Bodega.empresa_id) == empresa_scope)
             if sucursal_id is not None:
-                stmt = stmt.where(Bodega.sucursal_id == sucursal_id)
+                stmt = stmt.where(col(Bodega.sucursal_id) == sucursal_id)
 
-        rows = session.exec(stmt).all()
+        rows = session.execute(stmt).all()
         saldo = Decimal("0.0000")
         movimientos: list[ReporteInventarioKardexMovimientoRead] = []
         for mov_fecha, tipo_movimiento, referencia_documento, cantidad, costo_unitario in rows:

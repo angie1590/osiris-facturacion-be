@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from uuid import UUID
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
@@ -20,7 +21,7 @@ from osiris.modules.inventario.movimientos.schemas import (
 from osiris.modules.inventario.movimientos.services.movimiento_inventario_service import MovimientoInventarioService
 
 
-COMMON_RESPONSES = {
+COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Solicitud inválida para la operación de inventario."},
     404: {"description": "Recurso no encontrado."},
 }
@@ -36,7 +37,7 @@ service = MovimientoInventarioService()
     summary="Crear movimiento de inventario",
     responses=COMMON_RESPONSES,
 )
-def crear_movimiento_borrador(payload: MovimientoInventarioCreate, session: Session = Depends(get_session)):
+def crear_movimiento_borrador(payload: MovimientoInventarioCreate, session: Session = Depends(get_session)) -> MovimientoInventarioRead:
     """Crea un movimiento en estado borrador sin afectar saldos hasta su confirmación."""
     movimiento = service.crear_movimiento_borrador(session, payload)
     return service.obtener_movimiento_read(session, movimiento.id)
@@ -52,7 +53,7 @@ def confirmar_movimiento(
     movimiento_id: UUID,
     payload: MovimientoInventarioConfirmRequest,
     session: Session = Depends(get_session),
-):
+) -> MovimientoInventarioRead:
     """Confirma el movimiento aplicando locks, regla anti-negativos y valoración NIIF."""
     movimiento = service.confirmar_movimiento(
         session,
@@ -73,7 +74,7 @@ def anular_movimiento(
     movimiento_id: UUID,
     payload: MovimientoInventarioAnularRequest,
     session: Session = Depends(get_session),
-):
+) -> MovimientoInventarioRead:
     """Anula movimiento con reverso automático de stock cuando el original está confirmado."""
     movimiento = service.anular_movimiento(
         session,
@@ -94,7 +95,7 @@ def anular_movimiento(
 def transferir_entre_bodegas(
     payload: TransferenciaInventarioCreate,
     session: Session = Depends(get_session),
-):
+) -> TransferenciaInventarioRead:
     """Ejecuta una transferencia atómica: egreso en origen + ingreso en destino."""
     return service.transferir_entre_bodegas(session, payload)
 
@@ -106,7 +107,7 @@ def obtener_kardex(
     fecha_inicio: date | None = Query(default=None),
     fecha_fin: date | None = Query(default=None),
     session: Session = Depends(get_session),
-):
+) -> dict[str, object]:
     """Retorna movimientos cronológicos del producto en bodega con saldos acumulados."""
     return service.obtener_kardex(
         session,
@@ -118,6 +119,6 @@ def obtener_kardex(
 
 
 @router.get("/valoracion", response_model=ValoracionResponse, summary="Consultar valoración de inventario", responses=COMMON_RESPONSES)
-def obtener_valoracion(session: Session = Depends(get_session)):
+def obtener_valoracion(session: Session = Depends(get_session)) -> dict[str, object]:
     """Devuelve la valoración de inventario por bodega y total global a costo promedio vigente."""
     return service.obtener_valoracion(session)

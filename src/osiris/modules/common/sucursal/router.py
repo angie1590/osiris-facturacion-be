@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
@@ -7,6 +8,7 @@ from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
+from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.common.sucursal.models import SucursalCreate, SucursalRead, SucursalUpdate
 from osiris.modules.common.sucursal.service import SucursalService
 
@@ -21,13 +23,13 @@ def list_sucursales(
     offset: int = Query(0, ge=0),
     only_active: bool = Query(True),
     session: Session = Depends(get_session),
-):
+) -> dict[str, Any]:
     items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset)
     return {"items": items, "meta": meta}
 
 
 @router.get("/{item_id}", response_model=SucursalRead)
-def get_sucursal(item_id: UUID = Path(...), session: Session = Depends(get_session)):
+def get_sucursal(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> Sucursal:
     obj = service.get(session, item_id)
     if not obj:
         raise HTTPException(status_code=404, detail=f"Sucursal {item_id} not found")
@@ -35,7 +37,7 @@ def get_sucursal(item_id: UUID = Path(...), session: Session = Depends(get_sessi
 
 
 @router.post("", response_model=SucursalRead, status_code=status.HTTP_201_CREATED)
-def create_sucursal(payload: SucursalCreate = Body(...), session: Session = Depends(get_session)):
+def create_sucursal(payload: SucursalCreate = Body(...), session: Session = Depends(get_session)) -> Sucursal:
     return service.create(session, payload.model_dump(exclude_unset=True))
 
 
@@ -44,7 +46,7 @@ def update_sucursal(
     item_id: UUID = Path(...),
     payload: SucursalUpdate = Body(...),
     session: Session = Depends(get_session),
-):
+) -> Sucursal:
     updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Sucursal {item_id} not found")
@@ -52,7 +54,7 @@ def update_sucursal(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_sucursal(item_id: UUID = Path(...), session: Session = Depends(get_session)):
+def delete_sucursal(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
         raise HTTPException(status_code=404, detail=f"Sucursal {item_id} not found")

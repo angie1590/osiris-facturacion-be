@@ -30,7 +30,7 @@ def listar_catalogo_impuestos(
     tipo_impuesto: Optional[TipoImpuesto] = None,
     solo_vigentes: bool = False,
     session: Session = Depends(get_session),
-):
+) -> PaginatedResponse[ImpuestoCatalogoRead]:
     if tipo_impuesto:
         if solo_vigentes:
             items = service.list_by_tipo(session, tipo_impuesto, solo_vigentes=True)
@@ -50,30 +50,30 @@ def listar_catalogo_impuestos(
 def listar_impuestos_activos_vigentes(
     fecha: Optional[date] = Query(None, description="Fecha de vigencia (por defecto hoy)"),
     session: Session = Depends(get_session),
-):
+) -> list[ImpuestoCatalogoRead]:
     items = service.list_activos_vigentes(session, fecha)
     return [ImpuestoCatalogoRead.model_validate(item) for item in items]
 
 
 @router.get("/{impuesto_id}", response_model=ImpuestoCatalogoRead)
-def obtener_impuesto(impuesto_id: UUID, session: Session = Depends(get_session)):
+def obtener_impuesto(impuesto_id: UUID, session: Session = Depends(get_session)) -> ImpuestoCatalogoRead:
     impuesto = service.get(session, impuesto_id)
     return ImpuestoCatalogoRead.model_validate(impuesto)
 
 
 @router.post("", response_model=ImpuestoCatalogoRead, status_code=201)
-def crear_impuesto(payload: ImpuestoCatalogoCreate, session: Session = Depends(get_session)):
+def crear_impuesto(payload: ImpuestoCatalogoCreate, session: Session = Depends(get_session)) -> ImpuestoCatalogoRead:
     impuesto = service.create(session, payload.model_dump(exclude_unset=True))
     return ImpuestoCatalogoRead.model_validate(impuesto)
 
 
 @router.put("/{impuesto_id}", response_model=ImpuestoCatalogoRead)
-def actualizar_impuesto(impuesto_id: UUID, payload: ImpuestoCatalogoUpdate, session: Session = Depends(get_session)):
+def actualizar_impuesto(impuesto_id: UUID, payload: ImpuestoCatalogoUpdate, session: Session = Depends(get_session)) -> ImpuestoCatalogoRead:
     impuesto = service.update(session, impuesto_id, payload.model_dump(exclude_unset=True))
     return ImpuestoCatalogoRead.model_validate(impuesto)
 
 
 @router.delete("/{impuesto_id}", status_code=204)
-def desactivar_impuesto(impuesto_id: UUID, session: Session = Depends(get_session)):
+def desactivar_impuesto(impuesto_id: UUID, session: Session = Depends(get_session)) -> None:
     service.delete(session, impuesto_id)
     return None

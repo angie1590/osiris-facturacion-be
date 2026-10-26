@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.sri.core_sri.models import (
@@ -15,7 +16,7 @@ from osiris.modules.sri.core_sri.models import (
     Venta,
 )
 from osiris.modules.sri.core_sri.all_schemas import PagoCxCCreate, q2
-from osiris.utils.pagination import build_pagination_meta
+from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 
 
@@ -33,40 +34,40 @@ class CuentaPorCobrarService:
         only_active: bool = True,
         estado: EstadoCuentaPorCobrar | None = None,
         texto: str | None = None,
-    ):
-        stmt = select(CuentaPorCobrar, Venta).join(Venta, Venta.id == CuentaPorCobrar.venta_id)
+    ) -> tuple[list[dict[str, UUID | date | Decimal | str | None]], PaginationMeta]:
+        stmt = select(CuentaPorCobrar, Venta).join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
-            stmt = stmt.where(Venta.empresa_id == empresa_scope)
+            stmt = stmt.where(col(Venta.empresa_id) == empresa_scope)
         if only_active:
             stmt = stmt.where(
-                CuentaPorCobrar.activo.is_(True),
-                Venta.activo.is_(True),
+                col(CuentaPorCobrar.activo).is_(True),
+                col(Venta.activo).is_(True),
             )
         else:
             stmt = stmt.execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
 
         if estado is not None:
-            stmt = stmt.where(CuentaPorCobrar.estado == estado)
+            stmt = stmt.where(col(CuentaPorCobrar.estado) == estado)
 
         if texto:
             pattern = f"%{texto.strip()}%"
             stmt = stmt.where(
                 or_(
-                    Venta.identificacion_comprador.ilike(pattern),
-                    Venta.secuencial_formateado.ilike(pattern),
+                    col(Venta.identificacion_comprador).ilike(pattern),
+                    col(Venta.secuencial_formateado).ilike(pattern),
                 )
             )
 
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         rows = list(
             session.exec(
-                stmt.order_by(Venta.fecha_emision.desc(), CuentaPorCobrar.creado_en.desc())
+                stmt.order_by(col(Venta.fecha_emision).desc(), col(CuentaPorCobrar.creado_en).desc())
                 .offset(offset)
                 .limit(limit)
             ).all()
         )
-        items = [
+        items: list[dict[str, UUID | date | Decimal | str | None]] = [
             {
                 "id": cxc.id,
                 "venta_id": cxc.venta_id,
@@ -132,11 +133,11 @@ class CuentaPorCobrarService:
         empresa_scope = self._empresa_scope()
         cxc = session.exec(
             select(CuentaPorCobrar)
-            .join(Venta, Venta.id == CuentaPorCobrar.venta_id)
+            .join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
             .where(
-                CuentaPorCobrar.venta_id == venta_id,
-                CuentaPorCobrar.activo.is_(True),
-                Venta.activo.is_(True),
+                col(CuentaPorCobrar.venta_id) == venta_id,
+                col(CuentaPorCobrar.activo).is_(True),
+                col(Venta.activo).is_(True),
             )
         ).one_or_none()
         if not cxc:
@@ -160,11 +161,11 @@ class CuentaPorCobrarService:
             empresa_scope = self._empresa_scope()
             cxc = session.exec(
                 select(CuentaPorCobrar)
-                .join(Venta, Venta.id == CuentaPorCobrar.venta_id)
+                .join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
                 .where(
-                    CuentaPorCobrar.id == cuenta_por_cobrar_id,
-                    CuentaPorCobrar.activo.is_(True),
-                    Venta.activo.is_(True),
+                    col(CuentaPorCobrar.id) == cuenta_por_cobrar_id,
+                    col(CuentaPorCobrar.activo).is_(True),
+                    col(Venta.activo).is_(True),
                 )
                 .with_for_update()
             ).one_or_none()

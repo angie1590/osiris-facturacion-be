@@ -2,7 +2,7 @@
 from typing import Literal
 from uuid import UUID
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from osiris.modules.common.usuario.entity import Usuario
 from osiris.modules.common.rol_modulo_permiso.entity import RolModuloPermiso
@@ -36,7 +36,7 @@ def verificar_permiso(
         return False
 
     # Obtener módulo
-    modulo_stmt = select(Modulo).where(Modulo.codigo == codigo_modulo, Modulo.activo.is_(True))
+    modulo_stmt = select(Modulo).where(Modulo.codigo == codigo_modulo, col(Modulo.activo).is_(True))
     modulo = session.exec(modulo_stmt).first()
     if not modulo:
         return False
@@ -45,7 +45,7 @@ def verificar_permiso(
     permiso_stmt = select(RolModuloPermiso).where(
         RolModuloPermiso.rol_id == usuario.rol_id,
         RolModuloPermiso.modulo_id == modulo.id,
-        RolModuloPermiso.activo.is_(True)
+        col(RolModuloPermiso.activo).is_(True)
     )
     permiso = session.exec(permiso_stmt).first()
 
@@ -70,7 +70,7 @@ def requiere_permiso(
     usuario_id: UUID,
     codigo_modulo: str,
     accion: AccionPermiso
-):
+) -> None:
     """
     Valida permiso y lanza HTTPException 403 si no tiene acceso.
     Útil para usar en endpoints.

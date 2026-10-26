@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
@@ -7,6 +8,7 @@ from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
+from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.empresa.models import EmpresaCreate, EmpresaRead, EmpresaUpdate
 from osiris.modules.common.empresa.service import EmpresaService
 from osiris.modules.common.empresa.signature_service import MAX_P12_BYTES, EmpresaSignatureService
@@ -28,7 +30,7 @@ signature_service = EmpresaSignatureService()
     response_model=SriRucCertificatePreview,
     summary="Previsualizar datos de certificado RUC PDF",
 )
-async def importar_certificado_ruc(file: UploadFile = File(...)):
+async def importar_certificado_ruc(file: UploadFile = File(...)) -> SriRucCertificatePreview:
     if file.content_type != "application/pdf":
         raise certificate_error("Debe seleccionar un archivo PDF.")
     content = await file.read(MAX_CERTIFICATE_BYTES + 1)
@@ -49,7 +51,7 @@ async def cargar_firma_electronica(
     file: UploadFile = File(...),
     password: str = Form(..., min_length=1),
     session: Session = Depends(get_session),
-):
+) -> EmpresaRead:
     content = await file.read(MAX_P12_BYTES + 1)
     await file.close()
     empresa = signature_service.save(
@@ -70,7 +72,7 @@ async def cargar_firma_electronica(
 def eliminar_firma_electronica(
     item_id: UUID,
     session: Session = Depends(get_session),
-):
+) -> EmpresaRead:
     return EmpresaRead.model_validate(signature_service.delete(session, item_id))
 
 
@@ -80,13 +82,13 @@ def list_empresas(
     offset: int = Query(0, ge=0),
     only_active: bool = Query(True),
     session: Session = Depends(get_session),
-):
+) -> dict[str, Any]:
     items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset)
     return {"items": items, "meta": meta}
 
 
 @router.get("/{item_id}", response_model=EmpresaRead)
-def get_empresa(item_id: UUID = Path(...), session: Session = Depends(get_session)):
+def get_empresa(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> Empresa:
     obj = service.get(session, item_id)
     if not obj:
         raise HTTPException(status_code=404, detail=f"Empresa {item_id} not found")
@@ -94,7 +96,7 @@ def get_empresa(item_id: UUID = Path(...), session: Session = Depends(get_sessio
 
 
 @router.post("", response_model=EmpresaRead, status_code=status.HTTP_201_CREATED)
-def create_empresa(payload: EmpresaCreate = Body(...), session: Session = Depends(get_session)):
+def create_empresa(payload: EmpresaCreate = Body(...), session: Session = Depends(get_session)) -> Empresa:
     return service.create(session, payload.model_dump(exclude_unset=True))
 
 
@@ -103,7 +105,7 @@ def update_empresa(
     item_id: UUID = Path(...),
     payload: EmpresaUpdate = Body(...),
     session: Session = Depends(get_session),
-):
+) -> Empresa:
     updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Empresa {item_id} not found")
@@ -111,7 +113,7 @@ def update_empresa(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_empresa(item_id: UUID = Path(...), session: Session = Depends(get_session)):
+def delete_empresa(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
         raise HTTPException(status_code=404, detail=f"Empresa {item_id} not found")

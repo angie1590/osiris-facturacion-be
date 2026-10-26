@@ -1,12 +1,14 @@
 from __future__ import annotations
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 import sqlalchemy as sa
 from sqlalchemy import CheckConstraint, event
 from sqlalchemy.inspection import inspect as sa_inspect
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import InstanceState, Mapper
 from sqlmodel import Field
 
 from osiris.domain.base_models import BaseTable, AuditMixin, SoftDeleteMixin
@@ -125,7 +127,7 @@ class Empresa(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     )
 
 
-def _serialize_for_audit(value):
+def _serialize_for_audit(value: Any) -> Any:
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, datetime):
@@ -134,11 +136,11 @@ def _serialize_for_audit(value):
 
 
 @event.listens_for(Empresa, "after_update")
-def _registrar_auditoria_regimen_modo_after_update(_mapper, connection, target: Empresa):
-    state = sa_inspect(target)
+def _registrar_auditoria_regimen_modo_after_update(_mapper: Mapper[Empresa], connection: Connection, target: Empresa) -> None:
+    state: InstanceState[Empresa] = sa_inspect(target, raiseerr=True)
 
-    before_json: dict[str, str] = {}
-    after_json: dict[str, str] = {}
+    before_json: dict[str, Any] = {}
+    after_json: dict[str, Any] = {}
     hubo_cambio = False
 
     tracked_fields = (

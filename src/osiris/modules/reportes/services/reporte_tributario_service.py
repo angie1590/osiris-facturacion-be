@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import case, func
-from sqlmodel import Session, select
+from sqlalchemy import case, func, select as sa_select
+from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement, Label
+from sqlalchemy.sql.expression import SQLColumnExpression
+from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.punto_emision.entity import PuntoEmision
@@ -37,7 +41,7 @@ class ReporteTributarioService:
         return Decimal(str(value))
 
     @staticmethod
-    def _period_filters(session: Session, field, mes: int, anio: int):
+    def _period_filters(session: Session, field: SQLColumnExpression[date], mes: int, anio: int) -> list[ColumnElement[bool]]:
         bind = session.get_bind()
         dialect = bind.dialect.name if bind is not None else ""
         if dialect == "postgresql":
@@ -60,25 +64,25 @@ class ReporteTributarioService:
     ) -> ReporteImpuestosMensualRead:
         empresa_scope = self._empresa_scope()
         ventas_filtros = [
-            Venta.activo.is_(True),
-            Venta.estado != EstadoVenta.ANULADA,
-            *self._period_filters(session, Venta.fecha_emision, mes, anio),
+            col(Venta.activo).is_(True),
+            col(Venta.estado) != EstadoVenta.ANULADA,
+            *self._period_filters(session, col(Venta.fecha_emision), mes, anio),
         ]
         if empresa_scope is not None:
-            ventas_filtros.append(Venta.empresa_id == empresa_scope)
+            ventas_filtros.append(col(Venta.empresa_id) == empresa_scope)
         if sucursal_id is not None:
-            ventas_filtros.append(PuntoEmision.sucursal_id == sucursal_id)
+            ventas_filtros.append(col(PuntoEmision.sucursal_id) == sucursal_id)
 
-        ventas_stmt = select(
-            func.coalesce(func.sum(Venta.subtotal_0), 0),
-            func.coalesce(func.sum(Venta.subtotal_12), 0),
-            func.coalesce(func.sum(Venta.subtotal_15), 0),
-            func.coalesce(func.sum(Venta.monto_iva), 0),
-            func.coalesce(func.sum(Venta.valor_total), 0),
-            func.count(Venta.id),
+        ventas_stmt = sa_select(
+            func.coalesce(func.sum(col(Venta.subtotal_0)), 0),
+            func.coalesce(func.sum(col(Venta.subtotal_12)), 0),
+            func.coalesce(func.sum(col(Venta.subtotal_15)), 0),
+            func.coalesce(func.sum(col(Venta.monto_iva)), 0),
+            func.coalesce(func.sum(col(Venta.valor_total)), 0),
+            func.count(col(Venta.id)),
         ).select_from(Venta)
         if sucursal_id is not None:
-            ventas_stmt = ventas_stmt.join(PuntoEmision, PuntoEmision.id == Venta.punto_emision_id)
+            ventas_stmt = ventas_stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
         ventas_stmt = ventas_stmt.where(*ventas_filtros)
         (
             ventas_subtotal_0,
@@ -87,7 +91,7 @@ class ReporteTributarioService:
             ventas_monto_iva,
             ventas_total,
             ventas_count,
-        ) = session.exec(ventas_stmt).one()
+        ) = session.execute(ventas_stmt).one()
         ventas = ReportePre104BloqueRead(
             base_0=q2(self._d(ventas_subtotal_0)),
             base_iva=q2(self._d(ventas_subtotal_12) + self._d(ventas_subtotal_15)),
@@ -97,25 +101,25 @@ class ReporteTributarioService:
         )
 
         compras_filtros = [
-            Compra.activo.is_(True),
-            Compra.estado != EstadoCompra.ANULADA,
-            *self._period_filters(session, Compra.fecha_emision, mes, anio),
+            col(Compra.activo).is_(True),
+            col(Compra.estado) != EstadoCompra.ANULADA,
+            *self._period_filters(session, col(Compra.fecha_emision), mes, anio),
         ]
         if sucursal_id is not None:
-            compras_filtros.append(Compra.sucursal_id == sucursal_id)
+            compras_filtros.append(col(Compra.sucursal_id) == sucursal_id)
 
-        compras_stmt = select(
-            func.coalesce(func.sum(Compra.subtotal_0), 0),
-            func.coalesce(func.sum(Compra.subtotal_12), 0),
-            func.coalesce(func.sum(Compra.subtotal_15), 0),
-            func.coalesce(func.sum(Compra.monto_iva), 0),
-            func.coalesce(func.sum(Compra.valor_total), 0),
-            func.count(Compra.id),
+        compras_stmt = sa_select(
+            func.coalesce(func.sum(col(Compra.subtotal_0)), 0),
+            func.coalesce(func.sum(col(Compra.subtotal_12)), 0),
+            func.coalesce(func.sum(col(Compra.subtotal_15)), 0),
+            func.coalesce(func.sum(col(Compra.monto_iva)), 0),
+            func.coalesce(func.sum(col(Compra.valor_total)), 0),
+            func.count(col(Compra.id)),
         )
         if empresa_scope is not None:
-            compras_stmt = compras_stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(
-                Sucursal.activo.is_(True),
-                Sucursal.empresa_id == empresa_scope,
+            compras_stmt = compras_stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                col(Sucursal.activo).is_(True),
+                col(Sucursal.empresa_id) == empresa_scope,
             )
         compras_stmt = compras_stmt.where(*compras_filtros)
         (
@@ -125,7 +129,7 @@ class ReporteTributarioService:
             monto_iva,
             total,
             total_documentos,
-        ) = session.exec(compras_stmt).one()
+        ) = session.execute(compras_stmt).one()
 
         compras = ReportePre104BloqueRead(
             base_0=q2(self._d(subtotal_0)),
@@ -136,68 +140,69 @@ class ReporteTributarioService:
         )
 
         codigo_pasivo_expr = case(
-            (RetencionDetalle.tipo == TipoRetencionSRI.RENTA, "1"),
-            (RetencionDetalle.tipo == TipoRetencionSRI.IVA, "2"),
-            else_=RetencionDetalle.codigo_retencion_sri,
+            (col(RetencionDetalle.tipo) == TipoRetencionSRI.RENTA, "1"),
+            (col(RetencionDetalle.tipo) == TipoRetencionSRI.IVA, "2"),
+            else_=col(RetencionDetalle.codigo_retencion_sri),
         )
         pasivo_stmt = (
             select(
                 codigo_pasivo_expr.label("codigo_sri"),
-                func.coalesce(func.sum(RetencionDetalle.valor_retenido), 0).label("total"),
+                func.coalesce(func.sum(col(RetencionDetalle.valor_retenido)), 0).label("total"),
             )
             .select_from(RetencionDetalle)
-            .join(Retencion, Retencion.id == RetencionDetalle.retencion_id)
-            .join(Compra, Compra.id == Retencion.compra_id)
+            .join(Retencion, col(Retencion.id) == col(RetencionDetalle.retencion_id))
+            .join(Compra, col(Compra.id) == col(Retencion.compra_id))
             .where(
-                RetencionDetalle.activo.is_(True),
-                Retencion.activo.is_(True),
-                Compra.activo.is_(True),
-                Retencion.estado == EstadoRetencion.EMITIDA,
-                Compra.estado != EstadoCompra.ANULADA,
-                *self._period_filters(session, Compra.fecha_emision, mes, anio),
+                col(RetencionDetalle.activo).is_(True),
+                col(Retencion.activo).is_(True),
+                col(Compra.activo).is_(True),
+                col(Retencion.estado) == EstadoRetencion.EMITIDA,
+                col(Compra.estado) != EstadoCompra.ANULADA,
+                *self._period_filters(session, col(Compra.fecha_emision), mes, anio),
             )
             .group_by(codigo_pasivo_expr)
             .order_by(codigo_pasivo_expr.asc())
         )
         if empresa_scope is not None:
-            pasivo_stmt = pasivo_stmt.join(Sucursal, Sucursal.id == Compra.sucursal_id).where(
-                Sucursal.activo.is_(True),
-                Sucursal.empresa_id == empresa_scope,
+            pasivo_stmt = pasivo_stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                col(Sucursal.activo).is_(True),
+                col(Sucursal.empresa_id) == empresa_scope,
             )
         if sucursal_id is not None:
-            pasivo_stmt = pasivo_stmt.where(Compra.sucursal_id == sucursal_id)
+            pasivo_stmt = pasivo_stmt.where(col(Compra.sucursal_id) == sucursal_id)
         pasivo_rows = session.exec(pasivo_stmt).all()
         pasivo = {str(codigo_sri): q2(self._d(total_retenido)) for codigo_sri, total_retenido in pasivo_rows}
 
-        credito_stmt = (
-            select(
-                RetencionRecibidaDetalle.codigo_impuesto_sri.label("codigo_sri"),
-                func.coalesce(func.sum(RetencionRecibidaDetalle.valor_retenido), 0).label("total"),
+        codigo_credito_expr: Label[str] = col(RetencionRecibidaDetalle.codigo_impuesto_sri).label("codigo_sri")
+        credito_stmt: Select[tuple[str, Decimal]] = (
+            sa_select(
+            codigo_credito_expr,
+                func.coalesce(func.sum(col(RetencionRecibidaDetalle.valor_retenido)), 0).label("total"),
             )
             .select_from(RetencionRecibidaDetalle)
             .join(
                 RetencionRecibida,
-                RetencionRecibida.id == RetencionRecibidaDetalle.retencion_recibida_id,
+                col(RetencionRecibida.id) == col(RetencionRecibidaDetalle.retencion_recibida_id),
             )
-            .join(Venta, Venta.id == RetencionRecibida.venta_id)
+            .join(Venta, col(Venta.id) == col(RetencionRecibida.venta_id))
             .where(
-                RetencionRecibidaDetalle.activo.is_(True),
-                RetencionRecibida.activo.is_(True),
-                RetencionRecibida.estado == EstadoRetencionRecibida.APLICADA,
-                *self._period_filters(session, RetencionRecibida.fecha_emision, mes, anio),
+                col(RetencionRecibidaDetalle.activo).is_(True),
+                col(RetencionRecibida.activo).is_(True),
+                col(RetencionRecibida.estado) == EstadoRetencionRecibida.APLICADA,
+                *self._period_filters(session, col(RetencionRecibida.fecha_emision), mes, anio),
             )
-            .group_by(RetencionRecibidaDetalle.codigo_impuesto_sri)
-            .order_by(RetencionRecibidaDetalle.codigo_impuesto_sri.asc())
+            .group_by(col(RetencionRecibidaDetalle.codigo_impuesto_sri))
+            .order_by(col(RetencionRecibidaDetalle.codigo_impuesto_sri).asc())
         )
         if empresa_scope is not None:
-            credito_stmt = credito_stmt.where(Venta.empresa_id == empresa_scope)
+            credito_stmt = credito_stmt.where(col(Venta.empresa_id) == empresa_scope)
         if sucursal_id is not None:
             credito_stmt = (
                 credito_stmt
-                .join(PuntoEmision, PuntoEmision.id == Venta.punto_emision_id)
-                .where(PuntoEmision.sucursal_id == sucursal_id)
+                .join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
+                .where(col(PuntoEmision.sucursal_id) == sucursal_id)
             )
-        credito_rows = session.exec(credito_stmt).all()
+        credito_rows = session.execute(credito_stmt).all()
         credito = {str(codigo_sri): q2(self._d(total_retenido)) for codigo_sri, total_retenido in credito_rows}
 
         return ReporteImpuestosMensualRead(

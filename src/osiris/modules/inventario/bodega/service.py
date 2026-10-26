@@ -4,8 +4,7 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 from decimal import Decimal
-from sqlalchemy.orm import Session
-from sqlmodel import select
+from sqlmodel import Session, select, col
 from sqlalchemy import func
 from fastapi import HTTPException
 
@@ -26,11 +25,11 @@ class BodegaService:
         sucursal_id: Optional[UUID] = None,
     ) -> list[Bodega]:
         empresa_scope = resolve_company_scope(requested_company_id=empresa_id)
-        query = select(Bodega).where(Bodega.activo.is_(True))
+        query = select(Bodega).where(col(Bodega.activo).is_(True))
         if empresa_scope:
-            query = query.where(Bodega.empresa_id == empresa_scope)
+            query = query.where(col(Bodega.empresa_id) == empresa_scope)
         if sucursal_id:
-            query = query.where(Bodega.sucursal_id == sucursal_id)
+            query = query.where(col(Bodega.sucursal_id) == sucursal_id)
         query = query.offset(skip).limit(limit)
         return list(session.exec(query))
 
@@ -107,9 +106,9 @@ class BodegaService:
         # Regla: una bodega no se puede eliminar lógicamente si mantiene productos asignados
         # o stock materializado con saldo mayor a cero.
         relacion_activa = session.exec(
-            select(ProductoBodega.id).where(
-                ProductoBodega.bodega_id == id,
-                ProductoBodega.activo.is_(True),
+            select(col(ProductoBodega.id)).where(
+                col(ProductoBodega.bodega_id) == id,
+                col(ProductoBodega.activo).is_(True),
             )
         ).first()
         if relacion_activa is not None:
@@ -119,9 +118,9 @@ class BodegaService:
             )
 
         saldo = session.exec(
-            select(func.coalesce(func.sum(InventarioStock.cantidad_actual), 0)).where(
-                InventarioStock.bodega_id == id,
-                InventarioStock.activo.is_(True),
+            select(func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), 0)).where(
+                col(InventarioStock.bodega_id) == id,
+                col(InventarioStock.activo).is_(True),
             )
         ).one()
         if Decimal(str(saldo or 0)) > Decimal("0"):

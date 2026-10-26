@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import threading
+from importlib import import_module
 from tempfile import TemporaryDirectory
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol, cast
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlmodel import Session, select
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, select, col
 
 from osiris.core.db import engine as default_engine
 from osiris.core.settings import get_settings
@@ -38,9 +40,34 @@ from osiris.modules.sri.core_sri.all_schemas import (
     VentaRead,
 )
 
+
+class _FirmadorXML(Protocol):
+    def firmar_xml(
+        self, xml_path: str, output_path: str, p12_path: str, p12_password: str,
+    ) -> str: ...
+
+
+class _ManejadorXML(Protocol):
+    firmador: _FirmadorXML
+
+    def dict_a_xml_string(self, data: dict[str, object]) -> str: ...
+
+    def validar_estructura_xml(self, xml_path: str) -> bool: ...
+
+
+class _SRIService(Protocol):
+    def enviar_recepcion(self, xml_bytes: bytes) -> object: ...
+
+    def consultar_autorizacion(self, clave_acceso: str) -> object: ...
+
+
 try:
-    from fe_ec.utils.manejador_xml import ManejadorXML
-    from fe_ec.utils.sri import SRIService
+    ManejadorXML: Callable[[str], _ManejadorXML] | None = cast(
+        Callable[[str], _ManejadorXML], import_module("fe_ec.utils.manejador_xml").ManejadorXML,
+    )
+    SRIService: Callable[[], _SRIService] | None = cast(
+        Callable[[], _SRIService], import_module("fe_ec.utils.sri").SRIService,
+    )
 except Exception:  # pragma: no cover - fallback cuando la librería no está instalada.
     ManejadorXML = None
     SRIService = None
@@ -51,16 +78,16 @@ class FEECVentaGateway(Protocol):
         self,
         *,
         tipo_documento: str,
-        payload: dict,
+        payload: Mapping[str, object],
         signature_content: bytes | None = None,
         signature_password: str | None = None,
-    ) -> dict:
+    ) -> dict[str, str]:
         ...
 
 
 class FEECVentaGatewayDefault:
     @staticmethod
-    def _extract_estado_mensaje(value) -> tuple[str, str]:
+    def _extract_estado_mensaje(value: object) -> tuple[str, str]:
         if value is None:
             return "", ""
         if isinstance(value, dict):
@@ -70,7 +97,7 @@ class FEECVentaGatewayDefault:
         return estado, mensaje
 
     @staticmethod
-    def _extraer_estado_autorizacion(respuesta_autorizacion) -> tuple[str, str]:
+    def _extraer_estado_autorizacion(respuesta_autorizacion: object) -> tuple[str, str]:
         # Compatibilidad con estructura real de FE-EC y diccionarios mock.
         if isinstance(respuesta_autorizacion, dict):
             estado = str(respuesta_autorizacion.get("estado", "")).upper()
@@ -94,16 +121,22 @@ class FEECVentaGatewayDefault:
         self,
         *,
         tipo_documento: str,
-        payload: dict,
+        payload: Mapping[str, object],
         signature_content: bytes | None = None,
         signature_password: str | None = None,
-    ) -> dict:
+    ) -> dict[str, str]:
         if tipo_documento != "VENTA":
             return {"estado": "RECHAZADO", "mensaje": "Tipo de documento no soportado por gateway de venta."}
 
         if ManejadorXML is None or SRIService is None:
-            # Fallback local para tests/entornos sin librería FE-EC.
-            return {"estado": "AUTORIZADO", "mensaje": "Autorizado (modo mock FE-EC)."}
+            settings = get_settings()
+            environment = settings.ENVIRONMENT.strip().lower()
+            if settings.FEEC_MOCK_ENABLED and environment in {"development", "test"}:
+                return {"estado": "AUTORIZADO", "mensaje": "Autorizado (modo mock FE-EC explícito)."}
+            return {
+                "estado": "RECHAZADO",
+                "mensaje": "Integración FE-EC no disponible; autorización simulada deshabilitada.",
+            }
 
         if not signature_content or not signature_password:
             return {"estado": "RECHAZADO", "mensaje": "La empresa no tiene firma electrónica configurada."}
@@ -115,7 +148,7 @@ class FEECVentaGatewayDefault:
             p12_path = temp_path / "firma.p12"
             settings = get_settings()
             manejador = ManejadorXML(str(settings.FEEC_XSD_PATH))
-            unsigned_path.write_text(manejador.dict_a_xml_string(payload), encoding="utf-8")
+            unsigned_path.write_text(manejador.dict_a_xml_string(dict(payload)), encoding="utf-8")
             if not manejador.validar_estructura_xml(str(unsigned_path)):
                 return {"estado": "RECHAZADO", "mensaje": "El XML generado no cumple el esquema SRI."}
             p12_path.write_bytes(signature_content)
@@ -136,7 +169,8 @@ class FEECVentaGatewayDefault:
                 "mensaje": mensaje_recepcion or "Comprobante no recibido por el SRI.",
             }
 
-        clave = payload.get("infoTributaria", {}).get("claveAcceso", "")
+        info_tributaria = cast(Mapping[str, object], payload.get("infoTributaria", {}))
+        clave = cast(str, info_tributaria.get("claveAcceso", ""))
         autorizacion = sri.consultar_autorizacion(clave)
         estado_autorizacion, mensaje_autorizacion = self._extraer_estado_autorizacion(autorizacion)
         if estado_autorizacion == "AUTORIZADO":
@@ -152,7 +186,7 @@ class VentaSriAsyncService:
         self,
         gateway: FEECVentaGateway | None = None,
         *,
-        db_engine=None,
+        db_engine: Engine | None = None,
         correo_service: CorreoFacturaService | None = None,
     ) -> None:
         self.gateway = gateway or FEECVentaGatewayDefault()
@@ -209,8 +243,8 @@ class VentaSriAsyncService:
         detalles_db = list(
             session.exec(
                 select(VentaDetalle).where(
-                    VentaDetalle.venta_id == venta.id,
-                    VentaDetalle.activo.is_(True),
+                    col(VentaDetalle.venta_id) == venta.id,
+                    col(VentaDetalle.activo).is_(True),
                 )
             ).all()
         )
@@ -221,8 +255,8 @@ class VentaSriAsyncService:
             impuestos_db = list(
                 session.exec(
                     select(VentaDetalleImpuesto).where(
-                        VentaDetalleImpuesto.venta_detalle_id.in_(detalle_ids),
-                        VentaDetalleImpuesto.activo.is_(True),
+                        col(VentaDetalleImpuesto.venta_detalle_id).in_(detalle_ids),
+                        col(VentaDetalleImpuesto.activo).is_(True),
                     )
                 ).all()
             )
@@ -318,8 +352,8 @@ class VentaSriAsyncService:
             select(DocumentoSriCola).where(
                 DocumentoSriCola.entidad_id == venta.id,
                 DocumentoSriCola.tipo_documento == "VENTA",
-                DocumentoSriCola.activo.is_(True),
-                DocumentoSriCola.estado.in_(
+                col(DocumentoSriCola.activo).is_(True),
+                col(DocumentoSriCola.estado).in_(
                     [
                         EstadoColaSri.PENDIENTE,
                         EstadoColaSri.PROCESANDO,
@@ -352,8 +386,8 @@ class VentaSriAsyncService:
         clave_acceso = payload["infoTributaria"]["claveAcceso"]
         documento = session.exec(
             select(DocumentoElectronico).where(
-                DocumentoElectronico.venta_id == venta.id,
-                DocumentoElectronico.activo.is_(True),
+                col(DocumentoElectronico.venta_id) == venta.id,
+                col(DocumentoElectronico.activo).is_(True),
             )
         ).first()
         if documento is None:
@@ -443,8 +477,8 @@ class VentaSriAsyncService:
 
             documento = session.exec(
                 select(DocumentoElectronico).where(
-                    DocumentoElectronico.venta_id == venta.id,
-                    DocumentoElectronico.activo.is_(True),
+                    col(DocumentoElectronico.venta_id) == venta.id,
+                    col(DocumentoElectronico.activo).is_(True),
                 )
             ).first()
             if not documento:

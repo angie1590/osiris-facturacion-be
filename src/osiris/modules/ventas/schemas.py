@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationInfo, computed_field, model_validator
@@ -46,7 +46,7 @@ class VentaCreate(BaseModel):
     detalles: list[VentaCompraDetalleCreate] = Field(..., min_length=1)
 
     @model_validator(mode="after")
-    def validar_regimen_y_tipo_emision(self):
+    def validar_regimen_y_tipo_emision(self) -> VentaCreate:
         if self.regimen_emisor != RegimenTributario.RIMPE_NEGOCIO_POPULAR:
             if self.tipo_emision == TipoEmisionVenta.NOTA_VENTA_FISICA:
                 raise ValueError("NOTA_VENTA_FISICA solo está permitido para régimen RIMPE_NEGOCIO_POPULAR.")
@@ -70,56 +70,68 @@ class VentaCreate(BaseModel):
                 )
         return self
 
-    @computed_field(return_type=Decimal)
+    @property
     def subtotal_sin_impuestos(self) -> Decimal:
-        return q2(sum((d.subtotal_sin_impuesto for d in self.detalles), Decimal("0.00")))
+        return q2(sum((cast(Decimal, d.subtotal_sin_impuesto) for d in self.detalles), Decimal("0.00")))
 
-    @computed_field(return_type=Decimal)
+    subtotal_sin_impuestos = computed_field(return_type=Decimal)(subtotal_sin_impuestos)
+
+    @property
     def subtotal_12(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_12_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_12 = computed_field(return_type=Decimal)(subtotal_12)
+
+    @property
     def subtotal_15(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_15_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_15 = computed_field(return_type=Decimal)(subtotal_15)
+
+    @property
     def subtotal_8(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and q2(iva.tarifa) == Decimal("8.00"):
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_8 = computed_field(return_type=Decimal)(subtotal_8)
+
+    @property
     def subtotal_0(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva and iva.codigo_porcentaje_sri in IVA_0_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_0 = computed_field(return_type=Decimal)(subtotal_0)
+
+    @property
     def subtotal_no_objeto(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
             iva = detalle.iva_impuesto()
             if iva is None or iva.codigo_porcentaje_sri in IVA_NO_OBJETO_CODES:
-                total += detalle.subtotal_sin_impuesto
+                total += cast(Decimal, detalle.subtotal_sin_impuesto)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    subtotal_no_objeto = computed_field(return_type=Decimal)(subtotal_no_objeto)
+
+    @property
     def monto_iva(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
@@ -128,7 +140,9 @@ class VentaCreate(BaseModel):
                 total += detalle.valor_impuesto(iva)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    monto_iva = computed_field(return_type=Decimal)(monto_iva)
+
+    @property
     def monto_ice(self) -> Decimal:
         total = Decimal("0.00")
         for detalle in self.detalles:
@@ -136,13 +150,19 @@ class VentaCreate(BaseModel):
                 total += detalle.valor_impuesto(ice)
         return q2(total)
 
-    @computed_field(return_type=Decimal)
+    monto_ice = computed_field(return_type=Decimal)(monto_ice)
+
+    @property
     def valor_total(self) -> Decimal:
         return q2(self.subtotal_sin_impuestos + self.monto_iva + self.monto_ice)
 
-    @computed_field(return_type=Decimal)
+    valor_total = computed_field(return_type=Decimal)(valor_total)
+
+    @property
     def total(self) -> Decimal:
         return self.valor_total
+
+    total = computed_field(return_type=Decimal)(total)
 
 
 class VentaRegistroCreate(BaseModel):
@@ -214,7 +234,7 @@ class PagoCxCCreate(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _compat_forma_pago_legacy(cls, data):
+    def _compat_forma_pago_legacy(cls, data: object) -> object:
         if isinstance(data, dict) and "forma_pago_sri" not in data and "forma_pago" in data:
             data = dict(data)
             data["forma_pago_sri"] = data["forma_pago"]
@@ -238,7 +258,7 @@ class RetencionRecibidaDetalleCreate(BaseModel):
     valor_retenido: Decimal = Field(..., ge=Decimal("0"))
 
     @model_validator(mode="after")
-    def normalizar_montos(self):
+    def normalizar_montos(self) -> RetencionRecibidaDetalleCreate:
         self.porcentaje_aplicado = q2(self.porcentaje_aplicado)
         self.base_imponible = q2(self.base_imponible)
         self.valor_retenido = q2(self.valor_retenido)
@@ -255,12 +275,14 @@ class RetencionRecibidaCreate(BaseModel):
     usuario_auditoria: str
     detalles: list[RetencionRecibidaDetalleCreate] = Field(..., min_length=1)
 
-    @computed_field(return_type=Decimal)
+    @property
     def total_retenido(self) -> Decimal:
         return q2(sum((d.valor_retenido for d in self.detalles), Decimal("0.00")))
 
+    total_retenido = computed_field(return_type=Decimal)(total_retenido)
+
     @model_validator(mode="after")
-    def validar_reglas_tributarias_sri(self, info: ValidationInfo):
+    def validar_reglas_tributarias_sri(self, info: ValidationInfo) -> RetencionRecibidaCreate:
         contexto = info.context or {}
         if not contexto:
             return self

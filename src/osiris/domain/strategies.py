@@ -15,13 +15,13 @@ class DeleteStrategy(Protocol):
     def after_delete(self, obj: Any, session: Session) -> None: ...
 
 class DefaultCreate:
-    def before_create(self, data, session): return data
-    def after_create(self, obj, session): return obj
+    def before_create(self, data: Dict[str, Any], session: Session) -> Dict[str, Any]: return data
+    def after_create(self, obj: Any, session: Session) -> Any: return obj
 
 class DefaultUpdate:
-    def before_update(self, data, session): return data
-    def after_update(self, obj, session): return obj
+    def before_update(self, data: Dict[str, Any], session: Session) -> Dict[str, Any]: return data
+    def after_update(self, obj: Any, session: Session) -> Any: return obj
 
 class DefaultDelete:
-    def before_delete(self, obj, session): ...
-    def after_delete(self, obj, session): ...
+    def before_delete(self, obj: Any, session: Session) -> None: ...
+    def after_delete(self, obj: Any, session: Session) -> None: ...

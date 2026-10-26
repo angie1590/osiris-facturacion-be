@@ -40,11 +40,11 @@ Cuenta autenticable del sistema. Se asocia a Persona y Rol para seguridad y audi
 
 ### Persona
 
-Entidad base de identidad (natural/jurídica) reutilizable por cliente, empleado y proveedor.
+Identidad exclusivamente natural y global. Cliente, Proveedor Persona, Empleado y Usuario se componen mediante una FK `persona_id` única por rol (1:1), sin herencia ORM ni copia de identidad. Una misma Persona puede reunir varios roles. Proveedor Sociedad conserva su identidad jurídica separada y un contacto natural mutable; una Persona puede contactar varias sociedades (1:N).
 
 ### Cliente
 
-Contraparte comercial para ventas y CxC.
+Contraparte natural para ventas y CxC. Cliente Sociedad sigue pendiente: no se declara cobertura B2B completa. Consumidor Final usa `cliente_id=null`, sin crear una Persona o Cliente ficticios.
 
 ### Proveedor
 
@@ -101,6 +101,8 @@ Modelo Entidad-Atributo-Valor para catálogo dinámico de atributos de producto.
 ### Soft delete
 
 Borrado lógico (`activo = false`) para preservar trazabilidad y relaciones.
+
+El Directorio y sus maestros comerciales son globales; seleccionar Empresa no ofrece aislamiento comercial completo. Empleado valida su Empresa y acceso autorizado, pero mantiene unicidad global por Persona. Habilitación comercial por empresa, multiempleo, portal, identificación del exterior y placa fiscal requieren cambios posteriores.
 
 ### Auditoría
 
