@@ -16,12 +16,15 @@ from osiris.modules.common.proveedor_persona.models import (
 )
 from osiris.modules.common.proveedor_persona.service import ProveedorPersonaService
 
-
 router = APIRouter(prefix="/api/v1/proveedores-persona", tags=["Proveedores Persona"])
 service = ProveedorPersonaService()
 
 
-@router.get("", response_model=PaginatedResponse[ProveedorPersonaRead], dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "leer"))])
+@router.get(
+    "",
+    response_model=PaginatedResponse[ProveedorPersonaRead],
+    dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "leer"))],
+)
 def list_proveedores_persona(
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -33,25 +36,55 @@ def list_proveedores_persona(
     sort_order: Literal["asc", "desc"] | None = Query(None),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset,
-                                        q=q, estado=estado, sort_by=sort_by, sort_direction=sort_direction, sort_order=sort_order)
+    items, meta = service.list_paginated(
+        session,
+        only_active=only_active,
+        limit=limit,
+        offset=offset,
+        q=q,
+        estado=estado,
+        sort_by=sort_by,
+        sort_direction=sort_direction,
+        sort_order=sort_order,
+    )
     return {"items": items, "meta": meta}
 
 
-@router.get("/{item_id}", response_model=ProveedorPersonaRead, dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "leer"))])
-def get_proveedor_persona(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> Any:
+@router.get(
+    "/{item_id}",
+    response_model=ProveedorPersonaRead,
+    dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "leer"))],
+)
+def get_proveedor_persona(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> Any:
     obj = service.get(session, item_id)
     if not obj:
-        raise HTTPException(status_code=404, detail=f"Proveedor-persona {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Proveedor-persona {item_id} not found"
+        )
     return service.to_read(session, obj)
 
 
-@router.post("", response_model=ProveedorPersonaRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "crear"))])
-def create_proveedor_persona(payload: ProveedorPersonaCreate = Body(...), session: Session = Depends(get_session)) -> Any:
-    return service.to_read(session, service.create(session, payload.model_dump(exclude_unset=True)))
+@router.post(
+    "",
+    response_model=ProveedorPersonaRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "crear"))],
+)
+def create_proveedor_persona(
+    payload: ProveedorPersonaCreate = Body(...), session: Session = Depends(get_session)
+) -> Any:
+    return service.to_read(
+        session, service.create(session, payload.model_dump(exclude_unset=True))
+    )
 
 
-@router.put("/{item_id}", response_model=ProveedorPersonaRead, dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "actualizar"))])
+@router.put(
+    "/{item_id}",
+    response_model=ProveedorPersonaRead,
+    dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "actualizar"))],
+)
 def update_proveedor_persona(
     item_id: UUID = Path(...),
     payload: ProveedorPersonaUpdate = Body(...),
@@ -59,17 +92,33 @@ def update_proveedor_persona(
 ) -> Any:
     updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
     if updated is None:
-        raise HTTPException(status_code=404, detail=f"Proveedor-persona {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Proveedor-persona {item_id} not found"
+        )
     return service.to_read(session, updated)
 
 
-@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "eliminar"))])
-def delete_proveedor_persona(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
+@router.delete(
+    "/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "eliminar"))],
+)
+def delete_proveedor_persona(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
-        raise HTTPException(status_code=404, detail=f"Proveedor-persona {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Proveedor-persona {item_id} not found"
+        )
 
 
-@router.post("/{item_id}/reactivar", response_model=ProveedorPersonaRead, dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "actualizar"))])
-def reactivate_proveedor_persona(item_id: UUID, session: Session = Depends(get_session)) -> Any:
+@router.post(
+    "/{item_id}/reactivar",
+    response_model=ProveedorPersonaRead,
+    dependencies=[Depends(directory_permission("PROVEEDORES_PERSONA", "actualizar"))],
+)
+def reactivate_proveedor_persona(
+    item_id: UUID, session: Session = Depends(get_session)
+) -> Any:
     return service.to_read(session, service.reactivate(session, item_id))

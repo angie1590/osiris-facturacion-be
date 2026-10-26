@@ -31,23 +31,33 @@ class ProductoBodegaService(BaseService[ProductoBodega]):
         except (InvalidOperation, ValueError):
             raise HTTPException(status_code=400, detail="Cantidad inválida.")
         if result < Decimal("0.0000"):
-            raise HTTPException(status_code=400, detail="La cantidad no puede ser negativa.")
+            raise HTTPException(
+                status_code=400, detail="La cantidad no puede ser negativa."
+            )
         return result
 
     @staticmethod
-    def _validar_producto_y_bodega_activos(session: Session, producto_id: UUID | None, bodega_id: UUID | None) -> tuple[Producto, Bodega]:
+    def _validar_producto_y_bodega_activos(
+        session: Session, producto_id: UUID | None, bodega_id: UUID | None
+    ) -> tuple[Producto, Bodega]:
         producto = session.get(Producto, producto_id)
         if not producto or not producto.activo:
-            raise HTTPException(status_code=404, detail="Producto no encontrado o inactivo.")
+            raise HTTPException(
+                status_code=404, detail="Producto no encontrado o inactivo."
+            )
 
         bodega = session.get(Bodega, bodega_id)
         if not bodega or not bodega.activo:
-            raise HTTPException(status_code=409, detail="No se puede operar con una bodega inactiva.")
+            raise HTTPException(
+                status_code=409, detail="No se puede operar con una bodega inactiva."
+            )
 
         return producto, bodega
 
     @classmethod
-    def _validar_fracciones_producto(cls, producto: Producto, cantidad: Decimal) -> None:
+    def _validar_fracciones_producto(
+        cls, producto: Producto, cantidad: Decimal
+    ) -> None:
         if not producto.permite_fracciones and cantidad != cantidad.to_integral_value():
             raise HTTPException(
                 status_code=400,
@@ -69,7 +79,9 @@ class ProductoBodegaService(BaseService[ProductoBodega]):
         # Soporta enums (TipoProducto.SERVICIO) y strings ("SERVICIO")
         return bool(getattr(tipo, "value", tipo) == "SERVICIO")
 
-    def create(self, session: Session, data: dict[str, Any], *, commit: bool = True) -> ProductoBodega:
+    def create(
+        self, session: Session, data: dict[str, Any], *, commit: bool = True
+    ) -> ProductoBodega:
         """
         Crea una relación producto-bodega.
         Valida que no exista duplicado (constraint único en BD).
@@ -89,10 +101,12 @@ class ProductoBodegaService(BaseService[ProductoBodega]):
         if existing:
             raise HTTPException(
                 status_code=409,
-                detail="El producto ya está asignado a la bodega especificada."
+                detail="El producto ya está asignado a la bodega especificada.",
             )
 
-        producto, _ = self._validar_producto_y_bodega_activos(session, producto_id, bodega_id)
+        producto, _ = self._validar_producto_y_bodega_activos(
+            session, producto_id, bodega_id
+        )
         self._validar_fracciones_producto(producto, cantidad)
 
         # Regla de negocio: Productos de tipo SERVICIO no pueden tener stock (> 0) ni asignaciones a bodegas con cantidad positiva
@@ -122,12 +136,16 @@ class ProductoBodegaService(BaseService[ProductoBodega]):
         Si no existe la relación, la crea.
         """
         cantidad_q4 = self._to_q4(cantidad)
-        producto, _ = self._validar_producto_y_bodega_activos(session, producto_id, bodega_id)
+        producto, _ = self._validar_producto_y_bodega_activos(
+            session, producto_id, bodega_id
+        )
         self._validar_fracciones_producto(producto, cantidad_q4)
 
         # Regla de negocio: Productos de tipo SERVICIO no pueden tener stock (> 0)
         if self._is_service_product(producto) and cantidad_q4 > 0:
-            raise HTTPException(status_code=400, detail="Los servicios no pueden tener stock.")
+            raise HTTPException(
+                status_code=400, detail="Los servicios no pueden tener stock."
+            )
 
         relacion = session.exec(
             select(ProductoBodega)
@@ -196,7 +214,9 @@ class ProductoBodegaService(BaseService[ProductoBodega]):
             for rel, producto, bodega in relaciones
         ]
 
-    def get_bodegas_by_producto(self, session: Session, producto_id: UUID) -> list[dict[str, UUID | str | Decimal]]:
+    def get_bodegas_by_producto(
+        self, session: Session, producto_id: UUID
+    ) -> list[dict[str, UUID | str | Decimal]]:
         """Obtiene todas las bodegas donde está un producto"""
         relaciones = session.exec(
             select(ProductoBodega, Bodega)
@@ -219,7 +239,9 @@ class ProductoBodegaService(BaseService[ProductoBodega]):
             for rel, bodega in relaciones
         ]
 
-    def get_productos_by_bodega(self, session: Session, bodega_id: UUID) -> list[dict[str, UUID | str | Decimal]]:
+    def get_productos_by_bodega(
+        self, session: Session, bodega_id: UUID
+    ) -> list[dict[str, UUID | str | Decimal]]:
         """Obtiene todos los productos en una bodega"""
         relaciones = session.exec(
             select(ProductoBodega, Producto)

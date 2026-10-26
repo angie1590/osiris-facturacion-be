@@ -16,22 +16,39 @@ from osiris.modules.common.rol.entity import Rol
 from osiris.modules.common.usuario.entity import Usuario
 
 
-def _record_denial(session: Session, request: Request, user_id: UUID, module: str, action: AccionPermiso, error: HTTPException) -> None:
+def _record_denial(
+    session: Session,
+    request: Request,
+    user_id: UUID,
+    module: str,
+    action: AccionPermiso,
+    error: HTTPException,
+) -> None:
     session.rollback()
     try:
         log_unauthorized_access(
-            session, request=request, user_id=str(user_id), payload=None,
-            reason=str(error.detail), rule=SensitiveEndpointRule(
-                method=request.method, path_regex=re.compile(re.escape(request.url.path) + "$"),
-                modulo_codigo=module, accion=action,
+            session,
+            request=request,
+            user_id=str(user_id),
+            payload=None,
+            reason=str(error.detail),
+            rule=SensitiveEndpointRule(
+                method=request.method,
+                path_regex=re.compile(re.escape(request.url.path) + "$"),
+                modulo_codigo=module,
+                accion=action,
             ),
         )
     except Exception:
         session.rollback()
-        logging.getLogger(__name__).exception("No se pudo registrar acceso denegado del Directorio")
+        logging.getLogger(__name__).exception(
+            "No se pudo registrar acceso denegado del Directorio"
+        )
 
 
-def require_directory_permission(session: Session, user_id: UUID, module: str, action: AccionPermiso) -> None:
+def require_directory_permission(
+    session: Session, user_id: UUID, module: str, action: AccionPermiso
+) -> None:
     try:
         requiere_permiso(session, user_id, module, action)
     except HTTPException as error:
@@ -50,7 +67,9 @@ def directory_permission(module: str, action: AccionPermiso) -> Callable[..., Us
         session.info["directory_permission_request"] = request
         role = session.get(Rol, usuario.rol_id)
         if role is None or role.activo is False:
-            error = HTTPException(status_code=403, detail="Rol inactivo o no disponible")
+            error = HTTPException(
+                status_code=403, detail="Rol inactivo o no disponible"
+            )
             _record_denial(session, request, usuario.id, module, action, error)
             raise error
         require_directory_permission(session, usuario.id, module, action)

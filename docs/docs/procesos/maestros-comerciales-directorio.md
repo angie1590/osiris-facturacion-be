@@ -154,4 +154,3 @@ Consultar `GET /api/v1/personas/{id}/vinculos` antes de baja; el backend vuelve 
 
 - `POST /api/v1/empleados` ([doc API](../api/common/directorio))
 - `GET /api/v1/empleados` ([doc API](../api/common/directorio))
-

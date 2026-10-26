@@ -22,15 +22,22 @@ class Persona(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     Entidad Persona alineada a SQLModel y a tus mixins.
     Mantiene los mismos campos que tu modelo anterior.
     """
+
     __tablename__ = "tbl_persona"
     __table_args__ = (
-        Index("uq_tbl_persona_identificacion_normalizada", text("upper(trim(identificacion))"), unique=True),
+        Index(
+            "uq_tbl_persona_identificacion_normalizada",
+            text("upper(trim(identificacion))"),
+            unique=True,
+        ),
     )
 
     tipo_identificacion: TipoIdentificacion = Field(
         sa_column=Column(
             # Enum nativo de Postgres con constraint, como en el modelo antiguo
-            PgEnum(TipoIdentificacion, name="tipo_identificacion_enum", create_type=True),
+            PgEnum(
+                TipoIdentificacion, name="tipo_identificacion_enum", create_type=True
+            ),
             nullable=False,
             default=TipoIdentificacion.CEDULA,
         )

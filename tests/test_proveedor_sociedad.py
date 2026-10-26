@@ -19,8 +19,8 @@ from osiris.modules.common.persona.entity import Persona
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.utils.validacion_identificacion import ValidacionCedulaRucService
 
-
 # ---------- helpers ----------
+
 
 def _mk_cursor(obj):
     cur = MagicMock()
@@ -28,7 +28,9 @@ def _mk_cursor(obj):
     return cur
 
 
-def _mk_session_for_fk(*, persona_exists=True, tc_exists=True, tc_nombre="sociedad privada"):
+def _mk_session_for_fk(
+    *, persona_exists=True, tc_exists=True, tc_nombre="sociedad privada"
+):
     """
     Devuelve un MagicMock de session con exec que reconoce selects a
     aux_tipo_contribuyente y tbl_persona, y retorna primero/según el tipo.
@@ -88,17 +90,24 @@ def test_proveedor_sociedad_applicability_does_not_depend_on_catalog_name():
 
 def test_proveedor_sociedad_fk_map_rejects_inactive_contact():
     session = MagicMock()
-    contact = Persona(identificacion="AB123", nombre="Contacto", apellido="Historico", activo=False)
+    contact = Persona(
+        identificacion="AB123", nombre="Contacto", apellido="Historico", activo=False
+    )
     session.exec.return_value = _mk_cursor(contact)
     with pytest.raises(HTTPException) as exc:
-        ProveedorSociedadService()._check_fk_active_and_exists(session, {"persona_contacto_id": contact.id})
+        ProveedorSociedadService()._check_fk_active_and_exists(
+            session, {"persona_contacto_id": contact.id}
+        )
     assert exc.value.status_code == 409
 
 
 # ---------- tests ----------
 
+
 def test_proveedor_sociedad_create_ok(monkeypatch):
-    session = _mk_session_for_fk(persona_exists=True, tc_exists=True, tc_nombre="contribuyente regular")
+    session = _mk_session_for_fk(
+        persona_exists=True, tc_exists=True, tc_nombre="contribuyente regular"
+    )
 
     # Forzamos validador de RUC de sociedad como válido
     monkeypatch.setattr(
@@ -177,7 +186,9 @@ def test_proveedor_sociedad_create_tc_no_bloquea(monkeypatch):
 
 
 def test_proveedor_sociedad_create_ruc_invalido(monkeypatch):
-    session = _mk_session_for_fk(persona_exists=True, tc_exists=True, tc_nombre="Contribuyente Regular")
+    session = _mk_session_for_fk(
+        persona_exists=True, tc_exists=True, tc_nombre="Contribuyente Regular"
+    )
 
     # Validador indica que NO es un RUC de sociedad válido
     monkeypatch.setattr(
@@ -209,7 +220,9 @@ def test_proveedor_sociedad_create_ruc_invalido(monkeypatch):
 
 
 def test_proveedor_sociedad_create_telefono_mal(monkeypatch):
-    session = _mk_session_for_fk(persona_exists=True, tc_exists=True, tc_nombre="Contribuyente Regular")
+    session = _mk_session_for_fk(
+        persona_exists=True, tc_exists=True, tc_nombre="Contribuyente Regular"
+    )
 
     monkeypatch.setattr(
         ValidacionCedulaRucService,
@@ -236,7 +249,10 @@ def test_proveedor_sociedad_create_telefono_mal(monkeypatch):
             },
         )
     assert exc.value.status_code in (400, 422)  # según dónde lo valides
-    assert "teléfono" in exc.value.detail.lower() or "10 dígitos" in exc.value.detail.lower()
+    assert (
+        "teléfono" in exc.value.detail.lower()
+        or "10 dígitos" in exc.value.detail.lower()
+    )
 
 
 def test_proveedor_sociedad_create_unique_violation_propagado(monkeypatch):
@@ -312,14 +328,19 @@ def test_proveedor_sociedad_create_tc_no_existe(monkeypatch):
         )
 
     assert exc.value.status_code == 404
-    assert "tipo" in exc.value.detail.lower() and "contribuyente" in exc.value.detail.lower()
+    assert (
+        "tipo" in exc.value.detail.lower()
+        and "contribuyente" in exc.value.detail.lower()
+    )
 
 
 def test_proveedor_sociedad_update_valida_tc(monkeypatch):
     """
     En update, si envían tipo_contribuyente_id, se valida FK y la regla de negocio.
     """
-    session = _mk_session_for_fk(persona_exists=True, tc_exists=True, tc_nombre="Contribuyente Regular")
+    session = _mk_session_for_fk(
+        persona_exists=True, tc_exists=True, tc_nombre="Contribuyente Regular"
+    )
 
     monkeypatch.setattr(
         ValidacionCedulaRucService,

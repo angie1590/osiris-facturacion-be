@@ -15,7 +15,6 @@ from osiris.modules.inventario.casa_comercial.models import (
 )
 from osiris.modules.inventario.casa_comercial.service import CasaComercialService
 
-
 router = APIRouter(prefix="/api/v1/casas-comerciales", tags=["Casas Comerciales"])
 service = CasaComercialService()
 
@@ -27,20 +26,28 @@ def list_casas_comerciales(
     only_active: bool = Query(True),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset)
+    items, meta = service.list_paginated(
+        session, only_active=only_active, limit=limit, offset=offset
+    )
     return {"items": items, "meta": meta}
 
 
 @router.get("/{item_id}", response_model=CasaComercialRead)
-def get_casa_comercial(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> CasaComercial:
+def get_casa_comercial(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> CasaComercial:
     obj = service.get(session, item_id)
     if not obj:
-        raise HTTPException(status_code=404, detail=f"Casa-comercial {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Casa-comercial {item_id} not found"
+        )
     return obj
 
 
 @router.post("", response_model=CasaComercialRead, status_code=status.HTTP_201_CREATED)
-def create_casa_comercial(payload: CasaComercialCreate = Body(...), session: Session = Depends(get_session)) -> CasaComercial:
+def create_casa_comercial(
+    payload: CasaComercialCreate = Body(...), session: Session = Depends(get_session)
+) -> CasaComercial:
     return service.create(session, payload.model_dump(exclude_unset=True))
 
 
@@ -52,12 +59,18 @@ def update_casa_comercial(
 ) -> CasaComercial:
     updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
     if updated is None:
-        raise HTTPException(status_code=404, detail=f"Casa-comercial {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Casa-comercial {item_id} not found"
+        )
     return updated
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_casa_comercial(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
+def delete_casa_comercial(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
-        raise HTTPException(status_code=404, detail=f"Casa-comercial {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Casa-comercial {item_id} not found"
+        )

@@ -25,6 +25,7 @@ def _commercial_queries(session, persona, catalog):
         if "tbl_persona" in text:
             return _cursor_with_first(persona)
         return _cursor_with_first(catalog)
+
     session.exec.side_effect = query
 
 
@@ -187,14 +188,23 @@ def test_proveedor_persona_create_unicidad_persona_repo_409():
     session = MagicMock()
     svc = ProveedorPersonaService()
     svc.repo = MagicMock(model=ProveedorPersona)
-    svc.repo.create.side_effect = HTTPException(status_code=409, detail="persona_id duplicado")
+    svc.repo.create.side_effect = HTTPException(
+        status_code=409, detail="persona_id duplicado"
+    )
 
     # Saltamos hits a DB de FKs y reglas para concentrar en el 409 del repo
-    with patch.object(ProveedorPersonaService, "_check_fk_active_and_exists"), \
-            patch.object(ProveedorPersonaService, "_check_duplicate"), \
-            patch("osiris.domain.directory_service.resolve_persona", side_effect=lambda session, data, **kwargs: data):
+    with (
+        patch.object(ProveedorPersonaService, "_check_fk_active_and_exists"),
+        patch.object(ProveedorPersonaService, "_check_duplicate"),
+        patch(
+            "osiris.domain.directory_service.resolve_persona",
+            side_effect=lambda session, data, **kwargs: data,
+        ),
+    ):
         with patch.object(ProveedorPersonaService, "_assert_persona_ruc_natural"):
-            with patch.object(ProveedorPersonaService, "_assert_tipo_contribuyente_permitido"):
+            with patch.object(
+                ProveedorPersonaService, "_assert_tipo_contribuyente_permitido"
+            ):
                 with pytest.raises(HTTPException) as exc:
                     svc.create(
                         session,
@@ -260,8 +270,8 @@ def test_proveedor_persona_update_valida_tc_si_llega(monkeypatch):
     # En update, si viene tipo_contribuyente_id,
     # el service llama _check_fk_active_and_exists y la regla de tc permitido.
     session.exec.side_effect = [
-        _cursor_with_first(tc_ok),     # fk_map tc (exists)
-        _cursor_with_first(tc_ok),     # regla tc permitido
+        _cursor_with_first(tc_ok),  # fk_map tc (exists)
+        _cursor_with_first(tc_ok),  # regla tc permitido
     ]
 
     monkeypatch.setattr(
@@ -314,11 +324,15 @@ def test_proveedor_persona_applicability_does_not_depend_on_catalog_name():
     session = MagicMock()
     catalog = _mk_tc(codigo="03", nombre="Sociedad: etiqueta editada")
     session.exec.return_value = _cursor_with_first(catalog)
-    ProveedorPersonaService()._assert_tipo_contribuyente_permitido(session, catalog.codigo)
+    ProveedorPersonaService()._assert_tipo_contribuyente_permitido(
+        session, catalog.codigo
+    )
     catalog.aplica_persona_natural = False
     catalog.nombre = "Persona Natural"
     with pytest.raises(HTTPException) as exc:
-        ProveedorPersonaService()._assert_tipo_contribuyente_permitido(session, catalog.codigo)
+        ProveedorPersonaService()._assert_tipo_contribuyente_permitido(
+            session, catalog.codigo
+        )
     assert exc.value.status_code == 400
 
 
@@ -328,7 +342,9 @@ def test_proveedor_persona_rejects_inactive_catalog():
     catalog.activo = False
     session.exec.return_value = _cursor_with_first(catalog)
     with pytest.raises(HTTPException) as exc:
-        ProveedorPersonaService()._assert_tipo_contribuyente_permitido(session, catalog.codigo)
+        ProveedorPersonaService()._assert_tipo_contribuyente_permitido(
+            session, catalog.codigo
+        )
     assert exc.value.status_code == 409
 
 
@@ -338,5 +354,7 @@ def test_proveedor_persona_fk_map_validates_inactive_persona():
     persona.activo = False
     session.exec.return_value = _cursor_with_first(persona)
     with pytest.raises(HTTPException) as exc:
-        ProveedorPersonaService()._check_fk_active_and_exists(session, {"persona_id": persona.id})
+        ProveedorPersonaService()._check_fk_active_and_exists(
+            session, {"persona_id": persona.id}
+        )
     assert exc.value.status_code == 409

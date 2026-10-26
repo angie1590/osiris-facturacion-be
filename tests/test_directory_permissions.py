@@ -25,10 +25,29 @@ def test_directory_guard_checks_effective_permission_not_role_name():
     session = MagicMock()
     session.info = {}
     session.get.return_value = MagicMock(activo=True)
-    user = Usuario(persona_id=uuid4(), rol_id=uuid4(), username="administrator", password_hash="not-exposed")
-    with patch("osiris.core.directory_permissions.requiere_permiso", side_effect=HTTPException(status_code=403, detail="Sin permiso")) as check:
+    user = Usuario(
+        persona_id=uuid4(),
+        rol_id=uuid4(),
+        username="administrator",
+        password_hash="not-exposed",
+    )
+    with patch(
+        "osiris.core.directory_permissions.requiere_permiso",
+        side_effect=HTTPException(status_code=403, detail="Sin permiso"),
+    ) as check:
         with pytest.raises(HTTPException) as exc:
-            directory_permission("EMPLEADOS", "crear")(request=Request({"type": "http", "method": "POST", "path": "/api/v1/empleados", "headers": []}), usuario=user, session=session)
+            directory_permission("EMPLEADOS", "crear")(
+                request=Request(
+                    {
+                        "type": "http",
+                        "method": "POST",
+                        "path": "/api/v1/empleados",
+                        "headers": [],
+                    }
+                ),
+                usuario=user,
+                session=session,
+            )
         assert exc.value.status_code == 403
         check.assert_called_once_with(session, user.id, "EMPLEADOS", "crear")
         event = session.add.call_args.args[0]
@@ -41,21 +60,44 @@ def test_directory_guard_rejects_inactive_role():
     session = MagicMock()
     session.info = {}
     session.get.return_value = MagicMock(activo=False)
-    user = Usuario(persona_id=uuid4(), rol_id=uuid4(), username="test", password_hash="not-exposed")
+    user = Usuario(
+        persona_id=uuid4(), rol_id=uuid4(), username="test", password_hash="not-exposed"
+    )
     with pytest.raises(HTTPException) as exc:
-        directory_permission("USUARIOS", "actualizar")(request=Request({"type": "http", "method": "PUT", "path": "/api/v1/usuarios", "headers": []}), usuario=user, session=session)
+        directory_permission("USUARIOS", "actualizar")(
+            request=Request(
+                {
+                    "type": "http",
+                    "method": "PUT",
+                    "path": "/api/v1/usuarios",
+                    "headers": [],
+                }
+            ),
+            usuario=user,
+            session=session,
+        )
     assert exc.value.status_code == 403
 
 
 def test_embedded_person_permission_denial_rolls_back_and_audits_without_payload():
     session = MagicMock()
-    session.info = {"directory_permission_request": Request({
-        "type": "http", "method": "POST", "path": "/api/v1/clientes", "headers": [],
-    })}
+    session.info = {
+        "directory_permission_request": Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/v1/clientes",
+                "headers": [],
+            }
+        )
+    }
     actor = str(uuid4())
     token = set_current_user_id(actor)
     try:
-        with patch("osiris.core.directory_permissions.requiere_permiso", side_effect=HTTPException(status_code=403, detail="Sin permiso Persona")):
+        with patch(
+            "osiris.core.directory_permissions.requiere_permiso",
+            side_effect=HTTPException(status_code=403, detail="Sin permiso Persona"),
+        ):
             with pytest.raises(HTTPException) as error:
                 resolve_persona(session, {"persona_id": uuid4()})
         assert error.value.status_code == 403
@@ -92,7 +134,10 @@ def test_security_configuration_cannot_bypass_directory_guards_anonymously():
 
 
 def _bootstrap_migration():
-    path = Path(__file__).parents[1] / "src/osiris/db/alembic/versions/a9c3d6e41f82_directory_rbac_bootstrap.py"
+    path = (
+        Path(__file__).parents[1]
+        / "src/osiris/db/alembic/versions/a9c3d6e41f82_directory_rbac_bootstrap.py"
+    )
     spec = importlib.util.spec_from_file_location("directory_rbac_bootstrap", path)
     assert spec and spec.loader
     migration = importlib.util.module_from_spec(spec)
@@ -109,29 +154,70 @@ def test_rbac_bootstrap_grants_only_admin_is_idempotent_and_preserves_admin_chan
     operator = Rol(nombre="Vendedor", usuario_auditoria="test")
     try:
         with engine.begin() as connection:
-            connection.execute(Rol.__table__.insert(), [administrator.model_dump(), operator.model_dump()])
+            connection.execute(
+                Rol.__table__.insert(),
+                [administrator.model_dump(), operator.model_dump()],
+            )
             context = MigrationContext.configure(connection)
             with Operations.context(context):
                 migration.upgrade()
                 migration.upgrade()
-            assert connection.scalar(sa.select(sa.func.count()).select_from(Modulo.__table__)) == 7
-            grants = connection.execute(sa.select(RolModuloPermiso.__table__)).mappings().all()
+            assert (
+                connection.scalar(
+                    sa.select(sa.func.count()).select_from(Modulo.__table__)
+                )
+                == 7
+            )
+            grants = (
+                connection.execute(sa.select(RolModuloPermiso.__table__))
+                .mappings()
+                .all()
+            )
             assert len(grants) == 7
             assert {grant["rol_id"] for grant in grants} == {administrator.id}
-            assert all(grant["puede_crear"] and grant["puede_eliminar"] for grant in grants)
+            assert all(
+                grant["puede_crear"] and grant["puede_eliminar"] for grant in grants
+            )
             grant_id = grants[0]["id"]
-            connection.execute(RolModuloPermiso.__table__.update().where(RolModuloPermiso.id == grant_id).values(
-                puede_eliminar=False, updated_by="real-admin",
-            ))
+            connection.execute(
+                RolModuloPermiso.__table__.update()
+                .where(RolModuloPermiso.id == grant_id)
+                .values(
+                    puede_eliminar=False,
+                    updated_by="real-admin",
+                )
+            )
             with Operations.context(context):
                 migration.upgrade()
-            assert connection.scalar(sa.select(RolModuloPermiso.puede_eliminar).where(RolModuloPermiso.id == grant_id)) is False
-            with Operations.context(context), pytest.raises(RuntimeError, match="permisos administrados"):
+            assert (
+                connection.scalar(
+                    sa.select(RolModuloPermiso.puede_eliminar).where(
+                        RolModuloPermiso.id == grant_id
+                    )
+                )
+                is False
+            )
+            with (
+                Operations.context(context),
+                pytest.raises(RuntimeError, match="permisos administrados"),
+            ):
                 migration.downgrade()
-            connection.execute(RolModuloPermiso.__table__.update().where(RolModuloPermiso.id == grant_id).values(updated_by=migration.ACTOR))
+            connection.execute(
+                RolModuloPermiso.__table__.update()
+                .where(RolModuloPermiso.id == grant_id)
+                .values(updated_by=migration.ACTOR)
+            )
             with Operations.context(context):
                 migration.downgrade()
-            assert connection.scalar(sa.select(sa.func.count()).select_from(Modulo.__table__)) == 0
-            assert connection.scalar(sa.select(sa.func.count()).select_from(Rol.__table__)) == 2
+            assert (
+                connection.scalar(
+                    sa.select(sa.func.count()).select_from(Modulo.__table__)
+                )
+                == 0
+            )
+            assert (
+                connection.scalar(sa.select(sa.func.count()).select_from(Rol.__table__))
+                == 2
+            )
     finally:
         engine.dispose()

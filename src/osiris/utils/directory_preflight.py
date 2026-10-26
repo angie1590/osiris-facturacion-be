@@ -6,7 +6,6 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-
 DIRECTORY_KEYS = {
     "tbl_persona": "identificacion",
     "tbl_cliente": "persona_id",
@@ -46,11 +45,13 @@ def audit_directory(connection: Connection) -> dict[str, Any]:
                     normalized = normalized.upper()
                 groups[normalized].append(row)
                 if original != normalized:
-                    pending_normalization.append({
-                        "tabla": table_name,
-                        "campo": field,
-                        "id": str(row["id"]),
-                    })
+                    pending_normalization.append(
+                        {
+                            "tabla": table_name,
+                            "campo": field,
+                            "id": str(row["id"]),
+                        }
+                    )
             for key, duplicates in sorted(groups.items()):
                 if len(duplicates) < 2:
                     continue
@@ -64,49 +65,72 @@ def audit_directory(connection: Connection) -> dict[str, Any]:
                 if reference_field:
                     for related_name, related_rows in rows_by_table.items():
                         related_field = reference_field
-                        if table_name == "tbl_persona" and related_name == "tbl_proveedor_sociedad":
+                        if (
+                            table_name == "tbl_persona"
+                            and related_name == "tbl_proveedor_sociedad"
+                        ):
                             related_field = "persona_contacto_id"
                         for related in related_rows:
                             if str(related.get(related_field)) in ids:
-                                references.append({
-                                    "tabla": related_name,
-                                    "id": str(related["id"]),
-                                    "activo": bool(related["activo"]),
-                                })
+                                references.append(
+                                    {
+                                        "tabla": related_name,
+                                        "id": str(related["id"]),
+                                        "activo": bool(related["activo"]),
+                                    }
+                                )
                 seen_references = {(item["tabla"], item["id"]) for item in references}
                 for (schema, related_name), constraints in foreign_keys.items():
                     for constraint in constraints:
-                        if constraint["referred_table"] != table_name or constraint["referred_columns"] != ["id"]:
+                        if constraint["referred_table"] != table_name or constraint[
+                            "referred_columns"
+                        ] != ["id"]:
                             continue
-                        related_table = sa.Table(related_name, metadata, schema=schema, autoload_with=connection)
+                        related_table = sa.Table(
+                            related_name,
+                            metadata,
+                            schema=schema,
+                            autoload_with=connection,
+                        )
                         related_field = constraint["constrained_columns"][0]
                         referenced_results = connection.execute(
                             sa.select(related_table).where(
-                                sa.cast(related_table.c[related_field], sa.String()).in_(ids)
+                                sa.cast(
+                                    related_table.c[related_field], sa.String()
+                                ).in_(ids)
                             )
                         ).mappings()
                         for reference_row in referenced_results:
-                            related_id = str(reference_row.get("id")) if "id" in reference_row else ",".join(
-                                f"{column.name}={reference_row[column.name]}" for column in related_table.primary_key
+                            related_id = (
+                                str(reference_row.get("id"))
+                                if "id" in reference_row
+                                else ",".join(
+                                    f"{column.name}={reference_row[column.name]}"
+                                    for column in related_table.primary_key
+                                )
                             )
                             if (related_name, related_id) not in seen_references:
-                                references.append({
-                                    "tabla": related_name,
-                                    "id": related_id,
-                                    "activo": reference_row.get("activo"),
-                                })
+                                references.append(
+                                    {
+                                        "tabla": related_name,
+                                        "id": related_id,
+                                        "activo": reference_row.get("activo"),
+                                    }
+                                )
                                 seen_references.add((related_name, related_id))
-                conflicts.append({
-                    "tabla": table_name,
-                    "campo": field,
-                    "clave_normalizada": key,
-                    "registros": [
-                        {"id": str(row["id"]), "activo": bool(row["activo"])}
-                        for row in duplicates
-                    ],
-                    "referencias_directorio": references,
-                    "referencias_historicas": references,
-                })
+                conflicts.append(
+                    {
+                        "tabla": table_name,
+                        "campo": field,
+                        "clave_normalizada": key,
+                        "registros": [
+                            {"id": str(row["id"]), "activo": bool(row["activo"])}
+                            for row in duplicates
+                        ],
+                        "referencias_directorio": references,
+                        "referencias_historicas": references,
+                    }
+                )
     return {
         "apto_para_migrar": not conflicts,
         "total_conflictos": len(conflicts),

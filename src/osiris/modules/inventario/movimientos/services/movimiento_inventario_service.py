@@ -11,7 +11,9 @@ from sqlalchemy.exc import NoResultFound
 from sqlmodel import Session, select, col
 
 from osiris.modules.sri.core_sri.services.template_method import TemplateMethodService
-from osiris.modules.inventario.movimientos.strategies.calculo_kardex_strategy import CalculoKardexStrategy
+from osiris.modules.inventario.movimientos.strategies.calculo_kardex_strategy import (
+    CalculoKardexStrategy,
+)
 from osiris.modules.inventario.movimientos.models import (
     EstadoMovimientoInventario,
     InventarioStock,
@@ -30,7 +32,6 @@ from osiris.modules.inventario.movimientos.schemas import (
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.producto.entity import Producto, ProductoBodega
 from osiris.modules.common.audit_log.entity import AuditLog
-
 
 Q4 = Decimal("0.0001")
 
@@ -52,9 +53,15 @@ def q4(value: Decimal | int | str) -> Decimal:
     return Decimal(str(value)).quantize(Q4, rounding=ROUND_HALF_UP)
 
 
-class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCreate, MovimientoInventario]):
-    def __init__(self, calculo_kardex_strategy: CalculoKardexStrategy | None = None) -> None:
-        self.calculo_kardex_strategy = calculo_kardex_strategy or CalculoKardexStrategy()
+class MovimientoInventarioService(
+    TemplateMethodService[MovimientoInventarioCreate, MovimientoInventario]
+):
+    def __init__(
+        self, calculo_kardex_strategy: CalculoKardexStrategy | None = None
+    ) -> None:
+        self.calculo_kardex_strategy = (
+            calculo_kardex_strategy or CalculoKardexStrategy()
+        )
 
     def crear_movimiento_borrador(
         self,
@@ -119,18 +126,22 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
     ) -> MovimientoInventario:
         movimiento = session.get(MovimientoInventario, movimiento_id)
         if not movimiento or not movimiento.activo:
-            raise HTTPException(status_code=404, detail="Movimiento de inventario no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Movimiento de inventario no encontrado"
+            )
         if movimiento.estado != EstadoMovimientoInventario.BORRADOR:
-            raise HTTPException(status_code=400, detail="Solo se puede confirmar movimientos en BORRADOR")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede confirmar movimientos en BORRADOR",
+            )
 
         if usuario_autorizador:
             movimiento.usuario_auditoria = usuario_autorizador
         if motivo_ajuste is not None:
             motivo_limpio = motivo_ajuste.strip()
             movimiento.motivo_ajuste = motivo_limpio or None
-        if (
-            movimiento.tipo_movimiento == TipoMovimientoInventario.AJUSTE
-            and (not movimiento.motivo_ajuste or not movimiento.motivo_ajuste.strip())
+        if movimiento.tipo_movimiento == TipoMovimientoInventario.AJUSTE and (
+            not movimiento.motivo_ajuste or not movimiento.motivo_ajuste.strip()
         ):
             raise HTTPException(
                 status_code=400,
@@ -140,7 +151,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         detalles = list(
             session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento.id,
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                    == movimiento.id,
                     col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
@@ -169,7 +181,10 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             }
 
             for detalle in detalles:
-                if movimiento.tipo_movimiento in {TipoMovimientoInventario.EGRESO, TipoMovimientoInventario.TRANSFERENCIA}:
+                if movimiento.tipo_movimiento in {
+                    TipoMovimientoInventario.EGRESO,
+                    TipoMovimientoInventario.TRANSFERENCIA,
+                }:
                     self._aplicar_egreso_con_lock(session, movimiento, detalle)
                 else:
                     self._aplicar_ingreso(session, movimiento, detalle)
@@ -220,14 +235,21 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         commit: bool = True,
     ) -> TransferenciaInventarioRead:
         if payload.bodega_origen_id == payload.bodega_destino_id:
-            raise HTTPException(status_code=400, detail="La bodega origen y destino deben ser diferentes.")
+            raise HTTPException(
+                status_code=400,
+                detail="La bodega origen y destino deben ser diferentes.",
+            )
 
         bodega_origen = session.get(Bodega, payload.bodega_origen_id)
         bodega_destino = session.get(Bodega, payload.bodega_destino_id)
         if not bodega_origen or not bodega_origen.activo:
-            raise HTTPException(status_code=409, detail="La bodega origen no existe o está inactiva.")
+            raise HTTPException(
+                status_code=409, detail="La bodega origen no existe o está inactiva."
+            )
         if not bodega_destino or not bodega_destino.activo:
-            raise HTTPException(status_code=409, detail="La bodega destino no existe o está inactiva.")
+            raise HTTPException(
+                status_code=409, detail="La bodega destino no existe o está inactiva."
+            )
 
         referencia_base = payload.referencia_documento or f"TRANSFERENCIA:{uuid4()}"
 
@@ -247,7 +269,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             ],
         )
 
-        movimiento_egreso = self.crear_movimiento_borrador(session, egreso_payload, commit=False)
+        movimiento_egreso = self.crear_movimiento_borrador(
+            session, egreso_payload, commit=False
+        )
         self.confirmar_movimiento(
             session,
             movimiento_egreso.id,
@@ -259,7 +283,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             d.producto_id: q4(d.costo_unitario)
             for d in session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento_egreso.id,
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                    == movimiento_egreso.id,
                     col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
@@ -275,12 +300,16 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                 MovimientoInventarioDetalleCreate(
                     producto_id=detalle.producto_id,
                     cantidad=detalle.cantidad,
-                    costo_unitario=costos_egreso.get(detalle.producto_id, Decimal("0.0000")),
+                    costo_unitario=costos_egreso.get(
+                        detalle.producto_id, Decimal("0.0000")
+                    ),
                 )
                 for detalle in payload.detalles
             ],
         )
-        movimiento_ingreso = self.crear_movimiento_borrador(session, ingreso_payload, commit=False)
+        movimiento_ingreso = self.crear_movimiento_borrador(
+            session, ingreso_payload, commit=False
+        )
         self.confirmar_movimiento(
             session,
             movimiento_ingreso.id,
@@ -300,10 +329,18 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         )
 
     @staticmethod
-    def _tipo_reverso(tipo_movimiento: TipoMovimientoInventario) -> TipoMovimientoInventario:
-        if tipo_movimiento in {TipoMovimientoInventario.INGRESO, TipoMovimientoInventario.AJUSTE}:
+    def _tipo_reverso(
+        tipo_movimiento: TipoMovimientoInventario,
+    ) -> TipoMovimientoInventario:
+        if tipo_movimiento in {
+            TipoMovimientoInventario.INGRESO,
+            TipoMovimientoInventario.AJUSTE,
+        }:
             return TipoMovimientoInventario.EGRESO
-        if tipo_movimiento in {TipoMovimientoInventario.EGRESO, TipoMovimientoInventario.TRANSFERENCIA}:
+        if tipo_movimiento in {
+            TipoMovimientoInventario.EGRESO,
+            TipoMovimientoInventario.TRANSFERENCIA,
+        }:
             return TipoMovimientoInventario.INGRESO
         return TipoMovimientoInventario.AJUSTE
 
@@ -325,7 +362,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             .with_for_update()
         ).one_or_none()
         if not movimiento:
-            raise HTTPException(status_code=404, detail="Movimiento de inventario no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Movimiento de inventario no encontrado"
+            )
 
         if movimiento.estado == EstadoMovimientoInventario.ANULADO:
             return movimiento
@@ -344,18 +383,24 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             return movimiento
 
         if movimiento.estado != EstadoMovimientoInventario.CONFIRMADO:
-            raise HTTPException(status_code=400, detail="Solo se pueden anular movimientos BORRADOR o CONFIRMADO.")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se pueden anular movimientos BORRADOR o CONFIRMADO.",
+            )
 
         detalles = list(
             session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento.id,
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                    == movimiento.id,
                     col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
         )
         if not detalles:
-            raise HTTPException(status_code=400, detail="No se puede anular un movimiento sin detalles.")
+            raise HTTPException(
+                status_code=400, detail="No se puede anular un movimiento sin detalles."
+            )
 
         reverso_payload = MovimientoInventarioCreate(
             fecha=movimiento.fecha,
@@ -406,7 +451,12 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
 
         for producto_id in producto_ids:
             total_stock = session.exec(
-                select(func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), Decimal("0.0000"))).where(
+                select(
+                    func.coalesce(
+                        func.sum(col(InventarioStock.cantidad_actual)),
+                        Decimal("0.0000"),
+                    )
+                ).where(
                     col(InventarioStock.producto_id) == producto_id,
                     col(InventarioStock.activo).is_(True),
                 )
@@ -417,7 +467,10 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                 continue
 
             cantidad_decimal = q4(total_stock)
-            if not producto.permite_fracciones and cantidad_decimal != cantidad_decimal.to_integral_value():
+            if (
+                not producto.permite_fracciones
+                and cantidad_decimal != cantidad_decimal.to_integral_value()
+            ):
                 raise ValueError(
                     f"Inconsistencia de fracciones: el producto {producto_id} no permite fracciones y su stock agregado es {cantidad_decimal}."
                 )
@@ -449,7 +502,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                     col(InventarioStock.activo).is_(True),
                 )
             ).one_or_none()
-            cantidad = q4(stock.cantidad_actual) if stock is not None else Decimal("0.0000")
+            cantidad = (
+                q4(stock.cantidad_actual) if stock is not None else Decimal("0.0000")
+            )
 
             relacion = session.exec(
                 select(ProductoBodega).where(
@@ -476,7 +531,11 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         movimiento: MovimientoInventario,
         estado_anterior: str,
     ) -> None:
-        usuario_autorizador = movimiento.usuario_auditoria or movimiento.updated_by or movimiento.created_by
+        usuario_autorizador = (
+            movimiento.usuario_auditoria
+            or movimiento.updated_by
+            or movimiento.created_by
+        )
         estado_nuevo = {
             "estado": movimiento.estado.value,
             "tipo_movimiento": movimiento.tipo_movimiento.value,
@@ -518,7 +577,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                 .with_for_update()
             ).one()
         except NoResultFound as exc:
-            raise ValueError("No existe stock materializado para el producto/bodega.") from exc
+            raise ValueError(
+                "No existe stock materializado para el producto/bodega."
+            ) from exc
 
         cantidad_actual = q4(stock.cantidad_actual)
         cantidad_detalle = q4(detalle.cantidad)
@@ -526,7 +587,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             raise ValueError("Inventario insuficiente: no se permite stock negativo.")
 
         # E3-3: congelar costo histórico del egreso al costo promedio vigente.
-        detalle.costo_unitario = self.calculo_kardex_strategy.congelar_costo_egreso(stock.costo_promedio_vigente)
+        detalle.costo_unitario = self.calculo_kardex_strategy.congelar_costo_egreso(
+            stock.costo_promedio_vigente
+        )
         session.add(detalle)
 
         result = session.exec(
@@ -536,7 +599,9 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                 col(InventarioStock.activo).is_(True),
                 col(InventarioStock.cantidad_actual) >= cantidad_detalle,
             )
-            .values(cantidad_actual=col(InventarioStock.cantidad_actual) - cantidad_detalle)
+            .values(
+                cantidad_actual=col(InventarioStock.cantidad_actual) - cantidad_detalle
+            )
         )
         if (getattr(result, "rowcount", 0) or 0) != 1:
             raise ValueError("Inventario insuficiente: no se permite stock negativo.")
@@ -614,7 +679,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                 )
                 .join(
                     MovimientoInventarioDetalle,
-                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                    == col(MovimientoInventario.id),
                 )
                 .where(
                     *filtros_base,
@@ -623,7 +689,10 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             ).all()
             for tipo_movimiento, cantidad in filas_saldo:
                 cantidad_q = q4(cantidad)
-                if tipo_movimiento in {TipoMovimientoInventario.EGRESO, TipoMovimientoInventario.TRANSFERENCIA}:
+                if tipo_movimiento in {
+                    TipoMovimientoInventario.EGRESO,
+                    TipoMovimientoInventario.TRANSFERENCIA,
+                }:
                     saldo_inicial = q4(saldo_inicial - cantidad_q)
                 else:
                     saldo_inicial = q4(saldo_inicial + cantidad_q)
@@ -638,7 +707,8 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             select(MovimientoInventario, MovimientoInventarioDetalle)
             .join(
                 MovimientoInventarioDetalle,
-                col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
+                col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                == col(MovimientoInventario.id),
             )
             .where(*filtros_movimientos)
             .order_by(
@@ -653,7 +723,10 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         for movimiento, detalle in filas:
             cantidad = q4(detalle.cantidad)
             costo = q4(detalle.costo_unitario)
-            if movimiento.tipo_movimiento in {TipoMovimientoInventario.EGRESO, TipoMovimientoInventario.TRANSFERENCIA}:
+            if movimiento.tipo_movimiento in {
+                TipoMovimientoInventario.EGRESO,
+                TipoMovimientoInventario.TRANSFERENCIA,
+            }:
                 entrada = Decimal("0.0000")
                 salida = cantidad
                 saldo = q4(saldo - cantidad)
@@ -727,15 +800,20 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             "total_global": total_global,
         }
 
-    def obtener_movimiento_read(self, session: Session, movimiento_id: UUID) -> MovimientoInventarioRead:
+    def obtener_movimiento_read(
+        self, session: Session, movimiento_id: UUID
+    ) -> MovimientoInventarioRead:
         movimiento = session.get(MovimientoInventario, movimiento_id)
         if not movimiento or not movimiento.activo:
-            raise HTTPException(status_code=404, detail="Movimiento de inventario no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Movimiento de inventario no encontrado"
+            )
 
         detalles = list(
             session.exec(
                 select(MovimientoInventarioDetalle).where(
-                    col(MovimientoInventarioDetalle.movimiento_inventario_id) == movimiento.id,
+                    col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                    == movimiento.id,
                     col(MovimientoInventarioDetalle.activo).is_(True),
                 )
             ).all()
@@ -761,12 +839,18 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             motivo_ajuste=movimiento.motivo_ajuste,
             detalles=detalles_read,
         )
-    @staticmethod
-    def _es_movimiento_egreso(tipo_movimiento: TipoMovimientoInventario) -> bool:
-        return tipo_movimiento in {TipoMovimientoInventario.EGRESO, TipoMovimientoInventario.TRANSFERENCIA}
 
     @staticmethod
-    def _obtener_stock_producto_bodega(session: Session, *, bodega_id: UUID, producto_id: UUID) -> Decimal:
+    def _es_movimiento_egreso(tipo_movimiento: TipoMovimientoInventario) -> bool:
+        return tipo_movimiento in {
+            TipoMovimientoInventario.EGRESO,
+            TipoMovimientoInventario.TRANSFERENCIA,
+        }
+
+    @staticmethod
+    def _obtener_stock_producto_bodega(
+        session: Session, *, bodega_id: UUID, producto_id: UUID
+    ) -> Decimal:
         stock = session.exec(
             select(InventarioStock).where(
                 col(InventarioStock.bodega_id) == bodega_id,
@@ -792,11 +876,13 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
             )
             .join(
                 MovimientoInventarioDetalle,
-                col(MovimientoInventarioDetalle.movimiento_inventario_id) == col(MovimientoInventario.id),
+                col(MovimientoInventarioDetalle.movimiento_inventario_id)
+                == col(MovimientoInventario.id),
             )
             .where(
                 col(MovimientoInventario.bodega_id) == bodega_id,
-                col(MovimientoInventario.estado) == EstadoMovimientoInventario.CONFIRMADO,
+                col(MovimientoInventario.estado)
+                == EstadoMovimientoInventario.CONFIRMADO,
                 col(MovimientoInventario.activo).is_(True),
                 col(MovimientoInventarioDetalle.producto_id) == producto_id,
                 col(MovimientoInventarioDetalle.activo).is_(True),
@@ -826,12 +912,19 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
         stock_before: dict[UUID, Decimal],
         kardex_before: dict[UUID, Decimal],
     ) -> None:
-        factor = Decimal("-1.0000") if self._es_movimiento_egreso(movimiento.tipo_movimiento) else Decimal("1.0000")
+        factor = (
+            Decimal("-1.0000")
+            if self._es_movimiento_egreso(movimiento.tipo_movimiento)
+            else Decimal("1.0000")
+        )
         esperado_delta_por_producto: dict[UUID, Decimal] = {}
         for detalle in detalles:
-            esperado_delta_por_producto.setdefault(detalle.producto_id, Decimal("0.0000"))
+            esperado_delta_por_producto.setdefault(
+                detalle.producto_id, Decimal("0.0000")
+            )
             esperado_delta_por_producto[detalle.producto_id] = q4(
-                esperado_delta_por_producto[detalle.producto_id] + (q4(detalle.cantidad) * factor)
+                esperado_delta_por_producto[detalle.producto_id]
+                + (q4(detalle.cantidad) * factor)
             )
 
         for producto_id, esperado_delta in esperado_delta_por_producto.items():
@@ -856,10 +949,17 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                     f"Inconsistencia de kardex: desfase antes={desfase_before} y despues={desfase_after} para producto {producto_id}."
                 )
 
-    def _validar_producto_vs_stock(self, session: Session, *, producto_ids: set[UUID]) -> None:
+    def _validar_producto_vs_stock(
+        self, session: Session, *, producto_ids: set[UUID]
+    ) -> None:
         for producto_id in producto_ids:
             total_stock = session.exec(
-                select(func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), Decimal("0.0000"))).where(
+                select(
+                    func.coalesce(
+                        func.sum(col(InventarioStock.cantidad_actual)),
+                        Decimal("0.0000"),
+                    )
+                ).where(
                     col(InventarioStock.producto_id) == producto_id,
                     col(InventarioStock.activo).is_(True),
                 )
@@ -870,7 +970,10 @@ class MovimientoInventarioService(TemplateMethodService[MovimientoInventarioCrea
                 continue
 
             esperado = q4(total_stock)
-            if not producto.permite_fracciones and esperado != esperado.to_integral_value():
+            if (
+                not producto.permite_fracciones
+                and esperado != esperado.to_integral_value()
+            ):
                 raise ValueError(
                     f"Inconsistencia de fracciones: el producto {producto_id} no permite fracciones y su stock agregado es {esperado}."
                 )

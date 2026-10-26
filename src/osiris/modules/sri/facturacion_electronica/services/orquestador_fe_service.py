@@ -19,8 +19,14 @@ from osiris.modules.sri.core_sri.models import (
     TipoDocumentoElectronico,
     Venta,
 )
-from osiris.modules.sri.facturacion_electronica.services.sri_async_service import FEECOrquestadorGateway, SriAsyncService
-from osiris.modules.sri.facturacion_electronica.services.venta_sri_async_service import FEECVentaGateway, VentaSriAsyncService
+from osiris.modules.sri.facturacion_electronica.services.sri_async_service import (
+    FEECOrquestadorGateway,
+    SriAsyncService,
+)
+from osiris.modules.sri.facturacion_electronica.services.venta_sri_async_service import (
+    FEECVentaGateway,
+    VentaSriAsyncService,
+)
 
 
 def _sync_estado_documento(
@@ -44,8 +50,12 @@ class OrquestadorFEService:
         retencion_sri_service: SriAsyncService | None = None,
     ) -> None:
         self.db_engine = db_engine or default_engine
-        self.venta_sri_service = venta_sri_service or VentaSriAsyncService(db_engine=self.db_engine)
-        self.retencion_sri_service = retencion_sri_service or SriAsyncService(db_engine=self.db_engine)
+        self.venta_sri_service = venta_sri_service or VentaSriAsyncService(
+            db_engine=self.db_engine
+        )
+        self.retencion_sri_service = retencion_sri_service or SriAsyncService(
+            db_engine=self.db_engine
+        )
 
     @staticmethod
     def _backoff_minutes(intentos: int) -> int:
@@ -121,14 +131,19 @@ class OrquestadorFEService:
                     )
                 ).first()
                 if documento is None:
-                    raise HTTPException(status_code=500, detail="No se pudo crear el documento electrónico de factura.")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No se pudo crear el documento electrónico de factura.",
+                    )
             documento.tipo_documento = TipoDocumentoElectronico.FACTURA
             documento.referencia_id = referencia_id
             documento.venta_id = referencia_id
             documento.usuario_auditoria = usuario_id
             documento.intentos = 0
             documento.next_retry_at = datetime.utcnow()
-            _sync_estado_documento(documento, EstadoDocumentoElectronico.EN_COLA, mensaje=None)
+            _sync_estado_documento(
+                documento, EstadoDocumentoElectronico.EN_COLA, mensaje=None
+            )
             session.add(documento)
         elif tipo == TipoDocumentoElectronico.RETENCION:
             self.retencion_sri_service.encolar_retencion(
@@ -157,10 +172,15 @@ class OrquestadorFEService:
             documento.usuario_auditoria = usuario_id
             documento.intentos = 0
             documento.next_retry_at = datetime.utcnow()
-            _sync_estado_documento(documento, EstadoDocumentoElectronico.EN_COLA, mensaje=None)
+            _sync_estado_documento(
+                documento, EstadoDocumentoElectronico.EN_COLA, mensaje=None
+            )
             session.add(documento)
         else:
-            raise HTTPException(status_code=400, detail="Tipo de documento no soportado para orquestación FE-EC.")
+            raise HTTPException(
+                status_code=400,
+                detail="Tipo de documento no soportado para orquestación FE-EC.",
+            )
 
         if commit:
             session.commit()
@@ -183,14 +203,19 @@ class OrquestadorFEService:
 
             if documento.tipo_documento == TipoDocumentoElectronico.FACTURA:
                 if documento.referencia_id is None:
-                    raise HTTPException(status_code=400, detail="Documento de factura sin referencia_id.")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Documento de factura sin referencia_id.",
+                    )
                 tarea = self._obtener_tarea(
                     session,
                     referencia_id=documento.referencia_id,
                     tipo_documento_cola="VENTA",
                 )
                 if tarea is None:
-                    raise HTTPException(status_code=404, detail="No existe tarea SRI para la factura.")
+                    raise HTTPException(
+                        status_code=404, detail="No existe tarea SRI para la factura."
+                    )
                 _sync_estado_documento(documento, EstadoDocumentoElectronico.FIRMADO)
                 session.add(documento)
                 session.commit()
@@ -206,7 +231,9 @@ class OrquestadorFEService:
                 if venta is None:
                     return
                 if venta.estado_sri == EstadoSriDocumento.AUTORIZADO:
-                    _sync_estado_documento(documento, EstadoDocumentoElectronico.AUTORIZADO, mensaje=None)
+                    _sync_estado_documento(
+                        documento, EstadoDocumentoElectronico.AUTORIZADO, mensaje=None
+                    )
                     documento.next_retry_at = None
                 elif venta.estado_sri == EstadoSriDocumento.RECHAZADO:
                     _sync_estado_documento(
@@ -234,14 +261,19 @@ class OrquestadorFEService:
 
             if documento.tipo_documento == TipoDocumentoElectronico.RETENCION:
                 if documento.referencia_id is None:
-                    raise HTTPException(status_code=400, detail="Documento de retención sin referencia_id.")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Documento de retención sin referencia_id.",
+                    )
                 tarea = self._obtener_tarea(
                     session,
                     referencia_id=documento.referencia_id,
                     tipo_documento_cola="RETENCION",
                 )
                 if tarea is None:
-                    raise HTTPException(status_code=404, detail="No existe tarea SRI para la retención.")
+                    raise HTTPException(
+                        status_code=404, detail="No existe tarea SRI para la retención."
+                    )
                 _sync_estado_documento(documento, EstadoDocumentoElectronico.FIRMADO)
                 session.add(documento)
                 session.commit()
@@ -257,7 +289,9 @@ class OrquestadorFEService:
                 if retencion is None:
                     return
                 if retencion.estado_sri == EstadoSriDocumento.AUTORIZADO:
-                    _sync_estado_documento(documento, EstadoDocumentoElectronico.AUTORIZADO, mensaje=None)
+                    _sync_estado_documento(
+                        documento, EstadoDocumentoElectronico.AUTORIZADO, mensaje=None
+                    )
                     documento.next_retry_at = None
                 elif retencion.estado_sri == EstadoSriDocumento.RECHAZADO:
                     _sync_estado_documento(
@@ -283,7 +317,10 @@ class OrquestadorFEService:
                 session.commit()
                 return
 
-            raise HTTPException(status_code=400, detail="Tipo de documento no soportado para procesamiento FE-EC.")
+            raise HTTPException(
+                status_code=400,
+                detail="Tipo de documento no soportado para procesamiento FE-EC.",
+            )
 
     def procesar_cola(self, session: Session, *, now: datetime | None = None) -> int:
         now_dt = now or datetime.utcnow()
@@ -312,13 +349,19 @@ class OrquestadorFEService:
         stmt = select(DocumentoElectronico).where(
             col(DocumentoElectronico.activo).is_(True),
             col(DocumentoElectronico.estado_sri).in_(
-                [EstadoDocumentoElectronico.EN_COLA, EstadoDocumentoElectronico.RECIBIDO]
+                [
+                    EstadoDocumentoElectronico.EN_COLA,
+                    EstadoDocumentoElectronico.RECIBIDO,
+                ]
             ),
             DocumentoElectronico.intentos < 5,
         )
         if not incluir_no_vencidos:
             stmt = stmt.where(
-                or_(col(DocumentoElectronico.next_retry_at).is_(None), col(DocumentoElectronico.next_retry_at) <= now_dt)
+                or_(
+                    col(DocumentoElectronico.next_retry_at).is_(None),
+                    col(DocumentoElectronico.next_retry_at) <= now_dt,
+                )
             )
         if tipo_documento is not None:
             stmt = stmt.where(DocumentoElectronico.tipo_documento == tipo_documento)
@@ -347,7 +390,9 @@ class OrquestadorFEService:
         )
         return items, int(total)
 
-    def procesar_documentos_ids(self, documento_ids: list[UUID]) -> tuple[int, list[UUID], list[str]]:
+    def procesar_documentos_ids(
+        self, documento_ids: list[UUID]
+    ) -> tuple[int, list[UUID], list[str]]:
         procesados = 0
         ids_procesados: list[UUID] = []
         errores: list[str] = []

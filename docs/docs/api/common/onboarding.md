@@ -15,7 +15,9 @@ Antes de integrar los endpoints de onboarding, considera estas reglas de contrat
 
 1. Soft delete y filtro `only_active`:
    - `only_active=true`: retorna solo registros activos.
-  - `only_active=false`: incluye activos e inactivos; no equivale a un filtro de solo inactivos.
+
+- `only_active=false`: incluye activos e inactivos; no equivale a un filtro de solo inactivos.
+
 2. Códigos HTTP esperados:
    - `400`: error de validación de payload/formato.
    - `404`: recurso no encontrado.
@@ -25,7 +27,8 @@ Antes de integrar los endpoints de onboarding, considera estas reglas de contrat
 4. Secuenciales SRI:
    - El endpoint de siguiente secuencial devuelve siempre el número en formato de 9 dígitos (`zfill(9)`), por ejemplo `000000123`.
 5. Multiempresa por sesión:
-  - El aislamiento por empresa se aplica por contexto de sesión/JWT a recursos con ámbito empresarial. Persona y maestros comerciales siguen globales; Empleado valida Empresa pero mantiene unicidad global por Persona. Ver [Empresa Seleccionada por Sesión](./empresa-seleccionada-sesion).
+
+- El aislamiento por empresa se aplica por contexto de sesión/JWT a recursos con ámbito empresarial. Persona y maestros comerciales siguen globales; Empleado valida Empresa pero mantiene unicidad global por Persona. Ver [Empresa Seleccionada por Sesión](./empresa-seleccionada-sesion).
 
 ## Política de Registros Activos (Frontend)
 
@@ -37,30 +40,31 @@ Antes de integrar los endpoints de onboarding, considera estas reglas de contrat
 
 ### `regimen` (Empresa)
 
-| Valor | Descripción |
-|---|---|
-| `GENERAL` | Régimen general de contribuyente. |
-| `RIMPE_EMPRENDEDOR` | Régimen RIMPE emprendedor. |
-| `RIMPE_NEGOCIO_POPULAR` | Régimen RIMPE negocio popular. |
+| Valor                   | Descripción                       |
+| ----------------------- | --------------------------------- |
+| `GENERAL`               | Régimen general de contribuyente. |
+| `RIMPE_EMPRENDEDOR`     | Régimen RIMPE emprendedor.        |
+| `RIMPE_NEGOCIO_POPULAR` | Régimen RIMPE negocio popular.    |
 
 ### `modo_emision` (Empresa)
 
-| Valor | Descripción | Regla |
-|---|---|---|
-| `ELECTRONICO` | Emisión electrónica. | Permitido para todos los regímenes. |
+| Valor               | Descripción                     | Regla                                                 |
+| ------------------- | ------------------------------- | ----------------------------------------------------- |
+| `ELECTRONICO`       | Emisión electrónica.            | Permitido para todos los regímenes.                   |
 | `NOTA_VENTA_FISICA` | Emisión física (nota de venta). | Solo permitido con `regimen = RIMPE_NEGOCIO_POPULAR`. |
 
 ### `tipo_documento` (Secuenciales de Punto de Emisión)
 
-| Valor | Descripción |
-|---|---|
-| `FACTURA` | Secuencial para facturas. |
-| `RETENCION` | Secuencial para retenciones. |
-| `NOTA_CREDITO` | Secuencial para notas de crédito. |
-| `NOTA_DEBITO` | Secuencial para notas de débito. |
+| Valor           | Descripción                        |
+| --------------- | ---------------------------------- |
+| `FACTURA`       | Secuencial para facturas.          |
+| `RETENCION`     | Secuencial para retenciones.       |
+| `NOTA_CREDITO`  | Secuencial para notas de crédito.  |
+| `NOTA_DEBITO`   | Secuencial para notas de débito.   |
 | `GUIA_REMISION` | Secuencial para guías de remisión. |
 
 ## GET /api/v1/empresas
+
 Devuelve empresas en forma paginada para inicializar catálogos y configuración de cabecera empresarial en el frontend.
 
 <Tabs>
@@ -128,13 +132,14 @@ Devuelve empresas en forma paginada para inicializar catálogos y configuración
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Valor por defecto `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Desplazamiento inicial. Valor por defecto `0`, mínimo `0`. |
-| only_active | bool | No | Si es `true`, solo retorna registros activos. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                          |
+| ----------- | ---- | ----------- | -------------------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Valor por defecto `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Desplazamiento inicial. Valor por defecto `0`, mínimo `0`.           |
+| only_active | bool | No          | Si es `true`, solo retorna registros activos.                        |
 
 ## GET /api/v1/empresas/\{item_id\}
+
 Recupera una empresa específica por identificador para consultar configuración tributaria y modo de emisión vigentes.
 
 <Tabs>
@@ -183,11 +188,12 @@ Recupera una empresa específica por identificador para consultar configuración
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la empresa. Si no existe, retorna error de recurso no encontrado. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones                                                        |
+| ------- | ---- | ----------- | ---------------------------------------------------------------------------------- |
+| item_id | UUID | Sí          | Identificador de la empresa. Si no existe, retorna error de recurso no encontrado. |
 
 ## POST /api/v1/empresas
+
 Crea la empresa principal del tenant y valida las reglas tributarias que impactan facturación, emisión y procesos SRI.
 
 <Tabs>
@@ -244,21 +250,22 @@ Crea la empresa principal del tenant y valida las reglas tributarias que impacta
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| razon_social | string | Sí | Solo letras y espacios. Regex `^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$`. |
-| nombre_comercial | string | No | Letras, números y `.,-`. Regex `^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s\.\,\-]+$`. |
-| ruc | string | Sí | Debe tener exactamente 13 dígitos y pasar validación de identificación. |
-| direccion_matriz | string | Sí | Dirección legal principal de la empresa. |
-| telefono | string | No | Solo dígitos, entre 7 y 10 caracteres. |
-| logo | string | No | URL o referencia del logo. |
-| obligado_contabilidad | boolean | No | Valor por defecto `false`. |
-| regimen | enum | No | Valor por defecto `GENERAL`. |
-| modo_emision | enum | No | Valor por defecto `ELECTRONICO`; `NOTA_VENTA_FISICA` exige `RIMPE_NEGOCIO_POPULAR`. |
-| tipo_contribuyente_id | string | Sí | Código de 2 caracteres exactos. |
-| usuario_auditoria | string | Sí | Usuario que registra la operación. |
+| Campo                 | Tipo    | Obligatorio | Descripción y Restricciones                                                         |
+| --------------------- | ------- | ----------- | ----------------------------------------------------------------------------------- |
+| razon_social          | string  | Sí          | Solo letras y espacios. Regex `^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$`.                          |
+| nombre_comercial      | string  | No          | Letras, números y `.,-`. Regex `^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s\.\,\-]+$`.                |
+| ruc                   | string  | Sí          | Debe tener exactamente 13 dígitos y pasar validación de identificación.             |
+| direccion_matriz      | string  | Sí          | Dirección legal principal de la empresa.                                            |
+| telefono              | string  | No          | Solo dígitos, entre 7 y 10 caracteres.                                              |
+| logo                  | string  | No          | URL o referencia del logo.                                                          |
+| obligado_contabilidad | boolean | No          | Valor por defecto `false`.                                                          |
+| regimen               | enum    | No          | Valor por defecto `GENERAL`.                                                        |
+| modo_emision          | enum    | No          | Valor por defecto `ELECTRONICO`; `NOTA_VENTA_FISICA` exige `RIMPE_NEGOCIO_POPULAR`. |
+| tipo_contribuyente_id | string  | Sí          | Código de 2 caracteres exactos.                                                     |
+| usuario_auditoria     | string  | Sí          | Usuario que registra la operación.                                                  |
 
 ## PUT /api/v1/empresas/\{item_id\}
+
 Actualiza parcialmente la configuración empresarial para ajustar reglas fiscales sin recrear el registro.
 
 <Tabs>
@@ -313,22 +320,23 @@ Actualiza parcialmente la configuración empresarial para ajustar reglas fiscale
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la empresa a actualizar. |
-| razon_social | string | No | Si se envía, respeta regex de solo letras y espacios. |
-| nombre_comercial | string | No | Si se envía, respeta regex alfanumérico con signos `.,-`. |
-| ruc | string | No | Si se envía, debe tener 13 dígitos y validación de identificación. |
-| direccion_matriz | string | No | Nueva dirección matriz. |
-| telefono | string | No | Solo dígitos, entre 7 y 10 caracteres. |
-| logo | string | No | URL o referencia del logo. |
-| obligado_contabilidad | boolean | No | Marca contable de la empresa. |
-| regimen | enum | No | Régimen tributario de la empresa. |
-| modo_emision | enum | No | Si se combina con régimen no permitido dispara error de negocio. |
-| tipo_contribuyente_id | string | No | Código de 2 caracteres. |
-| usuario_auditoria | string | No | Usuario que realiza el cambio. |
+| Campo                 | Tipo    | Obligatorio | Descripción y Restricciones                                        |
+| --------------------- | ------- | ----------- | ------------------------------------------------------------------ |
+| item_id               | UUID    | Sí          | Identificador de la empresa a actualizar.                          |
+| razon_social          | string  | No          | Si se envía, respeta regex de solo letras y espacios.              |
+| nombre_comercial      | string  | No          | Si se envía, respeta regex alfanumérico con signos `.,-`.          |
+| ruc                   | string  | No          | Si se envía, debe tener 13 dígitos y validación de identificación. |
+| direccion_matriz      | string  | No          | Nueva dirección matriz.                                            |
+| telefono              | string  | No          | Solo dígitos, entre 7 y 10 caracteres.                             |
+| logo                  | string  | No          | URL o referencia del logo.                                         |
+| obligado_contabilidad | boolean | No          | Marca contable de la empresa.                                      |
+| regimen               | enum    | No          | Régimen tributario de la empresa.                                  |
+| modo_emision          | enum    | No          | Si se combina con régimen no permitido dispara error de negocio.   |
+| tipo_contribuyente_id | string  | No          | Código de 2 caracteres.                                            |
+| usuario_auditoria     | string  | No          | Usuario que realiza el cambio.                                     |
 
 ## DELETE /api/v1/empresas/\{item_id\}
+
 Realiza baja lógica de una empresa para retirar su uso operativo sin borrar historial.
 
 <Tabs>
@@ -363,11 +371,12 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la empresa a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones               |
+| ------- | ---- | ----------- | ----------------------------------------- |
+| item_id | UUID | Sí          | Identificador de la empresa a desactivar. |
 
 ## GET /api/v1/sucursales
+
 Lista sucursales para selección operativa por bodega, ventas y punto de facturación.
 
 <Tabs>
@@ -435,13 +444,14 @@ Lista sucursales para selección operativa por bodega, ventas y punto de factura
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Inicio de paginación. Default `0`, mínimo `0`. |
-| only_active | bool | No | Filtra por registros activos cuando es `true`. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                |
+| ----------- | ---- | ----------- | ---------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Inicio de paginación. Default `0`, mínimo `0`.             |
+| only_active | bool | No          | Filtra por registros activos cuando es `true`.             |
 
 ## GET /api/v1/sucursales/\{item_id\}
+
 Obtiene una sucursal por ID para recuperar datos de ubicación, matriz y auditoría operativa.
 
 <Tabs>
@@ -490,11 +500,12 @@ Obtiene una sucursal por ID para recuperar datos de ubicación, matriz y auditor
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador único de la sucursal. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones         |
+| ------- | ---- | ----------- | ----------------------------------- |
+| item_id | UUID | Sí          | Identificador único de la sucursal. |
 
 ## POST /api/v1/sucursales
+
 Crea sucursales de operación y aplica reglas estructurales de código, matriz y georreferenciación.
 
 <Tabs>
@@ -549,19 +560,20 @@ Crea sucursales de operación y aplica reglas estructurales de código, matriz y
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| codigo | string | Sí | Longitud exacta de 3 caracteres; combinado con `empresa_id` debe ser único. |
-| nombre | string | Sí | Longitud entre 3 y 50 caracteres. |
-| direccion | string | Sí | Longitud entre 3 y 100 caracteres. |
-| telefono | string | No | Solo dígitos, entre 7 y 10 caracteres. |
-| latitud | decimal | No | Si se envía, debe estar entre `-90` y `90`. |
-| longitud | decimal | No | Si se envía, debe estar entre `-180` y `180`. |
-| es_matriz | boolean | Sí | Si `true`, el `codigo` debe ser `001`; si `false`, el código no puede ser `001`. |
-| usuario_auditoria | string | Sí | Usuario responsable del registro. |
-| empresa_id | UUID | Sí | Empresa propietaria de la sucursal; debe existir y estar activa. |
+| Campo             | Tipo    | Obligatorio | Descripción y Restricciones                                                      |
+| ----------------- | ------- | ----------- | -------------------------------------------------------------------------------- |
+| codigo            | string  | Sí          | Longitud exacta de 3 caracteres; combinado con `empresa_id` debe ser único.      |
+| nombre            | string  | Sí          | Longitud entre 3 y 50 caracteres.                                                |
+| direccion         | string  | Sí          | Longitud entre 3 y 100 caracteres.                                               |
+| telefono          | string  | No          | Solo dígitos, entre 7 y 10 caracteres.                                           |
+| latitud           | decimal | No          | Si se envía, debe estar entre `-90` y `90`.                                      |
+| longitud          | decimal | No          | Si se envía, debe estar entre `-180` y `180`.                                    |
+| es_matriz         | boolean | Sí          | Si `true`, el `codigo` debe ser `001`; si `false`, el código no puede ser `001`. |
+| usuario_auditoria | string  | Sí          | Usuario responsable del registro.                                                |
+| empresa_id        | UUID    | Sí          | Empresa propietaria de la sucursal; debe existir y estar activa.                 |
 
 ## PUT /api/v1/sucursales/\{item_id\}
+
 Actualiza datos de sucursal para mantener operación comercial sin perder trazabilidad histórica.
 
 <Tabs>
@@ -618,19 +630,20 @@ Actualiza datos de sucursal para mantener operación comercial sin perder trazab
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la sucursal a modificar. |
-| nombre | string | No | Si se envía, longitud entre 3 y 50 caracteres. |
-| direccion | string | No | Si se envía, longitud entre 3 y 100 caracteres. |
-| telefono | string | No | Si se envía, solo dígitos entre 7 y 10 caracteres. |
-| latitud | decimal | No | Debe ser decimal válido y quedar en el rango `-90` a `90`. |
-| longitud | decimal | No | Debe ser decimal válido y quedar en el rango `-180` a `180`. |
-| es_matriz | boolean | No | Debe respetar la regla con `codigo` (`001` para matriz). |
-| activo | boolean | No | Permite activar o desactivar la sucursal. |
-| usuario_auditoria | string | No | Si se envía, entre 3 y 50 caracteres. |
+| Campo             | Tipo    | Obligatorio | Descripción y Restricciones                                  |
+| ----------------- | ------- | ----------- | ------------------------------------------------------------ |
+| item_id           | UUID    | Sí          | Identificador de la sucursal a modificar.                    |
+| nombre            | string  | No          | Si se envía, longitud entre 3 y 50 caracteres.               |
+| direccion         | string  | No          | Si se envía, longitud entre 3 y 100 caracteres.              |
+| telefono          | string  | No          | Si se envía, solo dígitos entre 7 y 10 caracteres.           |
+| latitud           | decimal | No          | Debe ser decimal válido y quedar en el rango `-90` a `90`.   |
+| longitud          | decimal | No          | Debe ser decimal válido y quedar en el rango `-180` a `180`. |
+| es_matriz         | boolean | No          | Debe respetar la regla con `codigo` (`001` para matriz).     |
+| activo            | boolean | No          | Permite activar o desactivar la sucursal.                    |
+| usuario_auditoria | string  | No          | Si se envía, entre 3 y 50 caracteres.                        |
 
 ## DELETE /api/v1/sucursales/\{item_id\}
+
 Desactiva una sucursal para detener su uso en nuevas operaciones sin eliminar su histórico.
 
 <Tabs>
@@ -665,11 +678,12 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la sucursal a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones                |
+| ------- | ---- | ----------- | ------------------------------------------ |
+| item_id | UUID | Sí          | Identificador de la sucursal a desactivar. |
 
 ## GET /api/v1/puntos-emision
+
 Lista puntos de emisión para facturación y control de secuenciales por establecimiento.
 
 <Tabs>
@@ -737,13 +751,14 @@ Lista puntos de emisión para facturación y control de secuenciales por estable
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Inicio de paginación. Default `0`, mínimo `0`. |
-| only_active | bool | No | Filtra puntos de emisión activos. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                |
+| ----------- | ---- | ----------- | ---------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Inicio de paginación. Default `0`, mínimo `0`.             |
+| only_active | bool | No          | Filtra puntos de emisión activos.                          |
 
 ## GET /api/v1/puntos-emision/\{item_id\}
+
 Consulta el detalle de un punto de emisión para operación de caja y configuración de impresión.
 
 <Tabs>
@@ -792,11 +807,12 @@ Consulta el detalle de un punto de emisión para operación de caja y configurac
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del punto de emisión. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones         |
+| ------- | ---- | ----------- | ----------------------------------- |
+| item_id | UUID | Sí          | Identificador del punto de emisión. |
 
 ## POST /api/v1/puntos-emision
+
 Registra un nuevo punto de emisión por sucursal para separar series documentales y comportamiento de impresión.
 
 <Tabs>
@@ -851,16 +867,17 @@ Registra un nuevo punto de emisión por sucursal para separar series documentale
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| codigo | string | Sí | Longitud exacta de 3 caracteres; con `sucursal_id` debe ser único. |
-| descripcion | string | Sí | Descripción funcional del punto de emisión. En persistencia admite hasta 120 caracteres. |
-| secuencial_actual | int | No | Default `1`, mínimo `1`. |
-| config_impresion | object | No | Objeto JSON; default `{margen_superior_cm: 5.0, max_items_por_pagina: 15}`. |
-| usuario_auditoria | string | Sí | Usuario que registra la operación. |
-| sucursal_id | UUID | Sí | Sucursal propietaria del punto; debe existir y estar activa. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                                                              |
+| ----------------- | ------ | ----------- | ---------------------------------------------------------------------------------------- |
+| codigo            | string | Sí          | Longitud exacta de 3 caracteres; con `sucursal_id` debe ser único.                       |
+| descripcion       | string | Sí          | Descripción funcional del punto de emisión. En persistencia admite hasta 120 caracteres. |
+| secuencial_actual | int    | No          | Default `1`, mínimo `1`.                                                                 |
+| config_impresion  | object | No          | Objeto JSON; default `{margen_superior_cm: 5.0, max_items_por_pagina: 15}`.              |
+| usuario_auditoria | string | Sí          | Usuario que registra la operación.                                                       |
+| sucursal_id       | UUID   | Sí          | Sucursal propietaria del punto; debe existir y estar activa.                             |
 
 ## PUT /api/v1/puntos-emision/\{item_id\}
+
 Actualiza descripción, secuencial base o configuración de impresión para ajustar la operación diaria de caja.
 
 <Tabs>
@@ -925,16 +942,17 @@ Actualiza descripción, secuencial base o configuración de impresión para ajus
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del punto de emisión a actualizar. |
-| descripcion | string | No | Texto descriptivo del punto de emisión. |
-| secuencial_actual | int | No | Valor base del secuencial del punto en documento factura. |
-| config_impresion | object | No | Parámetros de impresión usados por formatos de salida. |
-| usuario_auditoria | string | No | Usuario responsable de la modificación. |
-| activo | boolean | No | Activa o desactiva el punto de emisión. |
+| Campo             | Tipo    | Obligatorio | Descripción y Restricciones                               |
+| ----------------- | ------- | ----------- | --------------------------------------------------------- |
+| item_id           | UUID    | Sí          | Identificador del punto de emisión a actualizar.          |
+| descripcion       | string  | No          | Texto descriptivo del punto de emisión.                   |
+| secuencial_actual | int     | No          | Valor base del secuencial del punto en documento factura. |
+| config_impresion  | object  | No          | Parámetros de impresión usados por formatos de salida.    |
+| usuario_auditoria | string  | No          | Usuario responsable de la modificación.                   |
+| activo            | boolean | No          | Activa o desactiva el punto de emisión.                   |
 
 ## DELETE /api/v1/puntos-emision/\{item_id\}
+
 Ejecuta baja lógica de un punto de emisión para impedir nuevas transacciones con esa serie.
 
 <Tabs>
@@ -969,11 +987,12 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del punto de emisión a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones                      |
+| ------- | ---- | ----------- | ------------------------------------------------ |
+| item_id | UUID | Sí          | Identificador del punto de emisión a desactivar. |
 
 ## POST /api/v1/puntos-emision/\{punto_emision_id\}/secuenciales/\{tipo_documento\}/siguiente
+
 Entrega y consume el siguiente secuencial SRI de forma transaccional por punto y tipo documental.
 
 <Tabs>
@@ -1014,13 +1033,14 @@ Entrega y consume el siguiente secuencial SRI de forma transaccional por punto y
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| punto_emision_id | UUID | Sí | Punto de emisión sobre el que se controla secuencial. |
-| tipo_documento | enum | Sí | Valores permitidos: `FACTURA`, `RETENCION`, `NOTA_CREDITO`, `NOTA_DEBITO`, `GUIA_REMISION`. |
-| usuario_auditoria | string | No | Usuario opcional para trazabilidad del incremento. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                                                                 |
+| ----------------- | ------ | ----------- | ------------------------------------------------------------------------------------------- |
+| punto_emision_id  | UUID   | Sí          | Punto de emisión sobre el que se controla secuencial.                                       |
+| tipo_documento    | enum   | Sí          | Valores permitidos: `FACTURA`, `RETENCION`, `NOTA_CREDITO`, `NOTA_DEBITO`, `GUIA_REMISION`. |
+| usuario_auditoria | string | No          | Usuario opcional para trazabilidad del incremento.                                          |
 
 ## POST /api/v1/puntos-emision/\{punto_emision_id\}/secuenciales/\{tipo_documento\}/ajuste-manual
+
 Permite corregir manualmente secuenciales en contingencias con control estricto de perfil administrativo y permisos.
 
 <Tabs>
@@ -1070,13 +1090,13 @@ Permite corregir manualmente secuenciales en contingencias con control estricto 
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| punto_emision_id | UUID | Sí | Identificador del punto de emisión cuyo secuencial se corrige. |
-| tipo_documento | enum | Sí | Tipo documental SRI a ajustar: `FACTURA`, `RETENCION`, `NOTA_CREDITO`, `NOTA_DEBITO`, `GUIA_REMISION`. |
-| usuario_id | UUID | Sí | Usuario que ejecuta el ajuste; debe estar activo, tener rol `ADMIN/ADMINISTRADOR` y permiso de módulo `PUNTOS_EMISION` para `actualizar`. |
-| justificacion | string | Sí | Texto obligatorio entre 5 y 500 caracteres, se registra en auditoría. |
-| nuevo_secuencial | int | Sí | Nuevo valor del secuencial, mínimo `1`. |
+| Campo            | Tipo   | Obligatorio | Descripción y Restricciones                                                                                                               |
+| ---------------- | ------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| punto_emision_id | UUID   | Sí          | Identificador del punto de emisión cuyo secuencial se corrige.                                                                            |
+| tipo_documento   | enum   | Sí          | Tipo documental SRI a ajustar: `FACTURA`, `RETENCION`, `NOTA_CREDITO`, `NOTA_DEBITO`, `GUIA_REMISION`.                                    |
+| usuario_id       | UUID   | Sí          | Usuario que ejecuta el ajuste; debe estar activo, tener rol `ADMIN/ADMINISTRADOR` y permiso de módulo `PUNTOS_EMISION` para `actualizar`. |
+| justificacion    | string | Sí          | Texto obligatorio entre 5 y 500 caracteres, se registra en auditoría.                                                                     |
+| nuevo_secuencial | int    | Sí          | Nuevo valor del secuencial, mínimo `1`.                                                                                                   |
 
 ---
 
@@ -1084,22 +1104,22 @@ Diccionario de Datos
 
 > Códigos operativos para manejo de UX y mensajes en frontend.
 
-| Endpoint | Códigos esperados |
-|---|---|
-| `GET /api/v1/empresas` | `200`, `422` |
-| `GET /api/v1/empresas/{item_id}` | `200`, `404` |
-| `POST /api/v1/empresas` | `201`, `400`, `404`, `409`, `422` |
-| `PUT /api/v1/empresas/{item_id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/empresas/{item_id}` | `204`, `404` |
-| `GET /api/v1/sucursales` | `200`, `422` |
-| `GET /api/v1/sucursales/{item_id}` | `200`, `404` |
-| `POST /api/v1/sucursales` | `201`, `400`, `404`, `409`, `422` |
-| `PUT /api/v1/sucursales/{item_id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/sucursales/{item_id}` | `204`, `404` |
-| `GET /api/v1/puntos-emision` | `200`, `422` |
-| `GET /api/v1/puntos-emision/{item_id}` | `200`, `404` |
-| `POST /api/v1/puntos-emision` | `201`, `404`, `409`, `422` |
-| `PUT /api/v1/puntos-emision/{item_id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/puntos-emision/{item_id}` | `204`, `404` |
-| `POST /api/v1/puntos-emision/{punto_emision_id}/secuenciales/{tipo_documento}/siguiente` | `200`, `404`, `422` |
+| Endpoint                                                                                     | Códigos esperados                 |
+| -------------------------------------------------------------------------------------------- | --------------------------------- |
+| `GET /api/v1/empresas`                                                                       | `200`, `422`                      |
+| `GET /api/v1/empresas/{item_id}`                                                             | `200`, `404`                      |
+| `POST /api/v1/empresas`                                                                      | `201`, `400`, `404`, `409`, `422` |
+| `PUT /api/v1/empresas/{item_id}`                                                             | `200`, `400`, `404`, `409`, `422` |
+| `DELETE /api/v1/empresas/{item_id}`                                                          | `204`, `404`                      |
+| `GET /api/v1/sucursales`                                                                     | `200`, `422`                      |
+| `GET /api/v1/sucursales/{item_id}`                                                           | `200`, `404`                      |
+| `POST /api/v1/sucursales`                                                                    | `201`, `400`, `404`, `409`, `422` |
+| `PUT /api/v1/sucursales/{item_id}`                                                           | `200`, `400`, `404`, `409`, `422` |
+| `DELETE /api/v1/sucursales/{item_id}`                                                        | `204`, `404`                      |
+| `GET /api/v1/puntos-emision`                                                                 | `200`, `422`                      |
+| `GET /api/v1/puntos-emision/{item_id}`                                                       | `200`, `404`                      |
+| `POST /api/v1/puntos-emision`                                                                | `201`, `404`, `409`, `422`        |
+| `PUT /api/v1/puntos-emision/{item_id}`                                                       | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/puntos-emision/{item_id}`                                                    | `204`, `404`                      |
+| `POST /api/v1/puntos-emision/{punto_emision_id}/secuenciales/{tipo_documento}/siguiente`     | `200`, `404`, `422`               |
 | `POST /api/v1/puntos-emision/{punto_emision_id}/secuenciales/{tipo_documento}/ajuste-manual` | `200`, `400`, `403`, `404`, `422` |

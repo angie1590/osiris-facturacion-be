@@ -9,20 +9,24 @@ from osiris.domain.base_models import BaseOSModel
 from osiris.modules.common.persona.composition import PersonaReference
 from osiris.modules.common.persona.models import PersonaRead
 
+
 class ClienteBase(BaseOSModel):
     persona_id: UUID
     tipo_cliente_id: UUID
+
 
 class ClienteCreate(PersonaReference):
     model_config = {"extra": "forbid", "from_attributes": True}
     tipo_cliente_id: UUID
     usuario_auditoria: Optional[str] = None
 
+
 class ClienteUpdate(BaseOSModel):
     model_config = {"extra": "forbid", "from_attributes": True}
     persona_id: Optional[UUID] = None
     tipo_cliente_id: Optional[UUID] = None
     usuario_auditoria: Optional[str] = None
+
 
 class ClienteRead(BaseOSModel):
     id: UUID

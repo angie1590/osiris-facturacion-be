@@ -4,15 +4,15 @@ Fuente funcional: documento adjunto, decisiones D-001..D-009, reglas RN-GEN/RN-C
 
 Evidencia local revisada durante planificacion:
 
-| Superficie | Observacion | Consecuencia |
-| --- | --- | --- |
-| `domain/service.py` | Create/update/delete soportan `commit=False`, FKs activas y rollback | Reutilizar este limite de transaccion; no crear otro CRUD framework |
-| `empleado/service.py` | Crea Usuario por estrategia con `commit=False`, luego Empleado y commit final; no define baja especifica | Extender alta a Persona, cubrir todos los fallos y agregar baja atomica |
-| Cliente/Proveedor Persona/Empleado | Updates eliminan `persona_id` del payload | Validacion explicita de inmutabilidad en DTO y servicio |
-| Proveedor Sociedad | Update elimina `persona_contacto_id` | Habilitar contacto mutable y validar Persona activa |
-| Usuario | Update filtra campos; create admite `commit=False`; DTO minimo seis | Rechazar identidad/username y unificar politica de password |
-| `core/auth.py` | Login compara `lower(username)` y existe control de invalidacion de sesion | Reutilizarlo y probar access/refresh; alinear unicidad persistente |
-| Frontend | Persona y asociaciones ya existen | Conservar contratos base y evolucionar, no reemplazar modulos |
+| Superficie                         | Observacion                                                                                              | Consecuencia                                                            |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `domain/service.py`                | Create/update/delete soportan `commit=False`, FKs activas y rollback                                     | Reutilizar este limite de transaccion; no crear otro CRUD framework     |
+| `empleado/service.py`              | Crea Usuario por estrategia con `commit=False`, luego Empleado y commit final; no define baja especifica | Extender alta a Persona, cubrir todos los fallos y agregar baja atomica |
+| Cliente/Proveedor Persona/Empleado | Updates eliminan `persona_id` del payload                                                                | Validacion explicita de inmutabilidad en DTO y servicio                 |
+| Proveedor Sociedad                 | Update elimina `persona_contacto_id`                                                                     | Habilitar contacto mutable y validar Persona activa                     |
+| Usuario                            | Update filtra campos; create admite `commit=False`; DTO minimo seis                                      | Rechazar identidad/username y unificar politica de password             |
+| `core/auth.py`                     | Login compara `lower(username)` y existe control de invalidacion de sesion                               | Reutilizarlo y probar access/refresh; alinear unicidad persistente      |
+| Frontend                           | Persona y asociaciones ya existen                                                                        | Conservar contratos base y evolucionar, no reemplazar modulos           |
 
 Los hallazgos del documento sobre restricciones SQL, auditoria y RBAC son objetivos de verificacion, no resultados certificados de una inspeccion de PostgreSQL. Reutilizar pruebas existentes `test_persona.py`, `test_cliente.py`, `test_tipo_cliente.py`, `test_proveedor_persona.py`, `test_proveedor_sociedad.py`, `test_empleado.py`, `test_usuario.py`, `test_auth_session_invalidation.py`, `test_audit_context.py` y `test_security_access_audit.py`.
 
@@ -105,16 +105,16 @@ Rollback: deshabilitar nuevas altas UI y conservar contratos por ID; revertir ve
 
 ## Traceability
 
-| Documento fuente | Cobertura |
-| --- | --- |
-| D-001..D-008; RN-GEN-001..013 | Identidad, constraints, ciclo de vida, auditoria, FKs, inmutabilidad y RBAC |
-| D-009; RN-CTX-001..007 | Contrato excluyente, resolver, carrera, rollback y permisos compuestos; UI en cambio par |
-| RN-PER-001..010 | Normalizacion/validadores, duplicidad, cambio de identidad y guard de dependencias |
-| RN-TC-001..004; RN-CLI-001..009 | TipoCliente, rol unico, FKs, reactivacion, Consumidor Final y alta contextual |
-| RN-PP-001..010; RN-PS-001..008 | RUC/catalogo, constraints, contacto mutable y alta/cambio atomicos |
-| RN-EMP-001..012; RN-USR-001..013 | Laboral, credenciales, atomicidad, baja/revocacion y reactivacion administrativa |
-| RN-LIFE-001..003; RN-TENANT-001..002 | ID historico, auditoria y limites globales |
-| H-001..H-012; secciones 55..71 | Verificacion de hallazgos, pruebas PostgreSQL, docs y backlog fuera de alcance |
+| Documento fuente                     | Cobertura                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| D-001..D-008; RN-GEN-001..013        | Identidad, constraints, ciclo de vida, auditoria, FKs, inmutabilidad y RBAC              |
+| D-009; RN-CTX-001..007               | Contrato excluyente, resolver, carrera, rollback y permisos compuestos; UI en cambio par |
+| RN-PER-001..010                      | Normalizacion/validadores, duplicidad, cambio de identidad y guard de dependencias       |
+| RN-TC-001..004; RN-CLI-001..009      | TipoCliente, rol unico, FKs, reactivacion, Consumidor Final y alta contextual            |
+| RN-PP-001..010; RN-PS-001..008       | RUC/catalogo, constraints, contacto mutable y alta/cambio atomicos                       |
+| RN-EMP-001..012; RN-USR-001..013     | Laboral, credenciales, atomicidad, baja/revocacion y reactivacion administrativa         |
+| RN-LIFE-001..003; RN-TENANT-001..002 | ID historico, auditoria y limites globales                                               |
+| H-001..H-012; secciones 55..71       | Verificacion de hallazgos, pruebas PostgreSQL, docs y backlog fuera de alcance           |
 
 ## Implementation Evidence
 
@@ -135,32 +135,32 @@ Checkpoint 2026-10-03, fase de caracterizacion/datos:
 
 Las decisiones pendientes del checkpoint inicial fueron aprobadas por el usuario: metadatos `01/03` natural, `02/05` sociedad y `04` ambos; codigos desconocidos sin aplicabilidad hasta configuracion explicita. Se preservan algoritmos actuales y pasaporte minimo cinco caracteres, sin afirmar existencia/actividad SRI. RBAC por entidad, con grants iniciales solo para Administrador; no se sobrescriben permisos preexistentes. La delegacion de implementacion fue autorizada explicitamente.
 
-| Hallazgo | Resultado |
-| --- | --- |
-| H-001 | Documentacion corregida a Persona natural |
-| H-002 | Unique ProveedorPersona en entity y Alembic, probado por inserts PostgreSQL |
-| H-003 | Baja Empleado revoca Usuario y access/refresh atomicamente |
-| H-004 | DTO/servicios rechazan cambios de identidad y campos internos |
-| H-005 | Contacto Sociedad mutable por ID o Persona nueva, con rollback |
-| H-006 | Username trim/lower e indice unico normalizado; login alineado |
-| H-007 | Politica unica de ocho caracteres en escrituras de password |
-| H-008 | Actor autenticado autoritativo, pruebas de spoofing y auditoria de denegaciones sin payload sensible |
-| H-009 | Validacion de contribuyente por flags, independiente del nombre |
-| H-010 | Cliente Sociedad queda como capacidad futura, no workaround natural |
-| H-011 | Maestros comerciales globales documentados; no aislamiento comercial completo |
-| H-012 | Formato/algoritmo local separado del estado tributario y comprobante |
+| Hallazgo | Resultado                                                                                            |
+| -------- | ---------------------------------------------------------------------------------------------------- |
+| H-001    | Documentacion corregida a Persona natural                                                            |
+| H-002    | Unique ProveedorPersona en entity y Alembic, probado por inserts PostgreSQL                          |
+| H-003    | Baja Empleado revoca Usuario y access/refresh atomicamente                                           |
+| H-004    | DTO/servicios rechazan cambios de identidad y campos internos                                        |
+| H-005    | Contacto Sociedad mutable por ID o Persona nueva, con rollback                                       |
+| H-006    | Username trim/lower e indice unico normalizado; login alineado                                       |
+| H-007    | Politica unica de ocho caracteres en escrituras de password                                          |
+| H-008    | Actor autenticado autoritativo, pruebas de spoofing y auditoria de denegaciones sin payload sensible |
+| H-009    | Validacion de contribuyente por flags, independiente del nombre                                      |
+| H-010    | Cliente Sociedad queda como capacidad futura, no workaround natural                                  |
+| H-011    | Maestros comerciales globales documentados; no aislamiento comercial completo                        |
+| H-012    | Formato/algoritmo local separado del estado tributario y comprobante                                 |
 
 Matriz de contratos entregados y verificados con frontend:
 
-| Recurso | Contrato |
-| --- | --- |
-| Personas | Identificacion exacta, q, estado, offset/limit, orden; GET vinculos; POST reactivar; GET contrato OpenAPI por prefijo API |
-| TipoCliente | Nombre/decimal/guard de dependencias, GET vinculos, POST reactivar |
-| Cliente y Proveedor Persona | POST persona_id XOR persona_nueva, Read con Persona, identidad inmutable, historicos/reactivar |
-| Proveedor Sociedad | POST contacto existente/nuevo; PUT contacto mutable o nuevo; datos juridicos separados y telefono opcional |
-| Empleado | POST Persona + Empleado + Usuario, decimal/fechas/empresa, baja revoca acceso, reactivar sin reactivar Usuario |
-| Usuario | POST Persona + Usuario, username normalizado, Rol/password, reset, invalidar-sesion, reactivar administrativamente |
-| Seguridad | Permisos propios autenticados; otros usuarios requieren RBAC; escrituras de roles/modulos/grants protegidas para impedir bypass |
+| Recurso                     | Contrato                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Personas                    | Identificacion exacta, q, estado, offset/limit, orden; GET vinculos; POST reactivar; GET contrato OpenAPI por prefijo API       |
+| TipoCliente                 | Nombre/decimal/guard de dependencias, GET vinculos, POST reactivar                                                              |
+| Cliente y Proveedor Persona | POST persona_id XOR persona_nueva, Read con Persona, identidad inmutable, historicos/reactivar                                  |
+| Proveedor Sociedad          | POST contacto existente/nuevo; PUT contacto mutable o nuevo; datos juridicos separados y telefono opcional                      |
+| Empleado                    | POST Persona + Empleado + Usuario, decimal/fechas/empresa, baja revoca acceso, reactivar sin reactivar Usuario                  |
+| Usuario                     | POST Persona + Usuario, username normalizado, Rol/password, reset, invalidar-sesion, reactivar administrativamente              |
+| Seguridad                   | Permisos propios autenticados; otros usuarios requieren RBAC; escrituras de roles/modulos/grants protegidas para impedir bypass |
 
 Comprobaciones finales:
 
@@ -176,13 +176,13 @@ Comprobaciones finales:
 
 ### Registered Subsequent Capabilities
 
-| Capacidad futura | Limite obligatorio |
-| --- | --- |
-| customer-society | Modelar cliente juridico antes de declarar ventas B2B completas |
-| directory-company-enablement | Habilitacion comercial por empresa antes de declarar aislamiento del Directorio |
-| employee-multiemployment | Revisar unicidad laboral global para empleo simultaneo en varias empresas |
-| customer-portal | Acceso de clientes con permisos y ciclo de vida propios |
-| foreign-identification-and-fiscal-plate | Contratos fiscales separados; no alias silencioso de Pasaporte/Persona |
+| Capacidad futura                        | Limite obligatorio                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| customer-society                        | Modelar cliente juridico antes de declarar ventas B2B completas                 |
+| directory-company-enablement            | Habilitacion comercial por empresa antes de declarar aislamiento del Directorio |
+| employee-multiemployment                | Revisar unicidad laboral global para empleo simultaneo en varias empresas       |
+| customer-portal                         | Acceso de clientes con permisos y ciclo de vida propios                         |
+| foreign-identification-and-fiscal-plate | Contratos fiscales separados; no alias silencioso de Pasaporte/Persona          |
 
 ### Completed Global Gates
 

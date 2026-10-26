@@ -177,7 +177,10 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     if (empresaId) headers.set("X-Empresa-Id", empresaId);
   }
 
-  const res = await fetch(`${import.meta.env.VITE_API_URL}${path}`, { ...init, headers });
+  const res = await fetch(`${import.meta.env.VITE_API_URL}${path}`, {
+    ...init,
+    headers,
+  });
   return res;
 }
 ```
@@ -190,11 +193,9 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
 ```ts
 function isCompanyContextError(detail?: string): boolean {
   if (!detail) return false;
-  return [
-    "empresa seleccionada",
-    "otra empresa",
-    "contexto de sesión",
-  ].some((x) => detail.toLowerCase().includes(x));
+  return ["empresa seleccionada", "otra empresa", "contexto de sesión"].some(
+    (x) => detail.toLowerCase().includes(x),
+  );
 }
 
 // En interceptor de respuesta:

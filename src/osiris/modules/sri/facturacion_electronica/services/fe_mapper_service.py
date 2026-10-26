@@ -76,15 +76,23 @@ def _fmt(value: Decimal) -> str:
     return f"{q2(value):.2f}"
 
 
-def _append_unique_campo_adicional(info_adicional: InfoAdicionalPayload, *, nombre: str, valor: str) -> InfoAdicionalPayload:
+def _append_unique_campo_adicional(
+    info_adicional: InfoAdicionalPayload, *, nombre: str, valor: str
+) -> InfoAdicionalPayload:
     campos = list(info_adicional.get("campoAdicional") or [])
-    if not any((campo.get("nombre"), campo.get("valor")) == (nombre, valor) for campo in campos if isinstance(campo, dict)):
+    if not any(
+        (campo.get("nombre"), campo.get("valor")) == (nombre, valor)
+        for campo in campos
+        if isinstance(campo, dict)
+    ):
         campos.append({"nombre": nombre, "valor": valor})
     info_adicional["campoAdicional"] = campos
     return info_adicional
 
 
-def _totales_impuestos_desde_detalle(venta: VentaRead) -> tuple[Decimal, Decimal, Decimal]:
+def _totales_impuestos_desde_detalle(
+    venta: VentaRead,
+) -> tuple[Decimal, Decimal, Decimal]:
     total = Decimal("0.00")
     total_iva = Decimal("0.00")
     total_ice = Decimal("0.00")
@@ -114,7 +122,11 @@ class FEMapperService:
         tipo_emision: str,
     ) -> str:
         if GeneradorClaveAcceso is None:
-            return f"{fecha_emision.strftime('%d%m%Y')}{ruc}{estab}{pto_emi}{secuencial}".ljust(49, "0")[:49]
+            return f"{fecha_emision.strftime('%d%m%Y')}{ruc}{estab}{pto_emi}{secuencial}".ljust(
+                49, "0"
+            )[
+                :49
+            ]
 
         return GeneradorClaveAcceso.generar(
             fecha_emision=fecha_emision.strftime("%d/%m/%Y"),
@@ -163,7 +175,9 @@ class FEMapperService:
         )
 
         payload_base = self.venta_to_fe_payload(venta)
-        info_adicional = payload_base.get("infoAdicional", InfoAdicionalPayload(campoAdicional=[]))
+        info_adicional = payload_base.get(
+            "infoAdicional", InfoAdicionalPayload(campoAdicional=[])
+        )
         if venta.regimen_emisor == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
             info_adicional = _append_unique_campo_adicional(
                 info_adicional,
@@ -174,7 +188,9 @@ class FEMapperService:
         # contribuyente especial, agente de retención y gran contribuyente con
         # su resolución según Ficha Técnica SRI 2.34 (Anexos 21 y 24).
         if email_cliente:
-            info_adicional = _append_unique_campo_adicional(info_adicional, nombre="email", valor=email_cliente)
+            info_adicional = _append_unique_campo_adicional(
+                info_adicional, nombre="email", valor=email_cliente
+            )
 
         return {
             "infoTributaria": {
@@ -194,12 +210,16 @@ class FEMapperService:
                 "fechaEmision": venta.fecha_emision.strftime("%d/%m/%Y"),
                 "dirEstablecimiento": dir_establecimiento or dir_matriz,
                 "obligadoContabilidad": "SI" if obligado_contabilidad else "NO",
-                "tipoIdentificacionComprador": IDENTIFICACION_SRI_CODE[venta.tipo_identificacion_comprador],
+                "tipoIdentificacionComprador": IDENTIFICACION_SRI_CODE[
+                    venta.tipo_identificacion_comprador
+                ],
                 "razonSocialComprador": venta.identificacion_comprador,
                 "identificacionComprador": venta.identificacion_comprador,
                 "totalSinImpuestos": _fmt(venta.subtotal_sin_impuestos),
                 "totalDescuento": "0.00",
-                "totalConImpuestos": {"totalImpuesto": payload_base["infoFactura"]["totalConImpuestos"]},
+                "totalConImpuestos": {
+                    "totalImpuesto": payload_base["infoFactura"]["totalConImpuestos"]
+                },
                 "propina": "0.00",
                 "importeTotal": _fmt(venta.valor_total),
                 "moneda": "DOLAR",
@@ -225,8 +245,13 @@ class FEMapperService:
             for impuesto in detalle.impuestos:
                 key = (impuesto.codigo_impuesto_sri, impuesto.codigo_porcentaje_sri)
                 if key not in total_con_impuestos:
-                    total_con_impuestos[key] = {"base": Decimal("0.00"), "valor": Decimal("0.00")}
-                specific_base = impuesto.componente == TipoComponenteTributario.ESPECIFICO
+                    total_con_impuestos[key] = {
+                        "base": Decimal("0.00"),
+                        "valor": Decimal("0.00"),
+                    }
+                specific_base = (
+                    impuesto.componente == TipoComponenteTributario.ESPECIFICO
+                )
                 base_imponible = (
                     impuesto.cantidad_gravable or Decimal("0.00")
                     if specific_base
@@ -239,8 +264,16 @@ class FEMapperService:
                     {
                         "codigo": impuesto.codigo_impuesto_sri,
                         "codigoPorcentaje": impuesto.codigo_porcentaje_sri,
-                        "tarifa": f"{impuesto.tarifa:.4f}" if specific_base else _fmt(impuesto.tarifa),
-                        "baseImponible": f"{base_imponible:.4f}" if specific_base else _fmt(base_imponible),
+                        "tarifa": (
+                            f"{impuesto.tarifa:.4f}"
+                            if specific_base
+                            else _fmt(impuesto.tarifa)
+                        ),
+                        "baseImponible": (
+                            f"{base_imponible:.4f}"
+                            if specific_base
+                            else _fmt(base_imponible)
+                        ),
                         "valor": _fmt(impuesto.valor_impuesto),
                     }
                 )
@@ -256,7 +289,9 @@ class FEMapperService:
                 }
             )
 
-        total_detalle_impuestos, total_detalle_iva, total_detalle_ice = _totales_impuestos_desde_detalle(venta)
+        total_detalle_impuestos, total_detalle_iva, total_detalle_ice = (
+            _totales_impuestos_desde_detalle(venta)
+        )
         if total_detalle_iva != q2(venta.monto_iva):
             raise ValueError(
                 "Inconsistencia tributaria: el IVA de detalle no coincide con la cabecera de la venta."
@@ -279,13 +314,20 @@ class FEMapperService:
             }
             for (codigo, codigo_porcentaje), data in sorted(total_con_impuestos.items())
         ]
-        total_agrupado = q2(sum((data["valor"] for data in total_con_impuestos.values()), Decimal("0.00")))
+        total_agrupado = q2(
+            sum(
+                (data["valor"] for data in total_con_impuestos.values()),
+                Decimal("0.00"),
+            )
+        )
         if total_agrupado != total_detalle_impuestos:
             raise ValueError(
                 "Inconsistencia tributaria: totalConImpuestos no cuadra con los impuestos de detalle."
             )
 
-        if q2(venta.subtotal_sin_impuestos + total_detalle_impuestos) != q2(venta.valor_total):
+        if q2(venta.subtotal_sin_impuestos + total_detalle_impuestos) != q2(
+            venta.valor_total
+        ):
             raise ValueError(
                 "Inconsistencia tributaria: subtotal mas impuestos no coincide con el valor total."
             )
@@ -293,7 +335,9 @@ class FEMapperService:
         payload: FacturaPayload = {
             "infoTributaria": {
                 "identificacionComprador": venta.identificacion_comprador,
-                "tipoIdentificacionComprador": IDENTIFICACION_SRI_CODE[venta.tipo_identificacion_comprador],
+                "tipoIdentificacionComprador": IDENTIFICACION_SRI_CODE[
+                    venta.tipo_identificacion_comprador
+                ],
             },
             "infoFactura": {
                 "fechaEmision": venta.fecha_emision.isoformat(),
@@ -321,7 +365,11 @@ class FEMapperService:
         impuestos = [
             {
                 "codigoRetencion": detalle.codigo_retencion_sri,
-                "tipo": detalle.tipo.value if hasattr(detalle.tipo, "value") else str(detalle.tipo),
+                "tipo": (
+                    detalle.tipo.value
+                    if hasattr(detalle.tipo, "value")
+                    else str(detalle.tipo)
+                ),
                 "baseImponible": _fmt(detalle.base_calculo),
                 "porcentajeRetener": _fmt(detalle.porcentaje),
                 "valorRetenido": _fmt(detalle.valor_retenido),
@@ -329,15 +377,26 @@ class FEMapperService:
             for detalle in retencion.detalles
         ]
 
-        total = q2(sum((detalle.valor_retenido for detalle in retencion.detalles), Decimal("0.00")))
+        total = q2(
+            sum(
+                (detalle.valor_retenido for detalle in retencion.detalles),
+                Decimal("0.00"),
+            )
+        )
         if total != q2(retencion.total_retenido):
-            raise ValueError("Inconsistencia tributaria: el total retenido no cuadra con los detalles.")
+            raise ValueError(
+                "Inconsistencia tributaria: el total retenido no cuadra con los detalles."
+            )
 
         return {
             "retencion": {
                 "compraId": str(retencion.compra_id),
                 "fechaEmision": retencion.fecha_emision.isoformat(),
-                "estado": retencion.estado.value if hasattr(retencion.estado, "value") else str(retencion.estado),
+                "estado": (
+                    retencion.estado.value
+                    if hasattr(retencion.estado, "value")
+                    else str(retencion.estado)
+                ),
                 "totalRetenido": _fmt(retencion.total_retenido),
                 "impuestos": impuestos,
             }
@@ -354,7 +413,9 @@ class FEMapperService:
     ) -> DocumentoElectronico:
         documento = session.get(DocumentoElectronico, documento_electronico_id)
         if not documento or not documento.activo:
-            raise HTTPException(status_code=404, detail="Documento electronico no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Documento electronico no encontrado"
+            )
 
         destino = (
             estado_nuevo
@@ -374,12 +435,22 @@ class FEMapperService:
                 else documento.estado_sri
             )
         else:
-            estado_actual = documento.estado_sri if hasattr(documento, "estado_sri") else documento.estado
-        anterior = estado_actual.value if hasattr(estado_actual, "value") else str(estado_actual)
+            estado_actual = (
+                documento.estado_sri
+                if hasattr(documento, "estado_sri")
+                else documento.estado
+            )
+        anterior = (
+            estado_actual.value
+            if hasattr(estado_actual, "value")
+            else str(estado_actual)
+        )
         motivo = (mensaje_sri or "").strip()
 
         if destino == EstadoDocumentoElectronico.RECHAZADO and not motivo:
-            raise ValueError("motivo_cambio es obligatorio cuando el SRI rechaza el comprobante")
+            raise ValueError(
+                "motivo_cambio es obligatorio cuando el SRI rechaza el comprobante"
+            )
         if not motivo:
             motivo = f"Respuesta SRI: {destino.value}"
 

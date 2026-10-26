@@ -55,7 +55,9 @@ class ImpuestoCatalogoCreate(BaseOSModel):
 
         elif self.tipo_impuesto == TipoImpuesto.ICE:
             if self.tarifa_ad_valorem is None and self.tarifa_especifica is None:
-                raise ValueError("Al menos una tarifa (ad_valorem o especifica) es obligatoria para ICE")
+                raise ValueError(
+                    "Al menos una tarifa (ad_valorem o especifica) es obligatoria para ICE"
+                )
             if self.modo_calculo_ice is None:
                 raise ValueError("modo_calculo_ice es obligatorio para ICE")
             if self.unidad_base is None:

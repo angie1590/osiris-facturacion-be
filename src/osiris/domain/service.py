@@ -22,6 +22,8 @@ FkSpec = Union[
     Tuple[Type[SQLModel], str, bool],
     Dict[str, Any],
 ]
+
+
 class BaseService(Generic[ModelT, ReadT]):
     repo: Any = None  # cada subclase la setea
 
@@ -62,9 +64,9 @@ class BaseService(Generic[ModelT, ReadT]):
 
         raise ValueError("fk_models contiene una especificación de FK inválida")
 
-
-
-    def _check_fk_active_and_exists(self, session: Session, data: Dict[str, Any]) -> None:
+    def _check_fk_active_and_exists(
+        self, session: Session, data: Dict[str, Any]
+    ) -> None:
         """
         Para cada entrada en fk_models:
           - verifica existencia (modelo.campo == valor)
@@ -80,24 +82,57 @@ class BaseService(Generic[ModelT, ReadT]):
             if not hasattr(model, field):
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Configuración inválida: {model.__name__}.{field} no existe"
+                    detail=f"Configuración inválida: {model.__name__}.{field} no existe",
                 )
 
-            stmt = select(model).where(getattr(model, field) == data[field_name]).execution_options(
-                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
+            stmt = (
+                select(model)
+                .where(getattr(model, field) == data[field_name])
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
             )
             obj = session.exec(stmt).first()
             if not obj:
-                raise HTTPException(status_code=404, detail=f"{model.__name__} no encontrado")
+                raise HTTPException(
+                    status_code=404, detail=f"{model.__name__} no encontrado"
+                )
 
-            if require_active and hasattr(obj, "activo") and getattr(obj, "activo") is False:
-                raise HTTPException(status_code=409, detail=f"{model.__name__} inactivo")
+            if (
+                require_active
+                and hasattr(obj, "activo")
+                and getattr(obj, "activo") is False
+            ):
+                raise HTTPException(
+                    status_code=409, detail=f"{model.__name__} inactivo"
+                )
 
-    def list(self, session: Session, *, only_active: bool = True, limit: int = 50, offset: int = 0, **kw: Any) -> tuple[List[ReadT], int]:
-        return cast(tuple[List[ReadT], int], self.repo.list(session, only_active=only_active, limit=limit, offset=offset, **kw))
+    def list(
+        self,
+        session: Session,
+        *,
+        only_active: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+        **kw: Any,
+    ) -> tuple[List[ReadT], int]:
+        return cast(
+            tuple[List[ReadT], int],
+            self.repo.list(
+                session, only_active=only_active, limit=limit, offset=offset, **kw
+            ),
+        )
 
-    def list_paginated(self, session: Session, *, only_active: bool = True, limit: int = 50, offset: int = 0, **kw: Any) -> tuple[List[ReadT], PaginationMeta]:
-        items, total = self.list(session, only_active=only_active, limit=limit, offset=offset, **kw)
+    def list_paginated(
+        self,
+        session: Session,
+        *,
+        only_active: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+        **kw: Any,
+    ) -> tuple[List[ReadT], PaginationMeta]:
+        items, total = self.list(
+            session, only_active=only_active, limit=limit, offset=offset, **kw
+        )
         meta = build_pagination_meta(total=total, limit=limit, offset=offset)
         return items, meta
 
@@ -115,7 +150,9 @@ class BaseService(Generic[ModelT, ReadT]):
     def on_deleted(self, obj: ModelT, session: Session) -> None: ...
 
     # Operaciones
-    def create(self, session: Session, data: Dict[str, Any], *, commit: bool = True) -> ModelT:
+    def create(
+        self, session: Session, data: Dict[str, Any], *, commit: bool = True
+    ) -> ModelT:
         try:
             self.validate_create(data, session)
             self._check_fk_active_and_exists(session, data)
@@ -131,7 +168,9 @@ class BaseService(Generic[ModelT, ReadT]):
     def get(self, session: Session, item_id: Any) -> ModelT | None:
         return cast(ModelT | None, self.repo.get(session, item_id))
 
-    def update(self, session: Session, item_id: Any, data: Any, *, commit: bool = True) -> ModelT | None:
+    def update(
+        self, session: Session, item_id: Any, data: Any, *, commit: bool = True
+    ) -> ModelT | None:
         try:
             db_obj = self.repo.get(session, item_id)
             if not db_obj:
@@ -146,7 +185,9 @@ class BaseService(Generic[ModelT, ReadT]):
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
-    def delete(self, session: Session, item_id: Any, *, commit: bool = True) -> bool | None:
+    def delete(
+        self, session: Session, item_id: Any, *, commit: bool = True
+    ) -> bool | None:
         try:
             db_obj = self.repo.get(session, item_id)
             if not db_obj:

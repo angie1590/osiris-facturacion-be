@@ -14,6 +14,7 @@ from osiris.core.security import PASSWORD_MIN_LENGTH
 
 SalarioType = Annotated[Decimal, PydField(ge=0, max_digits=10, decimal_places=2)]
 
+
 def _min_employee_age() -> int:
     # Parametrizable por env var EMP_MIN_AGE, por defecto 16
     try:
@@ -33,6 +34,7 @@ class UsuarioInlineCreate(BaseOSModel):
     rol_id: UUID
     usuario_auditoria: Optional[str] = None
     model_config = {"extra": "forbid"}
+
     @field_validator("username", mode="before")
     @classmethod
     def normalize_username(cls, value: str) -> str:
@@ -65,7 +67,9 @@ class EmpleadoCreate(PersonaReference):
         # 2) fecha_salida > fecha_ingreso si ambas existen
         if self.fecha_salida is not None:
             if self.fecha_salida <= self.fecha_ingreso:
-                raise ValueError("La fecha de salida debe ser posterior a la fecha de ingreso.")
+                raise ValueError(
+                    "La fecha de salida debe ser posterior a la fecha de ingreso."
+                )
 
         if self.fecha_ingreso > date.today():
             raise ValueError("La fecha de ingreso no puede ser en el futuro.")
@@ -94,8 +98,14 @@ class EmpleadoUpdate(BaseOSModel):
                 raise ValueError(f"El empleado debe tener al menos {min_age} años.")
         if self.fecha_ingreso is not None and self.fecha_ingreso > date.today():
             raise ValueError("La fecha de ingreso no puede ser en el futuro.")
-        if self.fecha_ingreso is not None and self.fecha_salida is not None and self.fecha_salida <= self.fecha_ingreso:
-            raise ValueError("La fecha de salida debe ser posterior a la fecha de ingreso.")
+        if (
+            self.fecha_ingreso is not None
+            and self.fecha_salida is not None
+            and self.fecha_salida <= self.fecha_ingreso
+        ):
+            raise ValueError(
+                "La fecha de salida debe ser posterior a la fecha de ingreso."
+            )
         return self
 
 

@@ -28,7 +28,9 @@ def create_token(subject: UUID, token_type: str, expires: timedelta) -> str:
         "iat": datetime.now(timezone.utc).timestamp(),
         "exp": datetime.now(timezone.utc) + expires,
     }
-    return cast(str, jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM))
+    return cast(
+        str, jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    )
 
 
 def decode_token(token: str) -> dict[str, Any]:
@@ -92,7 +94,9 @@ def require_roles(*allowed_roles: str) -> Callable[..., Usuario]:
         if normalized not in allowed:
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=403, detail="No tiene permiso para realizar esta operación.")
+            raise HTTPException(
+                status_code=403, detail="No tiene permiso para realizar esta operación."
+            )
         return usuario
 
     return _guard
@@ -100,9 +104,15 @@ def require_roles(*allowed_roles: str) -> Callable[..., Usuario]:
 
 def authenticate(session: Session, username: str, password: str) -> Usuario | None:
     usuario = session.exec(
-        select(Usuario).where(func.lower(func.trim(Usuario.username)) == username.strip().lower())
+        select(Usuario).where(
+            func.lower(func.trim(Usuario.username)) == username.strip().lower()
+        )
     ).first()
-    if not usuario or not usuario.activo or not verify_password(password, usuario.password_hash):
+    if (
+        not usuario
+        or not usuario.activo
+        or not verify_password(password, usuario.password_hash)
+    ):
         return None
     return usuario
 
@@ -118,7 +128,12 @@ def verify_approval_code(usuario: Usuario, approval_code: str) -> bool:
 def user_response(session: Session, usuario: Usuario) -> dict[str, Any]:
     persona = session.get(Persona, usuario.persona_id)
     rol = session.get(Rol, usuario.rol_id)
-    full_name = " ".join(filter(None, [persona.nombre if persona else "", persona.apellido if persona else ""]))
+    full_name = " ".join(
+        filter(
+            None,
+            [persona.nombre if persona else "", persona.apellido if persona else ""],
+        )
+    )
     role_name = (rol.nombre.lower() if rol else "operator").strip()
     role = {
         "administrador": "admin",

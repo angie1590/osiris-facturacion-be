@@ -9,15 +9,21 @@ from osiris.domain.base_models import BaseOSModel
 from osiris.modules.common.persona.composition import PersonaReference
 from osiris.modules.common.persona.models import PersonaRead
 
+
 class UsuarioBase(BaseOSModel):
     persona_id: UUID
     rol_id: UUID
     username: str
 
+
 class UsuarioCreate(PersonaReference):
     rol_id: UUID
     username: str = PydField(min_length=3, max_length=120)
-    password: str = PydField(..., min_length=PASSWORD_MIN_LENGTH, description="Clave en texto plano (se transformará en hash)")
+    password: str = PydField(
+        ...,
+        min_length=PASSWORD_MIN_LENGTH,
+        description="Clave en texto plano (se transformará en hash)",
+    )
     requiere_cambio_password: bool = True
     usuario_auditoria: Optional[str] = None
     model_config = {"extra": "forbid"}
@@ -32,6 +38,7 @@ class UsuarioCreate(PersonaReference):
     def password_policy(cls, value: str) -> str:
         return validate_password(value)
 
+
 class UsuarioUpdate(BaseOSModel):
     persona_id: Optional[UUID] = None
     username: Optional[str] = None
@@ -40,6 +47,7 @@ class UsuarioUpdate(BaseOSModel):
     usuario_auditoria: Optional[str] = None
 
     model_config = {"extra": "forbid"}
+
 
 class UsuarioRead(UsuarioBase):
     persona: Optional[PersonaRead] = None
@@ -65,7 +73,9 @@ class UsuarioResetPasswordResponse(BaseOSModel):
 
 
 class UsuarioVerifyPasswordRequest(BaseOSModel):
-    password: str = PydField(..., min_length=1, description="Clave en texto plano a verificar")
+    password: str = PydField(
+        ..., min_length=1, description="Clave en texto plano a verificar"
+    )
 
 
 class UsuarioReactivateRequest(BaseOSModel):

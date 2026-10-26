@@ -20,23 +20,32 @@ from osiris.modules.sri.core_sri.models import (
     RetencionDetalle,
     RetencionEstadoHistorial,
 )
-from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import FEMapperService
+from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import (
+    FEMapperService,
+)
 from osiris.modules.sri.core_sri.all_schemas import RetencionDetalleRead, RetencionRead
 
 
 class FEECOrquestadorGateway(Protocol):
-    def enviar_documento(self, *, tipo_documento: str, payload: dict[str, object]) -> dict[str, object]:
-        ...
+    def enviar_documento(
+        self, *, tipo_documento: str, payload: dict[str, object]
+    ) -> dict[str, object]: ...
 
 
 class FEECOrquestadorGatewayDefault:
-    def enviar_documento(self, *, tipo_documento: str, payload: dict[str, object]) -> dict[str, object]:
+    def enviar_documento(
+        self, *, tipo_documento: str, payload: dict[str, object]
+    ) -> dict[str, object]:
         _ = (tipo_documento, payload)
         return {"estado": "AUTORIZADO", "mensaje": "Autorizado por orquestador FE-EC"}
 
 
 class SriAsyncService:
-    def __init__(self, gateway: FEECOrquestadorGateway | None = None, db_engine: Engine | None = None) -> None:
+    def __init__(
+        self,
+        gateway: FEECOrquestadorGateway | None = None,
+        db_engine: Engine | None = None,
+    ) -> None:
         self.gateway = gateway or FEECOrquestadorGatewayDefault()
         self.fe_mapper = FEMapperService()
         self.db_engine = db_engine or default_engine
@@ -44,7 +53,9 @@ class SriAsyncService:
     def _retencion_read(self, session: Session, retencion_id: UUID) -> RetencionRead:
         retencion = session.get(Retencion, retencion_id)
         if not retencion or not retencion.activo:
-            raise HTTPException(status_code=404, detail="Retencion no encontrada para envio SRI")
+            raise HTTPException(
+                status_code=404, detail="Retencion no encontrada para envio SRI"
+            )
         detalles = list(
             session.exec(
                 select(RetencionDetalle)
@@ -64,7 +75,10 @@ class SriAsyncService:
             sri_intentos=retencion.sri_intentos,
             sri_ultimo_error=retencion.sri_ultimo_error,
             total_retenido=retencion.total_retenido,
-            detalles=[RetencionDetalleRead.model_validate(d, from_attributes=True) for d in detalles],
+            detalles=[
+                RetencionDetalleRead.model_validate(d, from_attributes=True)
+                for d in detalles
+            ],
         )
 
     @staticmethod
@@ -119,7 +133,9 @@ class SriAsyncService:
                 background_tasks.add_task(self.procesar_documento_sri, existente.id)
             return existente
 
-        payload = self.fe_mapper.retencion_to_fe_payload(self._retencion_read(session, retencion.id))
+        payload = self.fe_mapper.retencion_to_fe_payload(
+            self._retencion_read(session, retencion.id)
+        )
         tarea = DocumentoSriCola(
             entidad_id=retencion.id,
             tipo_documento="RETENCION",
@@ -156,7 +172,9 @@ class SriAsyncService:
         return tarea
 
     def _default_scheduler(self, tarea_id: UUID, delay_seconds: int) -> None:
-        timer = threading.Timer(delay_seconds, self.procesar_documento_sri, kwargs={"tarea_id": tarea_id})
+        timer = threading.Timer(
+            delay_seconds, self.procesar_documento_sri, kwargs={"tarea_id": tarea_id}
+        )
         timer.daemon = True
         timer.start()
 
@@ -204,7 +222,9 @@ class SriAsyncService:
                 if tarea.intentos_realizados < tarea.max_intentos:
                     delay = 2 ** (tarea.intentos_realizados - 1)
                     tarea.estado = EstadoColaSri.REINTENTO_PROGRAMADO
-                    tarea.proximo_intento_en = datetime.utcnow() + timedelta(seconds=delay)
+                    tarea.proximo_intento_en = datetime.utcnow() + timedelta(
+                        seconds=delay
+                    )
                     tarea.ultimo_error = error
 
                     retencion.estado_sri = EstadoSriDocumento.REINTENTO
@@ -283,7 +303,9 @@ class SriAsyncService:
                 return
 
             tarea.estado = EstadoColaSri.FALLIDO
-            tarea.ultimo_error = mensaje or f"Respuesta SRI desconocida: {estado or 'VACIO'}"
+            tarea.ultimo_error = (
+                mensaje or f"Respuesta SRI desconocida: {estado or 'VACIO'}"
+            )
             retencion.estado_sri = EstadoSriDocumento.ERROR
             retencion.sri_ultimo_error = tarea.ultimo_error
             session.add(tarea)

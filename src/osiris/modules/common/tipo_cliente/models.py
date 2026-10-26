@@ -36,7 +36,10 @@ class TipoClienteUpdate(BaseOSModel):
 
     @model_validator(mode="after")
     def reject_null_required(self) -> TipoClienteUpdate:
-        if any(getattr(self, field) is None for field in self.model_fields_set & {"nombre", "descuento"}):
+        if any(
+            getattr(self, field) is None
+            for field in self.model_fields_set & {"nombre", "descuento"}
+        ):
             raise ValueError("nombre y descuento no pueden ser null")
         return self
 

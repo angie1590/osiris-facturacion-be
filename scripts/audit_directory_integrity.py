@@ -9,17 +9,29 @@ from osiris.utils.directory_preflight import audit_directory
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Preflight de Directorio, solo lectura.")
-    parser.add_argument("--summary", action="store_true", help="Omitir claves e IDs del reporte.")
-    parser.add_argument("--host", help="Host de conexion para esta ejecucion, sin cambiar settings.")
-    parser.add_argument("--port", type=int, help="Puerto publicado para esta ejecucion.")
+    parser = argparse.ArgumentParser(
+        description="Preflight de Directorio, solo lectura."
+    )
+    parser.add_argument(
+        "--summary", action="store_true", help="Omitir claves e IDs del reporte."
+    )
+    parser.add_argument(
+        "--host", help="Host de conexion para esta ejecucion, sin cambiar settings."
+    )
+    parser.add_argument(
+        "--port", type=int, help="Puerto publicado para esta ejecucion."
+    )
     args = parser.parse_args()
     if args.port is not None and not 1 <= args.port <= 65535:
         parser.error("El puerto debe estar entre 1 y 65535.")
 
     from osiris.core.db import engine
 
-    audit_engine = create_engine(engine.url.set(host=args.host, port=args.port)) if args.host or args.port else engine
+    audit_engine = (
+        create_engine(engine.url.set(host=args.host, port=args.port))
+        if args.host or args.port
+        else engine
+    )
     try:
         with audit_engine.connect() as connection:
             report = audit_directory(connection)

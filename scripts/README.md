@@ -33,6 +33,7 @@ comprobar las colisiones antes de crear cualquier indice.
 **Propósito**: Validar la configuración del entorno de desarrollo antes de ejecutar el proyecto (compatible Mac/Windows/Linux).
 
 **Uso:**
+
 ```bash
 # Desde Makefile (recomendado - multiplataforma)
 make validate
@@ -49,6 +50,7 @@ bash scripts/validate_setup.sh
 ```
 
 **Validaciones que realiza**:
+
 - ✓ Sistema operativo detectado (Mac/Windows/Linux)
 - ✓ Docker instalado y corriendo
 - ✓ Docker Compose disponible (plugin moderno o legacy)
@@ -62,10 +64,12 @@ bash scripts/validate_setup.sh
 - ✓ docker-compose.yml sin `platform: linux/arm64` (multiplataforma)
 
 **Salida**:
+
 - Exit code 0: Entorno listo ✅
 - Exit code 1: Hay errores que corregir ❌
 
 **Cuándo ejecutarlo**:
+
 - Primera vez que configuras el proyecto
 - Después de cambiar de sistema operativo
 - Si encuentras errores 500 o ModuleNotFoundError
@@ -78,6 +82,7 @@ bash scripts/validate_setup.sh
 **Propósito**: Poblar la base de datos con un producto de ejemplo completo para demostración y testing manual.
 
 **Uso**:
+
 ```bash
 # Opción 1: Usando Makefile
 make seed
@@ -87,6 +92,7 @@ docker compose exec osiris-backend poetry run python scripts/seed_sample_product
 ```
 
 **Qué crea**:
+
 - 1 producto: "Laptop Gamer X Pro" (tipo=BIEN, pvp=2999.00)
 - 1 casa comercial: "Casa ACME"
 - Jerarquía de categorías: Tecnología → Computadoras → Laptop
@@ -96,6 +102,7 @@ docker compose exec osiris-backend poetry run python scripts/seed_sample_product
 - 2 impuestos: IVA 15%, ICE 10%
 
 **Características**:
+
 - Todos los registros tienen `usuario_auditoria = 'seed'`
 - Los datos son idempotentes: ejecutar múltiples veces no crea duplicados
 - Imprime el contrato JSON completo del producto al finalizar
@@ -107,6 +114,7 @@ docker compose exec osiris-backend poetry run python scripts/seed_sample_product
 **Propósito**: Eliminar físicamente (hard delete) todos los datos creados por tests, preservando los datos del seed.
 
 **Uso**:
+
 ```bash
 # Opción 1: Usando Makefile (recomendado)
 make cleanup-test-data
@@ -116,6 +124,7 @@ docker compose exec osiris-backend poetry run python scripts/cleanup_test_data.p
 ```
 
 **Qué elimina**:
+
 - Todos los registros con `usuario_auditoria IN ('smoke_test', 'ci', 'test')`
 - Elimina en el orden correcto respetando foreign keys:
   1. Relaciones de productos (tablas bridge)
@@ -131,15 +140,18 @@ docker compose exec osiris-backend poetry run python scripts/cleanup_test_data.p
   11. Puntos de emisión, sucursales, empresas
 
 **Qué preserva**:
+
 - ✅ Todos los datos del seed (`usuario_auditoria = 'seed'`)
 - ✅ Datos auxiliares del sistema (tipo_contribuyente, etc.)
 
 **Cuándo usar**:
+
 - Después de ejecutar la suite de tests completa
 - Para limpiar la base de datos sin perder el seed
 - Antes de hacer pruebas manuales con datos limpios
 
 **Salida del script**:
+
 ```
 🧹 Iniciando limpieza de datos de test...
    Usuarios de test: ('smoke_test', 'ci', 'test')
@@ -168,6 +180,7 @@ docker compose exec osiris-backend poetry run python scripts/cleanup_test_data.p
 ## Diferencia entre Soft Delete y Hard Delete
 
 ### Soft Delete (comportamiento por defecto)
+
 - Los registros se marcan como `activo = false`
 - Permanecen en la base de datos para auditoría
 - Los endpoints filtran por `activo = true` para no mostrarlos
@@ -175,6 +188,7 @@ docker compose exec osiris-backend poetry run python scripts/cleanup_test_data.p
 - **Variable de entorno**: `TEST_HARD_DELETE=false` (o no definida)
 
 ### Hard Delete (eliminación física)
+
 - Los registros se eliminan físicamente de la base de datos
 - Ideal para limpiar completamente después de tests
 - **Usado por**:
@@ -218,6 +232,7 @@ make test && make cleanup-test-data
 1. **Siempre verifica el entorno**: Los scripts usan la configuración definida en `.env.development` por defecto.
 
 2. **Orden de ejecución recomendado**:
+
    ```bash
    make seed                    # Poblar datos iniciales
    make test                    # Ejecutar suite de tests

@@ -20,8 +20,15 @@ from osiris.modules.common.rol.router import router as role_router
 
 @pytest.fixture
 def isolated_role_access():
-    dependencies = {dependency.dependency for route in role_router.routes for dependency in route.dependencies}
-    previous = {dependency: app.dependency_overrides.get(dependency) for dependency in dependencies}
+    dependencies = {
+        dependency.dependency
+        for route in role_router.routes
+        for dependency in route.dependencies
+    }
+    previous = {
+        dependency: app.dependency_overrides.get(dependency)
+        for dependency in dependencies
+    }
     for dependency in dependencies:
         app.dependency_overrides[dependency] = lambda: None
     try:
@@ -37,8 +44,12 @@ def isolated_role_access():
 def _build_fake_jwt(sub: str) -> str:
     header = {"alg": "none", "typ": "JWT"}
     payload = {"sub": sub}
-    header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
-    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    header_b64 = (
+        base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
+    )
+    payload_b64 = (
+        base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    )
     return f"{header_b64}.{payload_b64}."
 
 
@@ -94,7 +105,9 @@ def test_contextvar_user_injection(isolated_role_access):
             assert response.status_code == 201
 
         with Session(engine) as session:
-            rol = session.exec(select(Rol).where(Rol.nombre == payload["nombre"])).first()
+            rol = session.exec(
+                select(Rol).where(Rol.nombre == payload["nombre"])
+            ).first()
             assert rol is not None
             assert rol.created_by == user_id
             assert rol.updated_by == user_id
@@ -113,7 +126,9 @@ def test_soft_delete_exclusion(isolated_role_access):
     try:
         role_name = f"ROL-{uuid4().hex[:8]}"
         with TestClient(app) as client:
-            create_resp = client.post("/api/v1/roles", json={"nombre": role_name, "descripcion": "SoftDelete"})
+            create_resp = client.post(
+                "/api/v1/roles", json={"nombre": role_name, "descripcion": "SoftDelete"}
+            )
             assert create_resp.status_code == 201
             role_id = create_resp.json()["id"]
 

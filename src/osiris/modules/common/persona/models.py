@@ -19,10 +19,18 @@ class TipoIdentificacion(str, Enum):
 
 
 # Atajos de constraints (Pydantic v2)
-Str120 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
-Str255 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
-IdentStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
-TelStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
+Str120 = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
+]
+Str255 = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
+IdentStr = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
+]
+TelStr = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)
+]
 
 
 class PersonaBase(BaseOSModel):
@@ -42,7 +50,9 @@ class PersonaCreate(PersonaBase):
 
     @model_validator(mode="after")
     def validar_identificacion_por_tipo(self) -> "PersonaCreate":
-        self.identificacion = ValidacionCedulaRucService.normalizar_identificacion(self.identificacion)
+        self.identificacion = ValidacionCedulaRucService.normalizar_identificacion(
+            self.identificacion
+        )
         tipo = self.tipo_identificacion
         identificacion = self.identificacion
 
@@ -50,8 +60,12 @@ class PersonaCreate(PersonaBase):
             if not ValidacionCedulaRucService.es_cedula_valida(identificacion):
                 raise ValueError("La cédula ingresada no es válida.")
         elif tipo == TipoIdentificacion.RUC:
-            if not ValidacionCedulaRucService.es_ruc_persona_natural_valido(identificacion):
-                raise ValueError("El RUC ingresado no corresponde a una persona natural.")
+            if not ValidacionCedulaRucService.es_ruc_persona_natural_valido(
+                identificacion
+            ):
+                raise ValueError(
+                    "El RUC ingresado no corresponde a una persona natural."
+                )
         elif tipo == TipoIdentificacion.PASAPORTE:
             if not identificacion or len(identificacion.strip()) < 5:
                 raise ValueError("El pasaporte debe tener al menos 5 caracteres.")
@@ -73,7 +87,9 @@ class PersonaUpdate(BaseOSModel):
     @model_validator(mode="after")
     def validar_identificacion_si_cambia(self) -> "PersonaUpdate":
         if self.identificacion is not None:
-            self.identificacion = ValidacionCedulaRucService.normalizar_identificacion(self.identificacion)
+            self.identificacion = ValidacionCedulaRucService.normalizar_identificacion(
+                self.identificacion
+            )
         tipo = self.tipo_identificacion
         identificacion = self.identificacion
 
@@ -82,15 +98,20 @@ class PersonaUpdate(BaseOSModel):
                 if not ValidacionCedulaRucService.es_cedula_valida(identificacion):
                     raise ValueError("La cédula ingresada no es válida.")
             elif tipo == TipoIdentificacion.RUC:
-                if not ValidacionCedulaRucService.es_ruc_persona_natural_valido(identificacion):
-                    raise ValueError("El RUC ingresado no corresponde a una persona natural.")
+                if not ValidacionCedulaRucService.es_ruc_persona_natural_valido(
+                    identificacion
+                ):
+                    raise ValueError(
+                        "El RUC ingresado no corresponde a una persona natural."
+                    )
             elif tipo == TipoIdentificacion.PASAPORTE:
                 if len(identificacion.strip()) < 5:
                     raise ValueError("El pasaporte debe tener al menos 5 caracteres.")
         elif identificacion or tipo:
-            raise ValueError("Si vas a actualizar la identificación, debes enviar también el tipo.")
+            raise ValueError(
+                "Si vas a actualizar la identificación, debes enviar también el tipo."
+            )
         return self
-
 
 
 class PersonaRead(PersonaBase):

@@ -7,10 +7,15 @@ from sqlalchemy import Index, text
 from sqlmodel import Field
 from osiris.domain.base_models import BaseTable, AuditMixin, SoftDeleteMixin
 
+
 class Usuario(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     __tablename__ = "tbl_usuario"
     __table_args__ = (
-        Index("uq_tbl_usuario_username_normalizado", text("lower(trim(username))"), unique=True),
+        Index(
+            "uq_tbl_usuario_username_normalizado",
+            text("lower(trim(username))"),
+            unique=True,
+        ),
     )
 
     persona_id: UUID = Field(foreign_key="tbl_persona.id", nullable=False, unique=True)
@@ -20,6 +25,8 @@ class Usuario(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     password_hash: str = Field(nullable=False, max_length=255)
     requiere_cambio_password: bool = Field(default=True, nullable=False)
     sesion_invalidada_en: datetime | None = Field(default=None, nullable=True)
-    codigo_aprobacion_hash: str | None = Field(default=None, nullable=True, max_length=255)
+    codigo_aprobacion_hash: str | None = Field(
+        default=None, nullable=True, max_length=255
+    )
 
     usuario_auditoria: Optional[str] = Field(default=None, max_length=255)

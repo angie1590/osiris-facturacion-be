@@ -21,7 +21,9 @@ class ProveedorPersonaUpdate(BaseOSModel):
     model_config = {"extra": "forbid", "from_attributes": True}
     persona_id: Optional[UUID] = None
     nombre_comercial: Optional[str] = None
-    tipo_contribuyente_id: Optional[str] = Field(default=None, min_length=1, max_length=2)
+    tipo_contribuyente_id: Optional[str] = Field(
+        default=None, min_length=1, max_length=2
+    )
     usuario_auditoria: Optional[str] = None
 
 

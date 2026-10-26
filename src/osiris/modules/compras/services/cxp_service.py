@@ -11,7 +11,12 @@ from sqlmodel import Session, col, select
 from osiris.core.company_scope import resolve_company_scope
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.modules.common.sucursal.entity import Sucursal
-from osiris.modules.sri.core_sri.models import Compra, CuentaPorPagar, EstadoCuentaPorPagar, PagoCxP
+from osiris.modules.sri.core_sri.models import (
+    Compra,
+    CuentaPorPagar,
+    EstadoCuentaPorPagar,
+    PagoCxP,
+)
 from osiris.modules.sri.core_sri.all_schemas import PagoCxPCreate, q2
 from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 
@@ -26,10 +31,14 @@ class CuentaPorPagarService:
         if empresa_scope is None:
             return
         if compra.sucursal_id is None:
-            raise HTTPException(status_code=403, detail="No autorizado para operar CxP de otra empresa.")
+            raise HTTPException(
+                status_code=403, detail="No autorizado para operar CxP de otra empresa."
+            )
         sucursal = session.get(Sucursal, compra.sucursal_id)
         if not sucursal or not sucursal.activo or sucursal.empresa_id != empresa_scope:
-            raise HTTPException(status_code=403, detail="No autorizado para operar CxP de otra empresa.")
+            raise HTTPException(
+                status_code=403, detail="No autorizado para operar CxP de otra empresa."
+            )
 
     def listar_cxp(
         self,
@@ -41,11 +50,15 @@ class CuentaPorPagarService:
         estado: EstadoCuentaPorPagar | None = None,
         texto: str | None = None,
     ) -> tuple[list[dict[str, UUID | date | Decimal | str]], PaginationMeta]:
-        stmt = select(CuentaPorPagar, Compra).join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
+        stmt = select(CuentaPorPagar, Compra).join(
+            Compra, col(Compra.id) == col(CuentaPorPagar.compra_id)
+        )
         empresa_scope = self._empresa_scope()
 
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+            stmt = stmt.join(
+                Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+            ).where(
                 col(Sucursal.activo).is_(True),
                 col(Sucursal.empresa_id) == empresa_scope,
             )
@@ -73,7 +86,10 @@ class CuentaPorPagarService:
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         rows = list(
             session.exec(
-                stmt.order_by(col(Compra.fecha_emision).desc(), col(CuentaPorPagar.creado_en).desc())
+                stmt.order_by(
+                    col(Compra.fecha_emision).desc(),
+                    col(CuentaPorPagar.creado_en).desc(),
+                )
                 .offset(offset)
                 .limit(limit)
             ).all()
@@ -96,7 +112,9 @@ class CuentaPorPagarService:
         ]
         return items, build_pagination_meta(total=total, limit=limit, offset=offset)
 
-    def obtener_cxp_por_compra(self, session: Session, compra_id: UUID) -> CuentaPorPagar:
+    def obtener_cxp_por_compra(
+        self, session: Session, compra_id: UUID
+    ) -> CuentaPorPagar:
         row = session.exec(
             select(CuentaPorPagar, Compra)
             .join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
@@ -107,7 +125,9 @@ class CuentaPorPagarService:
             )
         ).one_or_none()
         if not row:
-            raise HTTPException(status_code=404, detail="Cuenta por pagar no encontrada para la compra")
+            raise HTTPException(
+                status_code=404, detail="Cuenta por pagar no encontrada para la compra"
+            )
         cxp, compra = row
         self._validar_compra_scope(session, compra)
         return cxp
@@ -133,12 +153,16 @@ class CuentaPorPagarService:
                 .with_for_update()
             ).one_or_none()
             if not row:
-                raise HTTPException(status_code=404, detail="Cuenta por pagar no encontrada")
+                raise HTTPException(
+                    status_code=404, detail="Cuenta por pagar no encontrada"
+                )
             cxp, compra = row
             self._validar_compra_scope(session, compra)
 
             if cxp.estado == EstadoCuentaPorPagar.ANULADA:
-                raise ValueError("No se puede registrar pagos en una cuenta por pagar ANULADA.")
+                raise ValueError(
+                    "No se puede registrar pagos en una cuenta por pagar ANULADA."
+                )
 
             monto_pago = q2(payload.monto)
             saldo_actual = q2(cxp.saldo_pendiente)
@@ -159,7 +183,9 @@ class CuentaPorPagarService:
             session.add(pago)
 
             cxp.pagos_acumulados = q2(cxp.pagos_acumulados + monto_pago)
-            nuevo_saldo = q2(cxp.valor_total_factura - cxp.valor_retenido - cxp.pagos_acumulados)
+            nuevo_saldo = q2(
+                cxp.valor_total_factura - cxp.valor_retenido - cxp.pagos_acumulados
+            )
             if nuevo_saldo < Decimal("0.00"):
                 raise ValueError("Saldo pendiente invalido luego de aplicar el pago.")
 

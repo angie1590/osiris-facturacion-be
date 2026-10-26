@@ -35,7 +35,9 @@ class CuentaPorCobrarService:
         estado: EstadoCuentaPorCobrar | None = None,
         texto: str | None = None,
     ) -> tuple[list[dict[str, UUID | date | Decimal | str | None]], PaginationMeta]:
-        stmt = select(CuentaPorCobrar, Venta).join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
+        stmt = select(CuentaPorCobrar, Venta).join(
+            Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id)
+        )
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
             stmt = stmt.where(col(Venta.empresa_id) == empresa_scope)
@@ -62,7 +64,10 @@ class CuentaPorCobrarService:
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         rows = list(
             session.exec(
-                stmt.order_by(col(Venta.fecha_emision).desc(), col(CuentaPorCobrar.creado_en).desc())
+                stmt.order_by(
+                    col(Venta.fecha_emision).desc(),
+                    col(CuentaPorCobrar.creado_en).desc(),
+                )
                 .offset(offset)
                 .limit(limit)
             ).all()
@@ -87,14 +92,18 @@ class CuentaPorCobrarService:
 
     @staticmethod
     def _recalcular_saldo_y_estado(cxc: CuentaPorCobrar) -> None:
-        nuevo_saldo = q2(cxc.valor_total_factura - cxc.valor_retenido - cxc.pagos_acumulados)
+        nuevo_saldo = q2(
+            cxc.valor_total_factura - cxc.valor_retenido - cxc.pagos_acumulados
+        )
         if nuevo_saldo < Decimal("0.00"):
             raise ValueError("La retención supera el saldo de la factura")
 
         cxc.saldo_pendiente = nuevo_saldo
         if nuevo_saldo == Decimal("0.00"):
             cxc.estado = EstadoCuentaPorCobrar.PAGADA
-        elif q2(cxc.pagos_acumulados) > Decimal("0.00") or q2(cxc.valor_retenido) > Decimal("0.00"):
+        elif q2(cxc.pagos_acumulados) > Decimal("0.00") or q2(
+            cxc.valor_retenido
+        ) > Decimal("0.00"):
             cxc.estado = EstadoCuentaPorCobrar.PARCIAL
         else:
             cxc.estado = EstadoCuentaPorCobrar.PENDIENTE
@@ -129,7 +138,9 @@ class CuentaPorCobrarService:
         cxc.pagos_acumulados = q2(cxc.pagos_acumulados + monto)
         CuentaPorCobrarService._recalcular_saldo_y_estado(cxc)
 
-    def obtener_cxc_por_venta(self, session: Session, venta_id: UUID) -> CuentaPorCobrar:
+    def obtener_cxc_por_venta(
+        self, session: Session, venta_id: UUID
+    ) -> CuentaPorCobrar:
         empresa_scope = self._empresa_scope()
         cxc = session.exec(
             select(CuentaPorCobrar)
@@ -141,11 +152,16 @@ class CuentaPorCobrarService:
             )
         ).one_or_none()
         if not cxc:
-            raise HTTPException(status_code=404, detail="Cuenta por cobrar no encontrada para la venta")
+            raise HTTPException(
+                status_code=404, detail="Cuenta por cobrar no encontrada para la venta"
+            )
         if empresa_scope is not None:
             venta = session.get(Venta, cxc.venta_id)
             if not venta or venta.empresa_id != empresa_scope:
-                raise HTTPException(status_code=403, detail="No autorizado para acceder a CxC de otra empresa.")
+                raise HTTPException(
+                    status_code=403,
+                    detail="No autorizado para acceder a CxC de otra empresa.",
+                )
         return cxc
 
     def registrar_pago_cxc(
@@ -170,14 +186,22 @@ class CuentaPorCobrarService:
                 .with_for_update()
             ).one_or_none()
             if not cxc:
-                raise HTTPException(status_code=404, detail="Cuenta por cobrar no encontrada")
+                raise HTTPException(
+                    status_code=404, detail="Cuenta por cobrar no encontrada"
+                )
             if empresa_scope is not None:
                 venta = session.get(Venta, cxc.venta_id)
                 if not venta or venta.empresa_id != empresa_scope:
-                    raise HTTPException(status_code=403, detail="No autorizado para registrar pagos en otra empresa.")
+                    raise HTTPException(
+                        status_code=403,
+                        detail="No autorizado para registrar pagos en otra empresa.",
+                    )
 
             if cxc.estado == EstadoCuentaPorCobrar.ANULADA:
-                raise HTTPException(status_code=400, detail="No se puede registrar pagos en una CxC ANULADA.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede registrar pagos en una CxC ANULADA.",
+                )
 
             self.aplicar_pago_en_cxc(cxc, payload.monto)
             cxc.usuario_auditoria = payload.usuario_auditoria

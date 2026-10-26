@@ -18,8 +18,9 @@ from osiris.modules.inventario.movimientos.schemas import (
     TransferenciaInventarioRead,
     ValoracionResponse,
 )
-from osiris.modules.inventario.movimientos.services.movimiento_inventario_service import MovimientoInventarioService
-
+from osiris.modules.inventario.movimientos.services.movimiento_inventario_service import (
+    MovimientoInventarioService,
+)
 
 COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Solicitud inválida para la operación de inventario."},
@@ -37,7 +38,9 @@ service = MovimientoInventarioService()
     summary="Crear movimiento de inventario",
     responses=COMMON_RESPONSES,
 )
-def crear_movimiento_borrador(payload: MovimientoInventarioCreate, session: Session = Depends(get_session)) -> MovimientoInventarioRead:
+def crear_movimiento_borrador(
+    payload: MovimientoInventarioCreate, session: Session = Depends(get_session)
+) -> MovimientoInventarioRead:
     """Crea un movimiento en estado borrador sin afectar saldos hasta su confirmación."""
     movimiento = service.crear_movimiento_borrador(session, payload)
     return service.obtener_movimiento_read(session, movimiento.id)
@@ -100,7 +103,12 @@ def transferir_entre_bodegas(
     return service.transferir_entre_bodegas(session, payload)
 
 
-@router.get("/kardex", response_model=KardexResponse, summary="Consultar kardex operativo", responses=COMMON_RESPONSES)
+@router.get(
+    "/kardex",
+    response_model=KardexResponse,
+    summary="Consultar kardex operativo",
+    responses=COMMON_RESPONSES,
+)
 def obtener_kardex(
     producto_id: UUID = Query(...),
     bodega_id: UUID = Query(...),
@@ -118,7 +126,12 @@ def obtener_kardex(
     )
 
 
-@router.get("/valoracion", response_model=ValoracionResponse, summary="Consultar valoración de inventario", responses=COMMON_RESPONSES)
+@router.get(
+    "/valoracion",
+    response_model=ValoracionResponse,
+    summary="Consultar valoración de inventario",
+    responses=COMMON_RESPONSES,
+)
 def obtener_valoracion(session: Session = Depends(get_session)) -> dict[str, object]:
     """Devuelve la valoración de inventario por bodega y total global a costo promedio vigente."""
     return service.obtener_valoracion(session)

@@ -18,7 +18,6 @@ from osiris.modules.sri.impuesto_catalogo.models import (
 from osiris.modules.sri.impuesto_catalogo.service import ImpuestoCatalogoService
 from osiris.utils.pagination import build_pagination_meta
 
-
 router = APIRouter(prefix="/api/v1/impuestos", tags=["Impuestos"])
 service = ImpuestoCatalogoService()
 
@@ -41,14 +40,21 @@ def listar_catalogo_impuestos(
     else:
         items, meta = service.list_paginated(session, limit=limit, offset=offset)
 
-    computed_meta = build_pagination_meta(total, limit, offset) if tipo_impuesto else meta
+    computed_meta = (
+        build_pagination_meta(total, limit, offset) if tipo_impuesto else meta
+    )
 
-    return PaginatedResponse(items=[ImpuestoCatalogoRead.model_validate(item) for item in items], meta=computed_meta)
+    return PaginatedResponse(
+        items=[ImpuestoCatalogoRead.model_validate(item) for item in items],
+        meta=computed_meta,
+    )
 
 
 @router.get("/activos-vigentes", response_model=List[ImpuestoCatalogoRead])
 def listar_impuestos_activos_vigentes(
-    fecha: Optional[date] = Query(None, description="Fecha de vigencia (por defecto hoy)"),
+    fecha: Optional[date] = Query(
+        None, description="Fecha de vigencia (por defecto hoy)"
+    ),
     session: Session = Depends(get_session),
 ) -> list[ImpuestoCatalogoRead]:
     items = service.list_activos_vigentes(session, fecha)
@@ -56,24 +62,36 @@ def listar_impuestos_activos_vigentes(
 
 
 @router.get("/{impuesto_id}", response_model=ImpuestoCatalogoRead)
-def obtener_impuesto(impuesto_id: UUID, session: Session = Depends(get_session)) -> ImpuestoCatalogoRead:
+def obtener_impuesto(
+    impuesto_id: UUID, session: Session = Depends(get_session)
+) -> ImpuestoCatalogoRead:
     impuesto = service.get(session, impuesto_id)
     return ImpuestoCatalogoRead.model_validate(impuesto)
 
 
 @router.post("", response_model=ImpuestoCatalogoRead, status_code=201)
-def crear_impuesto(payload: ImpuestoCatalogoCreate, session: Session = Depends(get_session)) -> ImpuestoCatalogoRead:
+def crear_impuesto(
+    payload: ImpuestoCatalogoCreate, session: Session = Depends(get_session)
+) -> ImpuestoCatalogoRead:
     impuesto = service.create(session, payload.model_dump(exclude_unset=True))
     return ImpuestoCatalogoRead.model_validate(impuesto)
 
 
 @router.put("/{impuesto_id}", response_model=ImpuestoCatalogoRead)
-def actualizar_impuesto(impuesto_id: UUID, payload: ImpuestoCatalogoUpdate, session: Session = Depends(get_session)) -> ImpuestoCatalogoRead:
-    impuesto = service.update(session, impuesto_id, payload.model_dump(exclude_unset=True))
+def actualizar_impuesto(
+    impuesto_id: UUID,
+    payload: ImpuestoCatalogoUpdate,
+    session: Session = Depends(get_session),
+) -> ImpuestoCatalogoRead:
+    impuesto = service.update(
+        session, impuesto_id, payload.model_dump(exclude_unset=True)
+    )
     return ImpuestoCatalogoRead.model_validate(impuesto)
 
 
 @router.delete("/{impuesto_id}", status_code=204)
-def desactivar_impuesto(impuesto_id: UUID, session: Session = Depends(get_session)) -> None:
+def desactivar_impuesto(
+    impuesto_id: UUID, session: Session = Depends(get_session)
+) -> None:
     service.delete(session, impuesto_id)
     return None

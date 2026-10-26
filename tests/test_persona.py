@@ -21,27 +21,31 @@ from osiris.modules.common.persona.repository import PersonaRepository
 from osiris.modules.common.persona.composition import PersonaReference, resolve_persona
 
 
-
 class _Diag:
     def __init__(self, constraint_name=None, column_name=None, table_name=None):
         self.constraint_name = constraint_name
         self.column_name = column_name
         self.table_name = table_name
 
+
 class _PGOrig:
     def __init__(self, pgcode, constraint=None, column=None, table=None, text=""):
         self.pgcode = pgcode
         self.diag = _Diag(constraint, column, table)
         self._text = text
+
     def __str__(self):
         return self._text or f"PG error {self.pgcode}"
+
 
 def _mk_integrity_error(pgcode, *, constraint=None, column=None, table=None, text=""):
     return IntegrityError("stmt", {}, _PGOrig(pgcode, constraint, column, table, text))
 
+
 # ============================================================
 # Validaciones de PersonaCreate (cédula / ruc natural / pasaporte)
 # ============================================================
+
 
 def test_persona_create_cedula_valida_ok():
     with patch(
@@ -122,6 +126,7 @@ def test_persona_create_pasaporte_corto_falla():
 # Validaciones de PersonaUpdate
 # ============================================================
 
+
 def test_persona_update_ident_y_tipo_deben_ir_juntos():
     # Enviar solo identificacion sin tipo → debe fallar
     with pytest.raises(ValidationError) as exc:
@@ -162,6 +167,7 @@ def test_persona_update_ruc_no_natural_falla():
 # ============================================================
 # Service: create → 409 si la identificación ya existe
 # ============================================================
+
 
 def test_persona_service_create_ident_duplicada_da_409_via_repository():
     session = MagicMock()
@@ -224,6 +230,7 @@ def test_persona_service_create_ok_llama_repo_create():
 # Repository: delete lógico (marca activo=False, commit)
 # ============================================================
 
+
 def test_persona_repository_delete_logico():
     session = MagicMock()
     repo = PersonaRepository()
@@ -250,8 +257,11 @@ def test_persona_repository_delete_logico():
 
 def test_persona_passport_normalization_in_create_update_and_service():
     payload = {
-        "identificacion": " ab123 ", "tipo_identificacion": "PASAPORTE",
-        "nombre": " Ana ", "apellido": " Perez ", "usuario_auditoria": "test",
+        "identificacion": " ab123 ",
+        "tipo_identificacion": "PASAPORTE",
+        "nombre": " Ana ",
+        "apellido": " Perez ",
+        "usuario_auditoria": "test",
     }
     created = PersonaCreate(**payload)
     updated = PersonaUpdate(**payload)
@@ -268,10 +278,27 @@ def test_persona_server_search_pagination_and_inactive_views():
     Persona.__table__.create(engine)
     try:
         with Session(engine) as session:
-            session.add_all([
-                Persona(identificacion="AA111", tipo_identificacion="PASAPORTE", nombre="Ana", apellido="Uno", email="ana@example.com", usuario_auditoria="test"),
-                Persona(identificacion=" ab123 ", tipo_identificacion="PASAPORTE", nombre="Zoe", apellido="Dos", telefono="0999999999", usuario_auditoria="test", activo=False),
-            ])
+            session.add_all(
+                [
+                    Persona(
+                        identificacion="AA111",
+                        tipo_identificacion="PASAPORTE",
+                        nombre="Ana",
+                        apellido="Uno",
+                        email="ana@example.com",
+                        usuario_auditoria="test",
+                    ),
+                    Persona(
+                        identificacion=" ab123 ",
+                        tipo_identificacion="PASAPORTE",
+                        nombre="Zoe",
+                        apellido="Dos",
+                        telefono="0999999999",
+                        usuario_auditoria="test",
+                        activo=False,
+                    ),
+                ]
+            )
             session.commit()
             repo = PersonaRepository()
             items, total = repo.list(session, limit=1)
@@ -280,9 +307,13 @@ def test_persona_server_search_pagination_and_inactive_views():
             assert total == 1 and items[0].nombre == "Zoe" and items[0].activo is False
             items, total = repo.list(session, q="example.com")
             assert total == 1 and items[0].nombre == "Ana"
-            items, total = repo.list(session, only_active=False, q="0999999999", estado="inactivo")
+            items, total = repo.list(
+                session, only_active=False, q="0999999999", estado="inactivo"
+            )
             assert total == 1 and items[0].nombre == "Zoe"
-            items, total = repo.list(session, only_active=False, limit=1, offset=1, sort_by="nombre")
+            items, total = repo.list(
+                session, only_active=False, limit=1, offset=1, sort_by="nombre"
+            )
             assert total == 2 and items[0].nombre == "Zoe"
     finally:
         engine.dispose()
@@ -295,7 +326,12 @@ def test_persona_service_rejects_partial_identity_update():
 
 
 def test_composite_persona_reference_is_exclusive():
-    draft = {"identificacion": "AB123", "tipo_identificacion": "PASAPORTE", "nombre": "Ana", "apellido": "Perez"}
+    draft = {
+        "identificacion": "AB123",
+        "tipo_identificacion": "PASAPORTE",
+        "nombre": "Ana",
+        "apellido": "Perez",
+    }
     assert PersonaReference(persona_nueva=draft).persona_nueva.identificacion == "AB123"
     assert PersonaReference(persona_id=uuid4()).persona_nueva is None
     for payload in [{}, {"persona_id": uuid4(), "persona_nueva": draft}]:
@@ -306,13 +342,26 @@ def test_composite_persona_reference_is_exclusive():
 def test_composite_persona_reuses_existing_without_overwriting_and_rejects_inactive():
     engine = create_engine("sqlite://")
     Persona.__table__.create(engine)
-    draft = {"identificacion": " ab123 ", "tipo_identificacion": "PASAPORTE", "nombre": "Propuesta", "apellido": "Nueva"}
+    draft = {
+        "identificacion": " ab123 ",
+        "tipo_identificacion": "PASAPORTE",
+        "nombre": "Propuesta",
+        "apellido": "Nueva",
+    }
     try:
         with Session(engine) as session:
-            original = Persona(identificacion="AB123", tipo_identificacion="PASAPORTE", nombre="Original", apellido="Persistido", usuario_auditoria="test")
+            original = Persona(
+                identificacion="AB123",
+                tipo_identificacion="PASAPORTE",
+                nombre="Original",
+                apellido="Persistido",
+                usuario_auditoria="test",
+            )
             session.add(original)
             session.commit()
-            payload = resolve_persona(session, {"persona_nueva": draft, "tipo_cliente_id": uuid4()})
+            payload = resolve_persona(
+                session, {"persona_nueva": draft, "tipo_cliente_id": uuid4()}
+            )
             assert payload["persona_id"] == original.id
             assert "persona_nueva" not in payload
             assert original.nombre == "Original"
@@ -326,16 +375,30 @@ def test_composite_persona_reuses_existing_without_overwriting_and_rejects_inact
         engine.dispose()
 
 
-@pytest.mark.parametrize("role", ["cliente", "proveedor_persona", "empleado", "usuario", "proveedores_sociedad"])
+@pytest.mark.parametrize(
+    "role",
+    ["cliente", "proveedor_persona", "empleado", "usuario", "proveedores_sociedad"],
+)
 def test_persona_deactivation_rejects_every_active_dependency(role):
     session = MagicMock()
     service = PersonaService(repo=MagicMock())
-    person = Persona(identificacion="AB123", tipo_identificacion="PASAPORTE", nombre="Ana", apellido="Perez")
+    person = Persona(
+        identificacion="AB123",
+        tipo_identificacion="PASAPORTE",
+        nombre="Ana",
+        apellido="Perez",
+    )
     dependency = MagicMock()
     dependency.id = uuid4()
     dependency.activo = True
     dependency.razon_social = "Sociedad de prueba"
-    keys = ["cliente", "proveedor_persona", "empleado", "usuario", "proveedores_sociedad"]
+    keys = [
+        "cliente",
+        "proveedor_persona",
+        "empleado",
+        "usuario",
+        "proveedores_sociedad",
+    ]
     cursor = MagicMock()
     cursor.first.return_value = person
     dependency_results = []

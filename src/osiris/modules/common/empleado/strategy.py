@@ -30,7 +30,10 @@ class EmpleadoCrearUsuarioStrategy:
         commit: bool = True,
     ) -> Usuario:
         if not usuario_payload:
-            raise HTTPException(status_code=400, detail="Debe enviar el bloque 'usuario' con username, password y rol_id")
+            raise HTTPException(
+                status_code=400,
+                detail="Debe enviar el bloque 'usuario' con username, password y rol_id",
+            )
 
         # Normalizar payload
         if hasattr(usuario_payload, "model_dump"):
@@ -39,7 +42,10 @@ class EmpleadoCrearUsuarioStrategy:
         required = ("username", "password", "rol_id")
         missing = [k for k in required if not usuario_payload.get(k)]
         if missing:
-            raise HTTPException(status_code=400, detail=f"Faltan campos requeridos en usuario: {', '.join(missing)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Faltan campos requeridos en usuario: {', '.join(missing)}",
+            )
 
         # ✅ Validar FK rol_id (existente y activo) ANTES de crear el usuario
         usuario_payload = self.usuario_service._ensure_dict(usuario_payload)
@@ -49,10 +55,14 @@ class EmpleadoCrearUsuarioStrategy:
             raise HTTPException(status_code=422, detail="rol_id debe ser UUID") from exc
         usuario_payload["rol_id"] = rol_id
         ok_rol = session.exec(
-            select(Rol).where(Rol.id == rol_id).execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            select(Rol)
+            .where(Rol.id == rol_id)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
         ).first()
         if not ok_rol:
-            raise HTTPException(status_code=404, detail=f"Rol {rol_id} no encontrado o inactivo")
+            raise HTTPException(
+                status_code=404, detail=f"Rol {rol_id} no encontrado o inactivo"
+            )
         if ok_rol.activo is False:
             raise HTTPException(status_code=409, detail="Rol inactivo")
 

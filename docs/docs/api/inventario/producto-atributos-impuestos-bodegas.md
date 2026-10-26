@@ -54,7 +54,7 @@ Todas las escrituras de catálogo requieren rol `admin` o `supervisor`.
 
 ### PUT `/api/v1/productos/{producto_id}/atributos`
 
-Actualiza/crea en bloque valores EAV del producto (upsert).  
+Actualiza/crea en bloque valores EAV del producto (upsert).
 Valida aplicabilidad del atributo según categorías actuales del producto y tipo de dato.
 
 <Tabs>
@@ -362,10 +362,10 @@ Request:
 
 ### `GET /api/v1/inventarios/stock-disponible`
 
-| Parámetro | Tipo | Requerido | Regla |
-|---|---|---|---|
-| `producto_id` | UUID | Condicional | enviar este o `bodega_id` |
-| `bodega_id` | UUID | Condicional | enviar este o `producto_id` |
+| Parámetro     | Tipo | Requerido   | Regla                       |
+| ------------- | ---- | ----------- | --------------------------- |
+| `producto_id` | UUID | Condicional | enviar este o `bodega_id`   |
+| `bodega_id`   | UUID | Condicional | enviar este o `producto_id` |
 
 Si no se envía ninguno, retorna `400`.
 

@@ -25,13 +25,16 @@ from osiris.modules.common.usuario.models import (
 )
 from osiris.modules.common.usuario.service import UsuarioService
 
-
 router = APIRouter(prefix="/api/v1/usuarios", tags=["Usuarios"])
 service = UsuarioService()
 permiso_service = RolModuloPermisoService()
 
 
-@router.get("", response_model=PaginatedResponse[UsuarioRead], dependencies=[Depends(directory_permission("USUARIOS", "leer"))])
+@router.get(
+    "",
+    response_model=PaginatedResponse[UsuarioRead],
+    dependencies=[Depends(directory_permission("USUARIOS", "leer"))],
+)
 def list_usuarios(
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -44,25 +47,54 @@ def list_usuarios(
     sort_direction: str | None = Query(None),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset,
-                                        q=q, identificacion=identificacion, estado=estado, sort_by=sort_by, sort_order=sort_order, sort_direction=sort_direction)
+    items, meta = service.list_paginated(
+        session,
+        only_active=only_active,
+        limit=limit,
+        offset=offset,
+        q=q,
+        identificacion=identificacion,
+        estado=estado,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        sort_direction=sort_direction,
+    )
     return {"items": items, "meta": meta}
 
 
-@router.get("/{item_id}", response_model=UsuarioRead, dependencies=[Depends(directory_permission("USUARIOS", "leer"))])
-def get_usuario(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> UsuarioRead:
+@router.get(
+    "/{item_id}",
+    response_model=UsuarioRead,
+    dependencies=[Depends(directory_permission("USUARIOS", "leer"))],
+)
+def get_usuario(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> UsuarioRead:
     obj = service.get(session, item_id)
     if not obj:
         raise HTTPException(status_code=404, detail=f"Usuario {item_id} not found")
     return service.to_read(session, obj)
 
 
-@router.post("", response_model=UsuarioRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(directory_permission("USUARIOS", "crear"))])
-def create_usuario(payload: UsuarioCreate = Body(...), session: Session = Depends(get_session)) -> UsuarioRead:
-    return service.to_read(session, service.create(session, payload.model_dump(exclude_unset=True)))
+@router.post(
+    "",
+    response_model=UsuarioRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(directory_permission("USUARIOS", "crear"))],
+)
+def create_usuario(
+    payload: UsuarioCreate = Body(...), session: Session = Depends(get_session)
+) -> UsuarioRead:
+    return service.to_read(
+        session, service.create(session, payload.model_dump(exclude_unset=True))
+    )
 
 
-@router.put("/{item_id}", response_model=UsuarioRead, dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))])
+@router.put(
+    "/{item_id}",
+    response_model=UsuarioRead,
+    dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))],
+)
 def update_usuario(
     item_id: UUID = Path(...),
     payload: UsuarioUpdate = Body(...),
@@ -74,14 +106,24 @@ def update_usuario(
     return service.to_read(session, updated)
 
 
-@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(directory_permission("USUARIOS", "eliminar"))])
-def delete_usuario(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
+@router.delete(
+    "/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(directory_permission("USUARIOS", "eliminar"))],
+)
+def delete_usuario(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
         raise HTTPException(status_code=404, detail=f"Usuario {item_id} not found")
 
 
-@router.get("/{usuario_id}/permisos", response_model=List[ModuloPermisoRead], tags=["Usuarios", "Permisos"])
+@router.get(
+    "/{usuario_id}/permisos",
+    response_model=List[ModuloPermisoRead],
+    tags=["Usuarios", "Permisos"],
+)
 def obtener_permisos_usuario(
     usuario_id: UUID = Path(..., description="ID del usuario"),
     session: Session = Depends(get_session),
@@ -97,7 +139,11 @@ def obtener_permisos_usuario(
     return permisos
 
 
-@router.get("/{usuario_id}/menu", response_model=List[ModuloPermisoRead], tags=["Usuarios", "Permisos"])
+@router.get(
+    "/{usuario_id}/menu",
+    response_model=List[ModuloPermisoRead],
+    tags=["Usuarios", "Permisos"],
+)
 def obtener_menu_usuario(
     usuario_id: UUID = Path(..., description="ID del usuario"),
     session: Session = Depends(get_session),
@@ -113,7 +159,11 @@ def obtener_menu_usuario(
     return menu
 
 
-@router.post("/{usuario_id}/reset-password", response_model=UsuarioResetPasswordResponse, dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))])
+@router.post(
+    "/{usuario_id}/reset-password",
+    response_model=UsuarioResetPasswordResponse,
+    dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))],
+)
 def reset_password_usuario(
     usuario_id: UUID = Path(..., description="ID del usuario"),
     payload: UsuarioResetPasswordRequest | None = Body(None),
@@ -132,7 +182,11 @@ def reset_password_usuario(
     )
 
 
-@router.post("/{usuario_id}/verify-password", response_model=bool, dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))])
+@router.post(
+    "/{usuario_id}/verify-password",
+    response_model=bool,
+    dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))],
+)
 def verify_password_usuario(
     usuario_id: UUID = Path(..., description="ID del usuario"),
     payload: UsuarioVerifyPasswordRequest = Body(...),
@@ -141,7 +195,11 @@ def verify_password_usuario(
     return service.verify_password(session, usuario_id, payload.password)
 
 
-@router.post("/{usuario_id}/reactivar", response_model=UsuarioRead, dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))])
+@router.post(
+    "/{usuario_id}/reactivar",
+    response_model=UsuarioRead,
+    dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))],
+)
 def reactivate_usuario(
     usuario_id: UUID,
     payload: UsuarioReactivateRequest | None = Body(None),
@@ -151,8 +209,14 @@ def reactivate_usuario(
     return service.to_read(session, service.reactivate(session, usuario_id, **options))
 
 
-@router.post("/{usuario_id}/invalidar-sesion", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))])
-def invalidate_usuario_session(usuario_id: UUID, session: Session = Depends(get_session)) -> None:
+@router.post(
+    "/{usuario_id}/invalidar-sesion",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(directory_permission("USUARIOS", "actualizar"))],
+)
+def invalidate_usuario_session(
+    usuario_id: UUID, session: Session = Depends(get_session)
+) -> None:
     user = service.get(session, usuario_id)
     if user is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")

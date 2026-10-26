@@ -39,7 +39,10 @@ class BodegaService:
             return None
         empresa_scope = resolve_company_scope()
         if empresa_scope is not None and entity.empresa_id != empresa_scope:
-            raise HTTPException(status_code=403, detail="No autorizado para acceder a bodegas de otra empresa.")
+            raise HTTPException(
+                status_code=403,
+                detail="No autorizado para acceder a bodegas de otra empresa.",
+            )
         return entity
 
     def create(
@@ -75,7 +78,10 @@ class BodegaService:
             return None
         empresa_scope = resolve_company_scope()
         if empresa_scope is not None and entity.empresa_id != empresa_scope:
-            raise HTTPException(status_code=403, detail="No autorizado para modificar bodegas de otra empresa.")
+            raise HTTPException(
+                status_code=403,
+                detail="No autorizado para modificar bodegas de otra empresa.",
+            )
         if dto.codigo_bodega is not None:
             entity.codigo_bodega = dto.codigo_bodega
         if dto.nombre_bodega is not None:
@@ -101,7 +107,10 @@ class BodegaService:
             return False
         empresa_scope = resolve_company_scope()
         if empresa_scope is not None and entity.empresa_id != empresa_scope:
-            raise HTTPException(status_code=403, detail="No autorizado para eliminar bodegas de otra empresa.")
+            raise HTTPException(
+                status_code=403,
+                detail="No autorizado para eliminar bodegas de otra empresa.",
+            )
 
         # Regla: una bodega no se puede eliminar lógicamente si mantiene productos asignados
         # o stock materializado con saldo mayor a cero.
@@ -118,7 +127,9 @@ class BodegaService:
             )
 
         saldo = session.exec(
-            select(func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), 0)).where(
+            select(
+                func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), 0)
+            ).where(
                 col(InventarioStock.bodega_id) == id,
                 col(InventarioStock.activo).is_(True),
             )

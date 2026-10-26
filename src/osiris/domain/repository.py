@@ -95,7 +95,9 @@ class BaseRepository:
         # ---- TOTAL (seguro) ----
         # Contamos sobre un subquery que ya incluye todos los filtros (y joins si los hubiere)
         count_stmt = select(func.count()).select_from(ordered_stmt.subquery())
-        if ordered_stmt.get_execution_options().get(SOFT_DELETE_INCLUDE_INACTIVE_OPTION, False):
+        if ordered_stmt.get_execution_options().get(
+            SOFT_DELETE_INCLUDE_INACTIVE_OPTION, False
+        ):
             count_stmt = count_stmt.execution_options(
                 **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
             )
@@ -110,7 +112,11 @@ class BaseRepository:
 
     def get(self, session: Session, item_id: Any) -> Any:
         obj = session.get(self.model, item_id)
-        if obj is not None and hasattr(obj, "activo") and getattr(obj, "activo") is False:
+        if (
+            obj is not None
+            and hasattr(obj, "activo")
+            and getattr(obj, "activo") is False
+        ):
             return None
         return obj
 
@@ -162,7 +168,9 @@ class BaseRepository:
 
         # Fallback: cualquier otro error de integridad
         tech = str(orig) if orig else str(e)
-        raise HTTPException(status_code=409, detail=f"Violación de integridad: {tech}") from e
+        raise HTTPException(
+            status_code=409, detail=f"Violación de integridad: {tech}"
+        ) from e
 
     def create(self, session: Session, obj: Any) -> Any:
         # Acepta dict o Pydantic y lo convierte al modelo SQLModel

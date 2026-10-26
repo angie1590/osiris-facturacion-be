@@ -14,7 +14,9 @@ class ProveedorPersona(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     # PK heredada: id: UUID
     # Auditoría/activo heredados de mixins
 
-    nombre_comercial: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    nombre_comercial: Optional[str] = Field(
+        default=None, sa_column=Column(String, nullable=True)
+    )
 
     # FK a aux_tipo_contribuyente.codigo (PK tipo_contribuyente = código 2 chars)
     tipo_contribuyente_id: str = Field(

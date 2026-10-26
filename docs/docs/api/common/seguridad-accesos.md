@@ -79,6 +79,7 @@ Exige `USUARIOS.actualizar`; responde `204` sin cuerpo y actualiza la marca de i
 Los listados Usuarios aceptan `q`, `identificacion`, `estado`, `sort_by`, `sort_order` y alias `sort_direction`, con whitelist y paginación del servidor. Errores: `401` autenticación, `403` permiso, `404` inexistente, `409` duplicado/inactivo/inmutabilidad, `422` DTO/filtro inválido y `400` regla funcional.
 
 ## GET /api/v1/usuarios
+
 Lista usuarios de forma paginada para administración de accesos y gobierno de cuentas.
 
 <Tabs>
@@ -142,13 +143,14 @@ Lista usuarios de forma paginada para administración de accesos y gobierno de c
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Desplazamiento inicial. Default `0`, mínimo `0`. |
-| only_active | bool | No | Si es `true`, devuelve solo usuarios activos. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                |
+| ----------- | ---- | ----------- | ---------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Desplazamiento inicial. Default `0`, mínimo `0`.           |
+| only_active | bool | No          | Si es `true`, devuelve solo usuarios activos.              |
 
 ## GET /api/v1/usuarios/\{item_id\}
+
 Obtiene el detalle de una cuenta para auditoría, soporte y validación de asignación de rol.
 
 <Tabs>
@@ -193,11 +195,12 @@ Obtiene el detalle de una cuenta para auditoría, soporte y validación de asign
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del usuario. Si no existe, retorna no encontrado. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones                                     |
+| ------- | ---- | ----------- | --------------------------------------------------------------- |
+| item_id | UUID | Sí          | Identificador del usuario. Si no existe, retorna no encontrado. |
 
 ## POST /api/v1/usuarios
+
 Crea un usuario operativo, valida referencias activas y almacena la contraseña en hash.
 
 <Tabs>
@@ -250,17 +253,18 @@ Crea un usuario operativo, valida referencias activas y almacena la contraseña 
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| persona_id | UUID | Alternativa | Persona activa; excluyente con `persona_nueva` y única por Usuario. |
-| persona_nueva | PersonaCreate | Alternativa | Borrador natural guardado junto con Usuario; excluyente con `persona_id`. |
-| rol_id | UUID | Sí | Debe existir y estar activo. |
-| username | string | Sí | Trim/lowercase, 3..120 caracteres, único incluyendo cuentas inactivas. |
-| password | string | Sí | Mínimo 8 caracteres; se transforma a `password_hash`. |
-| requiere_cambio_password | bool | No | Default `true`. Fuerza cambio en primer ingreso. |
-| usuario_auditoria | string | No | Compatibilidad técnica; en producción se omite y prevalece el JWT. |
+| Campo                    | Tipo          | Obligatorio | Descripción y Restricciones                                               |
+| ------------------------ | ------------- | ----------- | ------------------------------------------------------------------------- |
+| persona_id               | UUID          | Alternativa | Persona activa; excluyente con `persona_nueva` y única por Usuario.       |
+| persona_nueva            | PersonaCreate | Alternativa | Borrador natural guardado junto con Usuario; excluyente con `persona_id`. |
+| rol_id                   | UUID          | Sí          | Debe existir y estar activo.                                              |
+| username                 | string        | Sí          | Trim/lowercase, 3..120 caracteres, único incluyendo cuentas inactivas.    |
+| password                 | string        | Sí          | Mínimo 8 caracteres; se transforma a `password_hash`.                     |
+| requiere_cambio_password | bool          | No          | Default `true`. Fuerza cambio en primer ingreso.                          |
+| usuario_auditoria        | string        | No          | Compatibilidad técnica; en producción se omite y prevalece el JWT.        |
 
 ## PUT /api/v1/usuarios/\{item_id\}
+
 Actualiza rol activo o contraseña de una cuenta sin cambiar identidad base; el actor se deriva del contexto autenticado.
 
 <Tabs>
@@ -315,14 +319,15 @@ Actualiza rol activo o contraseña de una cuenta sin cambiar identidad base; el 
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del usuario a actualizar. |
-| rol_id | UUID | No | Si se envía, debe existir y estar activo. |
-| password | string | No | Si se envía, mínimo 8 caracteres; se guarda como hash e invalida sesiones previas. |
-| usuario_auditoria | string | No | Compatibilidad técnica; no enviar desde frontend productivo. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                                                        |
+| ----------------- | ------ | ----------- | ---------------------------------------------------------------------------------- |
+| item_id           | UUID   | Sí          | Identificador del usuario a actualizar.                                            |
+| rol_id            | UUID   | No          | Si se envía, debe existir y estar activo.                                          |
+| password          | string | No          | Si se envía, mínimo 8 caracteres; se guarda como hash e invalida sesiones previas. |
+| usuario_auditoria | string | No          | Compatibilidad técnica; no enviar desde frontend productivo.                       |
 
 ## DELETE /api/v1/usuarios/\{item_id\}
+
 Aplica baja lógica de usuario para bloquear su operación sin perder trazabilidad histórica.
 
 <Tabs>
@@ -357,11 +362,12 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del usuario a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones             |
+| ------- | ---- | ----------- | --------------------------------------- |
+| item_id | UUID | Sí          | Identificador del usuario a desactivar. |
 
 ## GET /api/v1/usuarios/\{usuario_id\}/permisos
+
 Retorna el conjunto de permisos por módulo según el rol del usuario para decisiones de autorización en frontend y backend.
 
 El usuario autenticado puede consultar sus propios permisos sin `USUARIOS.leer`; consultar los de otro Usuario exige `USUARIOS.leer`. No es un endpoint público ni requiere permiso de lectura de Usuarios para cargar los permisos propios.
@@ -415,11 +421,12 @@ El usuario autenticado puede consultar sus propios permisos sin `USUARIOS.leer`;
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| usuario_id | UUID | Sí | Usuario objetivo para resolver permisos por rol asociado. |
+| Campo      | Tipo | Obligatorio | Descripción y Restricciones                               |
+| ---------- | ---- | ----------- | --------------------------------------------------------- |
+| usuario_id | UUID | Sí          | Usuario objetivo para resolver permisos por rol asociado. |
 
 ## GET /api/v1/usuarios/\{usuario_id\}/menu
+
 Retorna únicamente módulos visibles en menú para el usuario (solo permisos con lectura habilitada).
 
 La consulta propia requiere autenticación; consultar el menú ajeno exige `USUARIOS.leer`.
@@ -465,11 +472,12 @@ La consulta propia requiere autenticación; consultar el menú ajeno exige `USUA
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| usuario_id | UUID | Sí | Usuario para construir menú dinámico por rol y permisos activos. |
+| Campo      | Tipo | Obligatorio | Descripción y Restricciones                                      |
+| ---------- | ---- | ----------- | ---------------------------------------------------------------- |
+| usuario_id | UUID | Sí          | Usuario para construir menú dinámico por rol y permisos activos. |
 
 ## POST /api/v1/usuarios/\{usuario_id\}/reset-password
+
 Regenera una contraseña temporal para recuperación segura y marca la cuenta para cambio obligatorio al siguiente inicio de sesión.
 
 Exige `USUARIOS.actualizar`, invalida sesiones anteriores y devuelve `409` si Usuario está inactivo. El cuerpo es opcional; no enviar actor desde producción.
@@ -512,12 +520,13 @@ Exige `USUARIOS.actualizar`, invalida sesiones anteriores y devuelve `409` si Us
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| usuario_id | UUID | Sí | Identificador del usuario a resetear. |
-| usuario_auditoria | string | No | Compatibilidad técnica; el actor autenticado manda. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                         |
+| ----------------- | ------ | ----------- | --------------------------------------------------- |
+| usuario_id        | UUID   | Sí          | Identificador del usuario a resetear.               |
+| usuario_auditoria | string | No          | Compatibilidad técnica; el actor autenticado manda. |
 
 ## POST /api/v1/usuarios/\{usuario_id\}/verify-password
+
 Verifica si una clave en texto plano coincide con la contraseña actual del usuario.
 
 <Tabs>
@@ -555,14 +564,15 @@ true
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| usuario_id | UUID | Sí | Usuario sobre el cual se valida la contraseña. |
-| password | string | Sí | Clave a verificar. Mínimo 1 carácter. |
+| Campo      | Tipo   | Obligatorio | Descripción y Restricciones                    |
+| ---------- | ------ | ----------- | ---------------------------------------------- |
+| usuario_id | UUID   | Sí          | Usuario sobre el cual se valida la contraseña. |
+| password   | string | Sí          | Clave a verificar. Mínimo 1 carácter.          |
 
 ---
 
 ## GET /api/v1/roles
+
 Lista roles para la matriz de seguridad y asignación de perfiles operativos.
 
 <Tabs>
@@ -624,13 +634,14 @@ Lista roles para la matriz de seguridad y asignación de perfiles operativos.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Inicio de paginación. Default `0`, mínimo `0`. |
-| only_active | bool | No | Filtra roles activos si es `true`. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                |
+| ----------- | ---- | ----------- | ---------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Inicio de paginación. Default `0`, mínimo `0`.             |
+| only_active | bool | No          | Filtra roles activos si es `true`.                         |
 
 ## GET /api/v1/roles/\{item_id\}
+
 Obtiene un rol específico para consultar su definición y estado operativo.
 
 <Tabs>
@@ -673,11 +684,12 @@ Obtiene un rol específico para consultar su definición y estado operativo.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del rol. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones |
+| ------- | ---- | ----------- | --------------------------- |
+| item_id | UUID | Sí          | Identificador del rol.      |
 
 ## POST /api/v1/roles
+
 Crea un rol nuevo para modelar perfiles de autorización en la plataforma.
 
 <Tabs>
@@ -720,13 +732,14 @@ Crea un rol nuevo para modelar perfiles de autorización en la plataforma.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| nombre | string | Sí | Nombre único del rol. Máximo 120 caracteres en persistencia. |
-| descripcion | string | No | Descripción funcional del rol. Máximo 255 caracteres. |
-| usuario_auditoria | string | No | Usuario que crea el registro. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                                  |
+| ----------------- | ------ | ----------- | ------------------------------------------------------------ |
+| nombre            | string | Sí          | Nombre único del rol. Máximo 120 caracteres en persistencia. |
+| descripcion       | string | No          | Descripción funcional del rol. Máximo 255 caracteres.        |
+| usuario_auditoria | string | No          | Usuario que crea el registro.                                |
 
 ## PUT /api/v1/roles/\{item_id\}
+
 Actualiza nombre o descripción de un rol para evolucionar políticas de acceso.
 
 <Tabs>
@@ -773,14 +786,15 @@ Actualiza nombre o descripción de un rol para evolucionar políticas de acceso.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Rol objetivo de la actualización. |
-| nombre | string | No | Si se envía, mantiene unicidad y máximo 120 caracteres. |
-| descripcion | string | No | Si se envía, máximo 255 caracteres. |
-| usuario_auditoria | string | No | Usuario que ejecuta el cambio. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                             |
+| ----------------- | ------ | ----------- | ------------------------------------------------------- |
+| item_id           | UUID   | Sí          | Rol objetivo de la actualización.                       |
+| nombre            | string | No          | Si se envía, mantiene unicidad y máximo 120 caracteres. |
+| descripcion       | string | No          | Si se envía, máximo 255 caracteres.                     |
+| usuario_auditoria | string | No          | Usuario que ejecuta el cambio.                          |
 
 ## DELETE /api/v1/roles/\{item_id\}
+
 Desactiva un rol para retirarlo de uso operativo conservando su historial.
 
 <Tabs>
@@ -815,13 +829,14 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del rol a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones         |
+| ------- | ---- | ----------- | ----------------------------------- |
+| item_id | UUID | Sí          | Identificador del rol a desactivar. |
 
 ---
 
 ## GET /api/v1/modulos
+
 Lista módulos funcionales para configuración de menú y matriz de permisos.
 
 <Tabs>
@@ -886,13 +901,14 @@ Lista módulos funcionales para configuración de menú y matriz de permisos.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Desplazamiento inicial. Default `0`, mínimo `0`. |
-| only_active | bool | No | Si es `true`, solo devuelve módulos activos. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                |
+| ----------- | ---- | ----------- | ---------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Desplazamiento inicial. Default `0`, mínimo `0`.           |
+| only_active | bool | No          | Si es `true`, solo devuelve módulos activos.               |
 
 ## GET /api/v1/modulos/\{item_id\}
+
 Obtiene el detalle de un módulo para administración de navegación y seguridad.
 
 <Tabs>
@@ -938,11 +954,12 @@ Obtiene el detalle de un módulo para administración de navegación y seguridad
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del módulo. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones |
+| ------- | ---- | ----------- | --------------------------- |
+| item_id | UUID | Sí          | Identificador del módulo.   |
 
 ## POST /api/v1/modulos
+
 Crea un módulo de negocio para habilitar su uso en menús y autorización por rol.
 
 <Tabs>
@@ -991,16 +1008,17 @@ Crea un módulo de negocio para habilitar su uso en menús y autorización por r
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| codigo | string | Sí | Código único del módulo. Máximo 50 caracteres. |
-| nombre | string | Sí | Nombre descriptivo del módulo. Máximo 120 caracteres. |
-| descripcion | string | No | Texto descriptivo. Máximo 255 caracteres. |
-| orden | int | No | Orden de despliegue en menú. |
-| icono | string | No | Nombre de icono para frontend. Máximo 50 caracteres. |
-| usuario_auditoria | string | No | Usuario que crea el módulo. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                           |
+| ----------------- | ------ | ----------- | ----------------------------------------------------- |
+| codigo            | string | Sí          | Código único del módulo. Máximo 50 caracteres.        |
+| nombre            | string | Sí          | Nombre descriptivo del módulo. Máximo 120 caracteres. |
+| descripcion       | string | No          | Texto descriptivo. Máximo 255 caracteres.             |
+| orden             | int    | No          | Orden de despliegue en menú.                          |
+| icono             | string | No          | Nombre de icono para frontend. Máximo 50 caracteres.  |
+| usuario_auditoria | string | No          | Usuario que crea el módulo.                           |
 
 ## PUT /api/v1/modulos/\{item_id\}
+
 Actualiza atributos de un módulo para ajustar presentación y orden funcional.
 
 <Tabs>
@@ -1052,17 +1070,18 @@ Actualiza atributos de un módulo para ajustar presentación y orden funcional.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Módulo objetivo de actualización. |
-| codigo | string | No | Si se envía, mantiene unicidad y máximo 50 caracteres. |
-| nombre | string | No | Si se envía, máximo 120 caracteres. |
-| descripcion | string | No | Si se envía, máximo 255 caracteres. |
-| orden | int | No | Orden para menú. |
-| icono | string | No | Nombre de icono; máximo 50 caracteres. |
-| usuario_auditoria | string | No | Usuario que realiza el cambio. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                            |
+| ----------------- | ------ | ----------- | ------------------------------------------------------ |
+| item_id           | UUID   | Sí          | Módulo objetivo de actualización.                      |
+| codigo            | string | No          | Si se envía, mantiene unicidad y máximo 50 caracteres. |
+| nombre            | string | No          | Si se envía, máximo 120 caracteres.                    |
+| descripcion       | string | No          | Si se envía, máximo 255 caracteres.                    |
+| orden             | int    | No          | Orden para menú.                                       |
+| icono             | string | No          | Nombre de icono; máximo 50 caracteres.                 |
+| usuario_auditoria | string | No          | Usuario que realiza el cambio.                         |
 
 ## DELETE /api/v1/modulos/\{item_id\}
+
 Desactiva un módulo para retirarlo del catálogo sin eliminar historial.
 
 <Tabs>
@@ -1097,13 +1116,14 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador del módulo a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones            |
+| ------- | ---- | ----------- | -------------------------------------- |
+| item_id | UUID | Sí          | Identificador del módulo a desactivar. |
 
 ---
 
 ## GET /api/v1/roles-modulos-permisos
+
 Lista asignaciones de permisos por rol y módulo para auditoría de seguridad.
 
 <Tabs>
@@ -1169,13 +1189,14 @@ Lista asignaciones de permisos por rol y módulo para auditoría de seguridad.
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| limit | int | No | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Inicio de paginación. Default `0`, mínimo `0`. |
-| only_active | bool | No | Si es `true`, lista solo asignaciones activas. |
+| Campo       | Tipo | Obligatorio | Descripción y Restricciones                                |
+| ----------- | ---- | ----------- | ---------------------------------------------------------- |
+| limit       | int  | No          | Tamaño de página. Default `50`, mínimo `1`, máximo `1000`. |
+| offset      | int  | No          | Inicio de paginación. Default `0`, mínimo `0`.             |
+| only_active | bool | No          | Si es `true`, lista solo asignaciones activas.             |
 
 ## GET /api/v1/roles-modulos-permisos/\{item_id\}
+
 Obtiene una asignación específica de permisos para inspección y soporte de seguridad.
 
 <Tabs>
@@ -1222,11 +1243,12 @@ Obtiene una asignación específica de permisos para inspección y soporte de se
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la asignación de permisos. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones                 |
+| ------- | ---- | ----------- | ------------------------------------------- |
+| item_id | UUID | Sí          | Identificador de la asignación de permisos. |
 
 ## POST /api/v1/roles-modulos-permisos
+
 Crea la relación de permisos entre un rol y un módulo para controlar operaciones CRUD autorizadas.
 
 <Tabs>
@@ -1277,17 +1299,18 @@ Crea la relación de permisos entre un rol y un módulo para controlar operacion
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| rol_id | UUID | Sí | Rol al que se asignan permisos. |
-| modulo_id | UUID | Sí | Módulo sobre el que aplica el permiso. |
-| puede_leer | bool | No | Default `false`. Habilita acceso de lectura. |
-| puede_crear | bool | No | Default `false`. Habilita operaciones de creación. |
-| puede_actualizar | bool | No | Default `false`. Habilita operaciones de actualización. |
-| puede_eliminar | bool | No | Default `false`. Habilita operaciones de eliminación. |
-| usuario_auditoria | string | No | Usuario que crea la asignación. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                             |
+| ----------------- | ------ | ----------- | ------------------------------------------------------- |
+| rol_id            | UUID   | Sí          | Rol al que se asignan permisos.                         |
+| modulo_id         | UUID   | Sí          | Módulo sobre el que aplica el permiso.                  |
+| puede_leer        | bool   | No          | Default `false`. Habilita acceso de lectura.            |
+| puede_crear       | bool   | No          | Default `false`. Habilita operaciones de creación.      |
+| puede_actualizar  | bool   | No          | Default `false`. Habilita operaciones de actualización. |
+| puede_eliminar    | bool   | No          | Default `false`. Habilita operaciones de eliminación.   |
+| usuario_auditoria | string | No          | Usuario que crea la asignación.                         |
 
 ## PUT /api/v1/roles-modulos-permisos/\{item_id\}
+
 Actualiza los flags de autorización para ajustar el alcance operativo de un rol en un módulo.
 
 <Tabs>
@@ -1341,16 +1364,17 @@ Actualiza los flags de autorización para ajustar el alcance operativo de un rol
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Asignación de permisos a actualizar. |
-| puede_leer | bool | No | Si se envía, redefine permiso de lectura. |
-| puede_crear | bool | No | Si se envía, redefine permiso de creación. |
-| puede_actualizar | bool | No | Si se envía, redefine permiso de actualización. |
-| puede_eliminar | bool | No | Si se envía, redefine permiso de eliminación. |
-| usuario_auditoria | string | No | Usuario que ejecuta el cambio. |
+| Campo             | Tipo   | Obligatorio | Descripción y Restricciones                     |
+| ----------------- | ------ | ----------- | ----------------------------------------------- |
+| item_id           | UUID   | Sí          | Asignación de permisos a actualizar.            |
+| puede_leer        | bool   | No          | Si se envía, redefine permiso de lectura.       |
+| puede_crear       | bool   | No          | Si se envía, redefine permiso de creación.      |
+| puede_actualizar  | bool   | No          | Si se envía, redefine permiso de actualización. |
+| puede_eliminar    | bool   | No          | Si se envía, redefine permiso de eliminación.   |
+| usuario_auditoria | string | No          | Usuario que ejecuta el cambio.                  |
 
 ## DELETE /api/v1/roles-modulos-permisos/\{item_id\}
+
 Desactiva una asignación de permisos para revocar acceso sin borrar el histórico de auditoría.
 
 <Tabs>
@@ -1385,13 +1409,14 @@ null
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| item_id | UUID | Sí | Identificador de la asignación a desactivar. |
+| Campo   | Tipo | Obligatorio | Descripción y Restricciones                  |
+| ------- | ---- | ----------- | -------------------------------------------- |
+| item_id | UUID | Sí          | Identificador de la asignación a desactivar. |
 
 ---
 
 ## GET /api/v1/audit-logs
+
 Consulta la bitácora transversal de auditoría para trazabilidad de cambios y eventos de seguridad.
 
 <Tabs>
@@ -1453,42 +1478,42 @@ Consulta la bitácora transversal de auditoría para trazabilidad de cambios y e
 
 Diccionario de Datos
 
-| Campo | Tipo | Obligatorio | Descripción y Restricciones |
-|---|---|---|---|
-| usuario_id | string | No | Filtra por usuario responsable (`usuario_id`, `created_by`, `updated_by` o `usuario_auditoria`). |
-| fecha_desde | datetime | No | Límite inferior del rango de auditoría (ISO 8601). |
-| fecha_hasta | datetime | No | Límite superior del rango de auditoría (ISO 8601). |
-| limit | int | No | Tamaño de página lógica. Default `100`, mínimo `1`, máximo `1000`. |
-| offset | int | No | Desplazamiento de resultados. Default `0`, mínimo `0`. |
+| Campo       | Tipo     | Obligatorio | Descripción y Restricciones                                                                      |
+| ----------- | -------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| usuario_id  | string   | No          | Filtra por usuario responsable (`usuario_id`, `created_by`, `updated_by` o `usuario_auditoria`). |
+| fecha_desde | datetime | No          | Límite inferior del rango de auditoría (ISO 8601).                                               |
+| fecha_hasta | datetime | No          | Límite superior del rango de auditoría (ISO 8601).                                               |
+| limit       | int      | No          | Tamaño de página lógica. Default `100`, mínimo `1`, máximo `1000`.                               |
+| offset      | int      | No          | Desplazamiento de resultados. Default `0`, mínimo `0`.                                           |
 
 ---
 
 ## Matriz de Errores por Endpoint
 
-| Endpoint | Códigos esperados |
-|---|---|
-| `GET /api/v1/usuarios` | `200`, `422` |
-| `GET /api/v1/usuarios/{item_id}` | `200`, `404` |
-| `POST /api/v1/usuarios` | `201`, `400`, `404`, `409`, `422` |
-| `PUT /api/v1/usuarios/{item_id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/usuarios/{item_id}` | `204`, `404` |
-| `GET /api/v1/usuarios/{usuario_id}/permisos` | `200`, `404`, `422` |
-| `GET /api/v1/usuarios/{usuario_id}/menu` | `200`, `404`, `422` |
-| `POST /api/v1/usuarios/{usuario_id}/reset-password` | `200`, `404`, `409`, `422` |
-| `POST /api/v1/usuarios/{usuario_id}/verify-password` | `200`, `404`, `409`, `422` |
-| `GET /api/v1/roles` | `200`, `422` |
-| `GET /api/v1/roles/{item_id}` | `200`, `404` |
-| `POST /api/v1/roles` | `201`, `409`, `422` |
-| `PUT /api/v1/roles/{item_id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/roles/{item_id}` | `204`, `404` |
-| `GET /api/v1/modulos` | `200`, `422` |
-| `GET /api/v1/modulos/{item_id}` | `200`, `404` |
-| `POST /api/v1/modulos` | `201`, `409`, `422` |
-| `PUT /api/v1/modulos/{item_id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/modulos/{item_id}` | `204`, `404` |
-| `GET /api/v1/roles-modulos-permisos` | `200`, `422` |
-| `GET /api/v1/roles-modulos-permisos/{item_id}` | `200`, `404` |
-| `POST /api/v1/roles-modulos-permisos` | `201`, `404`, `409`, `422` |
-| `PUT /api/v1/roles-modulos-permisos/{item_id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/roles-modulos-permisos/{item_id}` | `204`, `404` |
-| `GET /api/v1/audit-logs` | `200`, `422` |
+| Endpoint                                             | Códigos esperados                 |
+| ---------------------------------------------------- | --------------------------------- |
+| `GET /api/v1/usuarios`                               | `200`, `422`                      |
+| `GET /api/v1/usuarios/{item_id}`                     | `200`, `404`                      |
+| `POST /api/v1/usuarios`                              | `201`, `400`, `404`, `409`, `422` |
+| `PUT /api/v1/usuarios/{item_id}`                     | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/usuarios/{item_id}`                  | `204`, `404`                      |
+| `GET /api/v1/usuarios/{usuario_id}/permisos`         | `200`, `404`, `422`               |
+| `GET /api/v1/usuarios/{usuario_id}/menu`             | `200`, `404`, `422`               |
+| `POST /api/v1/usuarios/{usuario_id}/reset-password`  | `200`, `404`, `409`, `422`        |
+| `POST /api/v1/usuarios/{usuario_id}/verify-password` | `200`, `404`, `409`, `422`        |
+| `GET /api/v1/roles`                                  | `200`, `422`                      |
+| `GET /api/v1/roles/{item_id}`                        | `200`, `404`                      |
+| `POST /api/v1/roles`                                 | `201`, `409`, `422`               |
+| `PUT /api/v1/roles/{item_id}`                        | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/roles/{item_id}`                     | `204`, `404`                      |
+| `GET /api/v1/modulos`                                | `200`, `422`                      |
+| `GET /api/v1/modulos/{item_id}`                      | `200`, `404`                      |
+| `POST /api/v1/modulos`                               | `201`, `409`, `422`               |
+| `PUT /api/v1/modulos/{item_id}`                      | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/modulos/{item_id}`                   | `204`, `404`                      |
+| `GET /api/v1/roles-modulos-permisos`                 | `200`, `422`                      |
+| `GET /api/v1/roles-modulos-permisos/{item_id}`       | `200`, `404`                      |
+| `POST /api/v1/roles-modulos-permisos`                | `201`, `404`, `409`, `422`        |
+| `PUT /api/v1/roles-modulos-permisos/{item_id}`       | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/roles-modulos-permisos/{item_id}`    | `204`, `404`                      |
+| `GET /api/v1/audit-logs`                             | `200`, `422`                      |

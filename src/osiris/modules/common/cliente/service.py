@@ -13,6 +13,7 @@ from .models import ClienteCreate, ClienteRead, ClienteUpdate
 from osiris.modules.common.persona.entity import Persona
 from osiris.modules.common.tipo_cliente.entity import TipoCliente
 
+
 class ClienteService(DirectoryService):
     repo = ClienteRepository()
     read_model = ClienteRead
@@ -35,10 +36,15 @@ class ClienteService(DirectoryService):
         try:
             type_id = UUID(str(type_id))
         except ValueError as error:
-            raise HTTPException(status_code=422, detail="tipo_cliente_id no valido") from error
-        catalog = session.exec(select(TipoCliente).where(TipoCliente.id == type_id).execution_options(
-            **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
-        ).with_for_update()).first()
+            raise HTTPException(
+                status_code=422, detail="tipo_cliente_id no valido"
+            ) from error
+        catalog = session.exec(
+            select(TipoCliente)
+            .where(TipoCliente.id == type_id)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            .with_for_update()
+        ).first()
         if catalog is None:
             raise HTTPException(status_code=404, detail="TipoCliente no encontrado")
         if catalog.activo is False:
@@ -46,10 +52,16 @@ class ClienteService(DirectoryService):
         return type_id
 
     def validate_create(self, data: dict[str, Any], session: Session) -> None:
-        data["tipo_cliente_id"] = self._active_type(session, data.get("tipo_cliente_id"))
+        data["tipo_cliente_id"] = self._active_type(
+            session, data.get("tipo_cliente_id")
+        )
 
-    def prepare_update(self, session: Session, current: Any, payload: dict[str, Any]) -> dict[str, Any]:
+    def prepare_update(
+        self, session: Session, current: Any, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         payload = self.immutable_persona(current, payload)
         if "tipo_cliente_id" in payload:
-            payload["tipo_cliente_id"] = self._active_type(session, payload["tipo_cliente_id"])
+            payload["tipo_cliente_id"] = self._active_type(
+                session, payload["tipo_cliente_id"]
+            )
         return payload

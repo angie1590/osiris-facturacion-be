@@ -8,9 +8,12 @@ from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.modules.inventario.bodega.entity import Bodega
-from osiris.modules.inventario.bodega.models import BodegaCreate, BodegaRead, BodegaUpdate
+from osiris.modules.inventario.bodega.models import (
+    BodegaCreate,
+    BodegaRead,
+    BodegaUpdate,
+)
 from osiris.modules.inventario.bodega.service import BodegaService
-
 
 router = APIRouter(prefix="/api/v1/bodegas", tags=["Bodegas"])
 service = BodegaService()
@@ -47,7 +50,9 @@ def create_bodega(dto: BodegaCreate, session: Session = Depends(get_session)) ->
 
 
 @router.put("/{id}", response_model=BodegaRead)
-def update_bodega(id: UUID, dto: BodegaUpdate, session: Session = Depends(get_session)) -> Bodega:
+def update_bodega(
+    id: UUID, dto: BodegaUpdate, session: Session = Depends(get_session)
+) -> Bodega:
     entity = service.update(session, id, dto, usuario_auditoria="api")
     if not entity:
         raise HTTPException(status_code=404, detail="Bodega no encontrada")

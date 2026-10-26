@@ -1,6 +1,7 @@
 from typing import Optional
 from sqlmodel import SQLModel, Field
 
+
 class TipoContribuyente(SQLModel, table=True):
     __tablename__ = "aux_tipo_contribuyente"
 

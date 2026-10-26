@@ -4,6 +4,7 @@ from __future__ import annotations
 from osiris.domain.directory_repository import DirectoryRepository
 from .entity import Cliente
 
+
 class ClienteRepository(DirectoryRepository):
     model = Cliente
     persona_field = "persona_id"

@@ -43,11 +43,13 @@ Tabla jerárquica de categorías de productos que permite estructurar el inventa
 Obtiene una lista paginada de categorías activas (por defecto) o todas.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50) - Registros por página (min: 1, max: 1000)
 - `offset` (int, default: 0) - Desplazamiento desde el inicio
 - `only_active` (bool, default: true) - Si es `true`, solo categorías activas
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -89,9 +91,11 @@ Obtiene una lista paginada de categorías activas (por defecto) o todas.
 Obtiene los detalles de una categoría específica.
 
 **Parámetros de Path:**
+
 - `item_id` (UUID) - ID de la categoría
 
 **Response 200:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -106,6 +110,7 @@ Obtiene los detalles de una categoría específica.
 ```
 
 **Response 404:**
+
 ```json
 {
   "detail": "Categoría 550e8400-e29b-41d4-a716-446655440000 not found"
@@ -121,6 +126,7 @@ Obtiene los detalles de una categoría específica.
 Crea una nueva categoría. Puede ser una categoría raíz (`parent_id=null`) o subcategoría de una categoría existente.
 
 **Request Body:**
+
 ```json
 {
   "nombre": "Computadoras",
@@ -131,6 +137,7 @@ Crea una nueva categoría. Puede ser una categoría raíz (`parent_id=null`) o s
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "660e8400-e29b-41d4-a716-446655440000",
@@ -145,6 +152,7 @@ Crea una nueva categoría. Puede ser una categoría raíz (`parent_id=null`) o s
 ```
 
 **Response 409 (FK violada):**
+
 ```json
 {
   "detail": "Foreign key violation: parent_id does not exist in tbl_categoria"
@@ -160,9 +168,11 @@ Crea una nueva categoría. Puede ser una categoría raíz (`parent_id=null`) o s
 Actualiza parcialmente una categoría. Permite cambiar nombre, es_padre, o parent_id.
 
 **Parámetros de Path:**
+
 - `item_id` (UUID) - ID de la categoría
 
 **Request Body:**
+
 ```json
 {
   "nombre": "Computadoras de Escritorio",
@@ -172,6 +182,7 @@ Actualiza parcialmente una categoría. Permite cambiar nombre, es_padre, o paren
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "660e8400-e29b-41d4-a716-446655440000",
@@ -186,6 +197,7 @@ Actualiza parcialmente una categoría. Permite cambiar nombre, es_padre, o paren
 ```
 
 **Response 404:**
+
 ```json
 {
   "detail": "Categoría 660e8400-e29b-41d4-a716-446655440000 not found"
@@ -201,11 +213,13 @@ Actualiza parcialmente una categoría. Permite cambiar nombre, es_padre, o paren
 Realiza un borrado lógico (soft delete) marcando la categoría como inactiva.
 
 **Parámetros de Path:**
+
 - `id` (UUID) - ID de la categoría
 
 **Response 204:** No content
 
 **Response 404:**
+
 ```json
 {
   "detail": "Categoría 660e8400-e29b-41d4-a716-446655440000 not found"
@@ -217,16 +231,16 @@ Realiza un borrado lógico (soft delete) marcando la categoría como inactiva.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único de la categoría |
-| `nombre` | String(255) | Not Null, Index | Nombre descriptivo de la categoría (ej: "Electrónica", "Computadoras", "Ropa") |
-| `es_padre` | Boolean | Default: false, Not Null | Indicador de si esta categoría es padre de subcategorías. Facilita consultas jerárquicas. |
-| `parent_id` | UUID | FK (tbl_categoria.id), Optional | Referencia a la categoría padre si es una subcategoría. Si es nula, es una categoría raíz. |
-| `activo` | Boolean | Default: true | Indicador de estado (soft delete) |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Optional | Usuario que realizó la acción |
+| Campo               | Tipo        | Restricción                     | Descripción                                                                                |
+| ------------------- | ----------- | ------------------------------- | ------------------------------------------------------------------------------------------ |
+| `id`                | UUID        | PK, Auto                        | Identificador único de la categoría                                                        |
+| `nombre`            | String(255) | Not Null, Index                 | Nombre descriptivo de la categoría (ej: "Electrónica", "Computadoras", "Ropa")             |
+| `es_padre`          | Boolean     | Default: false, Not Null        | Indicador de si esta categoría es padre de subcategorías. Facilita consultas jerárquicas.  |
+| `parent_id`         | UUID        | FK (tbl_categoria.id), Optional | Referencia a la categoría padre si es una subcategoría. Si es nula, es una categoría raíz. |
+| `activo`            | Boolean     | Default: true                   | Indicador de estado (soft delete)                                                          |
+| `creado_en`         | DateTime    | Auto                            | Timestamp de creación                                                                      |
+| `actualizado_en`    | DateTime    | Auto                            | Timestamp de última actualización                                                          |
+| `usuario_auditoria` | String      | Optional                        | Usuario que realizó la acción                                                              |
 
 ---
 
@@ -237,6 +251,7 @@ Realiza un borrado lógico (soft delete) marcando la categoría como inactiva.
 Catálogo de atributos reutilizables que pueden ser asignados a múltiples categorías. Cada atributo tiene un tipo de dato definido que permite validar los valores asignados en productos.
 
 **Tipos de Dato Soportados:**
+
 - `string` - Texto libre (ej: "Rojo", "Algodón 100%")
 - `integer` - Números enteros (ej: 42 horas de batería)
 - `decimal` - Números decimales (ej: 2.5 kg)
@@ -259,11 +274,13 @@ Cuando cambia el tipo, los valores convertibles se mueven a la columna tipada nu
 Obtiene una lista paginada de atributos activos.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50)
 - `offset` (int, default: 0)
 - `only_active` (bool, default: true)
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -303,6 +320,7 @@ Obtiene una lista paginada de atributos activos.
 Obtiene los detalles de un atributo específico.
 
 **Response 200:**
+
 ```json
 {
   "id": "770e8400-e29b-41d4-a716-446655440000",
@@ -324,6 +342,7 @@ Obtiene los detalles de un atributo específico.
 Crea un nuevo atributo reutilizable. El nombre debe ser único.
 
 **Request Body:**
+
 ```json
 {
   "nombre": "Color",
@@ -334,6 +353,7 @@ Crea un nuevo atributo reutilizable. El nombre debe ser único.
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "770e8400-e29b-41d4-a716-446655440000",
@@ -347,6 +367,7 @@ Crea un nuevo atributo reutilizable. El nombre debe ser único.
 ```
 
 **Response 409 (Nombre duplicado):**
+
 ```json
 {
   "detail": "Atributo con nombre 'Color' ya existe"
@@ -362,6 +383,7 @@ Crea un nuevo atributo reutilizable. El nombre debe ser único.
 Actualiza un atributo. Se puede cambiar nombre y tipo_dato.
 
 **Request Body:**
+
 ```json
 {
   "nombre": "Colores Disponibles",
@@ -370,6 +392,7 @@ Actualiza un atributo. Se puede cambiar nombre y tipo_dato.
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "770e8400-e29b-41d4-a716-446655440000",
@@ -397,15 +420,15 @@ Realiza un borrado lógico del atributo. Las asignaciones en `categoria_atributo
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único del atributo |
-| `nombre` | String(120) | Unique, Not Null, Index | Nombre único del atributo (ej: "Color", "Tamaño", "Material", "Peso", "Garantía") |
-| `tipo_dato` | Enum | Not Null | Tipo de dato: `string`, `integer`, `decimal`, `boolean`, `date`. Define el formato esperado en valores. |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Optional | Usuario auditor |
+| Campo               | Tipo        | Restricción             | Descripción                                                                                             |
+| ------------------- | ----------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `id`                | UUID        | PK, Auto                | Identificador único del atributo                                                                        |
+| `nombre`            | String(120) | Unique, Not Null, Index | Nombre único del atributo (ej: "Color", "Tamaño", "Material", "Peso", "Garantía")                       |
+| `tipo_dato`         | Enum        | Not Null                | Tipo de dato: `string`, `integer`, `decimal`, `boolean`, `date`. Define el formato esperado en valores. |
+| `activo`            | Boolean     | Default: true           | Indicador de estado                                                                                     |
+| `creado_en`         | DateTime    | Auto                    | Timestamp de creación                                                                                   |
+| `actualizado_en`    | DateTime    | Auto                    | Timestamp de última actualización                                                                       |
+| `usuario_auditoria` | String      | Optional                | Usuario auditor                                                                                         |
 
 ---
 
@@ -444,11 +467,13 @@ Tabla de asignación que vincula atributos a categorías, permitiendo caracteriz
 Obtiene una lista de asignaciones categoría-atributo con soporte para filtrar por categoría.
 
 **Parámetros de Query:**
+
 - `skip` (int, default: 0) - Desplazamiento
 - `limit` (int, default: 50) - Registros por página (max: 200)
 - `categoria_id` (UUID, optional) - Filtrar por categoría específica
 
 **Response 200:**
+
 ```json
 [
   {
@@ -475,6 +500,7 @@ Obtiene una lista de asignaciones categoría-atributo con soporte para filtrar p
 Obtiene los detalles de una asignación categoría-atributo específica.
 
 **Response 200:**
+
 ```json
 {
   "id": "990e8400-e29b-41d4-a716-446655440000",
@@ -499,6 +525,7 @@ Obtiene los detalles de una asignación categoría-atributo específica.
 Crea una asignación entre un atributo y una categoría.
 
 **Request Body:**
+
 ```json
 {
   "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
@@ -511,6 +538,7 @@ Crea una asignación entre un atributo y una categoría.
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "990e8400-e29b-41d4-a716-446655440000",
@@ -527,6 +555,7 @@ Crea una asignación entre un atributo y una categoría.
 ```
 
 **Response 400 (valor_default no cumple tipo_dato):**
+
 ```json
 {
   "detail": [
@@ -548,6 +577,7 @@ Crea una asignación entre un atributo y una categoría.
 Actualiza los parámetros de una asignación (orden, obligatorio, valor_default).
 
 **Request Body:**
+
 ```json
 {
   "orden": 2,
@@ -561,6 +591,7 @@ Actualiza los parámetros de una asignación (orden, obligatorio, valor_default)
 Al cambiar una asignación opcional a obligatoria, envía `valor_default`. `aplicar_default_a_existentes` es opcional y por defecto conserva el comportamiento previo del API; cuando es `true`, el backend agrega el valor tipado solo a productos aplicables que todavía no tengan un valor EAV para ese atributo. Los valores existentes nunca se sobrescriben. La interfaz solicita confirmación antes de enviar esta opción.
 
 **Response 200:**
+
 ```json
 {
   "id": "990e8400-e29b-41d4-a716-446655440000",
@@ -591,18 +622,18 @@ Realiza un borrado lógico de la asignación categoría-atributo.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único de la asignación |
-| `categoria_id` | UUID | FK (tbl_categoria.id), Not Null | Referencia a la categoría que recibe el atributo |
-| `atributo_id` | UUID | FK (tbl_atributo.id), Not Null | Referencia al atributo asignado |
-| `orden` | Integer | Optional | Número de orden para mostrar el atributo en formularios (ej: 1, 2, 3...). Facilita el ordenamiento visual. |
-| `obligatorio` | Boolean | Optional | Si `true`, el atributo debe tener un valor en todo producto de esta categoría. Si `false` o nulo, es opcional. |
-| `valor_default` | String | Optional | Valor por defecto que se asigna automáticamente si no se proporciona otro. **Validación**: Debe cumplir el `tipo_dato` del atributo (ej: si tipo_dato="integer", valor_default debe ser un número). |
-| `usuario_auditoria` | String | Optional | Usuario que realizó la acción |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
+| Campo               | Tipo     | Restricción                     | Descripción                                                                                                                                                                                         |
+| ------------------- | -------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | UUID     | PK, Auto                        | Identificador único de la asignación                                                                                                                                                                |
+| `categoria_id`      | UUID     | FK (tbl_categoria.id), Not Null | Referencia a la categoría que recibe el atributo                                                                                                                                                    |
+| `atributo_id`       | UUID     | FK (tbl_atributo.id), Not Null  | Referencia al atributo asignado                                                                                                                                                                     |
+| `orden`             | Integer  | Optional                        | Número de orden para mostrar el atributo en formularios (ej: 1, 2, 3...). Facilita el ordenamiento visual.                                                                                          |
+| `obligatorio`       | Boolean  | Optional                        | Si `true`, el atributo debe tener un valor en todo producto de esta categoría. Si `false` o nulo, es opcional.                                                                                      |
+| `valor_default`     | String   | Optional                        | Valor por defecto que se asigna automáticamente si no se proporciona otro. **Validación**: Debe cumplir el `tipo_dato` del atributo (ej: si tipo_dato="integer", valor_default debe ser un número). |
+| `usuario_auditoria` | String   | Optional                        | Usuario que realizó la acción                                                                                                                                                                       |
+| `activo`            | Boolean  | Default: true                   | Indicador de estado                                                                                                                                                                                 |
+| `creado_en`         | DateTime | Auto                            | Timestamp de creación                                                                                                                                                                               |
+| `actualizado_en`    | DateTime | Auto                            | Timestamp de última actualización                                                                                                                                                                   |
 
 ---
 
@@ -611,6 +642,7 @@ Realiza un borrado lógico de la asignación categoría-atributo.
 ### Caso 1: Categoría "Camisetas" con Atributos
 
 **Paso 1: Crear Atributos**
+
 ```json
 POST /api/v1/atributos
 {
@@ -635,6 +667,7 @@ POST /api/v1/atributos
 ```
 
 **Paso 2: Crear Categoría**
+
 ```json
 POST /api/v1/categorias
 {
@@ -646,6 +679,7 @@ POST /api/v1/categorias
 ```
 
 **Paso 3: Asignar Atributos a Categoría**
+
 ```json
 POST /api/v1/categorias-atributos
 {
@@ -683,6 +717,7 @@ POST /api/v1/categorias-atributos
 ### Caso 2: Categoría Jerárquica "Electrónica > Computadoras"
 
 **Paso 1: Crear categoría padre**
+
 ```json
 POST /api/v1/categorias
 {
@@ -692,9 +727,11 @@ POST /api/v1/categorias
   "usuario_auditoria": "admin"
 }
 ```
+
 Respuesta: `id = 550e8400-e29b-41d4-a716-446655440000`
 
 **Paso 2: Crear subcategoría**
+
 ```json
 POST /api/v1/categorias
 {
@@ -715,17 +752,18 @@ POST /api/v1/categorias
 
 El campo `valor_default` en `CategoriaAtributo` debe cumplir con el `tipo_dato` del atributo asociado:
 
-| tipo_dato | Ejemplo válido | Ejemplo inválido |
-|-----------|---|---|
-| `string` | `"Negro"`, `"Algodón"` | ❌ (acepta cualquier string) |
-| `integer` | `"42"`, `"100"` | `"abc"` |
-| `decimal` | `"19.99"`, `"2.5"` | `"abc"` |
-| `boolean` | `"true"`, `"false"` | `"sí"` |
-| `date` | `"2024-12-31"` | `"31/12/2024"` |
+| tipo_dato | Ejemplo válido         | Ejemplo inválido             |
+| --------- | ---------------------- | ---------------------------- |
+| `string`  | `"Negro"`, `"Algodón"` | ❌ (acepta cualquier string) |
+| `integer` | `"42"`, `"100"`        | `"abc"`                      |
+| `decimal` | `"19.99"`, `"2.5"`     | `"abc"`                      |
+| `boolean` | `"true"`, `"false"`    | `"sí"`                       |
+| `date`    | `"2024-12-31"`         | `"31/12/2024"`               |
 
 ### Soft Delete
 
 Todas las entidades implementan **borrado lógico**:
+
 - Campo `activo: boolean` (default: `true`)
 - DELETE endpoint realiza update a `activo=false`
 - GET con parámetro `only_active=true` o query implícita filtran registros inactivos
@@ -733,6 +771,7 @@ Todas las entidades implementan **borrado lógico**:
 ### Auditoría
 
 Todas las entidades registran:
+
 - `creado_en`: Timestamp de creación
 - `actualizado_en`: Timestamp de última actualización
 - `usuario_auditoria`: Usuario que realizó la acción

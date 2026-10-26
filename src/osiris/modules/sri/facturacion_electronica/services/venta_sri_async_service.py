@@ -19,7 +19,9 @@ from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.empresa.signature_service import EmpresaSignatureService
 from osiris.modules.common.punto_emision.entity import PuntoEmision
 from osiris.modules.common.sucursal.entity import Sucursal
-from osiris.modules.sri.facturacion_electronica.services.correo_service import CorreoFacturaService
+from osiris.modules.sri.facturacion_electronica.services.correo_service import (
+    CorreoFacturaService,
+)
 from osiris.modules.sri.core_sri.models import (
     DocumentoElectronico,
     DocumentoElectronicoHistorial,
@@ -33,7 +35,9 @@ from osiris.modules.sri.core_sri.models import (
     VentaDetalle,
     VentaDetalleImpuesto,
 )
-from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import FEMapperService
+from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import (
+    FEMapperService,
+)
 from osiris.modules.sri.core_sri.all_schemas import (
     VentaDetalleImpuestoRead,
     VentaDetalleRead,
@@ -43,7 +47,11 @@ from osiris.modules.sri.core_sri.all_schemas import (
 
 class _FirmadorXML(Protocol):
     def firmar_xml(
-        self, xml_path: str, output_path: str, p12_path: str, p12_password: str,
+        self,
+        xml_path: str,
+        output_path: str,
+        p12_path: str,
+        p12_password: str,
     ) -> str: ...
 
 
@@ -63,10 +71,12 @@ class _SRIService(Protocol):
 
 try:
     ManejadorXML: Callable[[str], _ManejadorXML] | None = cast(
-        Callable[[str], _ManejadorXML], import_module("fe_ec.utils.manejador_xml").ManejadorXML,
+        Callable[[str], _ManejadorXML],
+        import_module("fe_ec.utils.manejador_xml").ManejadorXML,
     )
     SRIService: Callable[[], _SRIService] | None = cast(
-        Callable[[], _SRIService], import_module("fe_ec.utils.sri").SRIService,
+        Callable[[], _SRIService],
+        import_module("fe_ec.utils.sri").SRIService,
     )
 except Exception:  # pragma: no cover - fallback cuando la librería no está instalada.
     ManejadorXML = None
@@ -81,8 +91,7 @@ class FEECVentaGateway(Protocol):
         payload: Mapping[str, object],
         signature_content: bytes | None = None,
         signature_password: str | None = None,
-    ) -> dict[str, str]:
-        ...
+    ) -> dict[str, str]: ...
 
 
 class FEECVentaGatewayDefault:
@@ -91,7 +100,10 @@ class FEECVentaGatewayDefault:
         if value is None:
             return "", ""
         if isinstance(value, dict):
-            return str(value.get("estado", "")).upper(), str(value.get("mensaje", "")).strip()
+            return (
+                str(value.get("estado", "")).upper(),
+                str(value.get("mensaje", "")).strip(),
+            )
         estado = str(getattr(value, "estado", "")).upper()
         mensaje = str(getattr(value, "mensaje", "")).strip()
         return estado, mensaje
@@ -126,20 +138,29 @@ class FEECVentaGatewayDefault:
         signature_password: str | None = None,
     ) -> dict[str, str]:
         if tipo_documento != "VENTA":
-            return {"estado": "RECHAZADO", "mensaje": "Tipo de documento no soportado por gateway de venta."}
+            return {
+                "estado": "RECHAZADO",
+                "mensaje": "Tipo de documento no soportado por gateway de venta.",
+            }
 
         if ManejadorXML is None or SRIService is None:
             settings = get_settings()
             environment = settings.ENVIRONMENT.strip().lower()
             if settings.FEEC_MOCK_ENABLED and environment in {"development", "test"}:
-                return {"estado": "AUTORIZADO", "mensaje": "Autorizado (modo mock FE-EC explícito)."}
+                return {
+                    "estado": "AUTORIZADO",
+                    "mensaje": "Autorizado (modo mock FE-EC explícito).",
+                }
             return {
                 "estado": "RECHAZADO",
                 "mensaje": "Integración FE-EC no disponible; autorización simulada deshabilitada.",
             }
 
         if not signature_content or not signature_password:
-            return {"estado": "RECHAZADO", "mensaje": "La empresa no tiene firma electrónica configurada."}
+            return {
+                "estado": "RECHAZADO",
+                "mensaje": "La empresa no tiene firma electrónica configurada.",
+            }
 
         with TemporaryDirectory(prefix="osiris-fe-") as temp_dir:
             temp_path = Path(temp_dir)
@@ -148,9 +169,14 @@ class FEECVentaGatewayDefault:
             p12_path = temp_path / "firma.p12"
             settings = get_settings()
             manejador = ManejadorXML(str(settings.FEEC_XSD_PATH))
-            unsigned_path.write_text(manejador.dict_a_xml_string(dict(payload)), encoding="utf-8")
+            unsigned_path.write_text(
+                manejador.dict_a_xml_string(dict(payload)), encoding="utf-8"
+            )
             if not manejador.validar_estructura_xml(str(unsigned_path)):
-                return {"estado": "RECHAZADO", "mensaje": "El XML generado no cumple el esquema SRI."}
+                return {
+                    "estado": "RECHAZADO",
+                    "mensaje": "El XML generado no cumple el esquema SRI.",
+                }
             p12_path.write_bytes(signature_content)
             manejador.firmador.firmar_xml(
                 xml_path=str(unsigned_path),
@@ -172,9 +198,14 @@ class FEECVentaGatewayDefault:
         info_tributaria = cast(Mapping[str, object], payload.get("infoTributaria", {}))
         clave = cast(str, info_tributaria.get("claveAcceso", ""))
         autorizacion = sri.consultar_autorizacion(clave)
-        estado_autorizacion, mensaje_autorizacion = self._extraer_estado_autorizacion(autorizacion)
+        estado_autorizacion, mensaje_autorizacion = self._extraer_estado_autorizacion(
+            autorizacion
+        )
         if estado_autorizacion == "AUTORIZADO":
-            return {"estado": "AUTORIZADO", "mensaje": mensaje_autorizacion or "Documento autorizado."}
+            return {
+                "estado": "AUTORIZADO",
+                "mensaje": mensaje_autorizacion or "Documento autorizado.",
+            }
         return {
             "estado": "RECHAZADO",
             "mensaje": mensaje_autorizacion or "Documento rechazado por SRI.",
@@ -195,7 +226,9 @@ class VentaSriAsyncService:
         self.correo_service = correo_service or CorreoFacturaService(self.db_engine)
 
     @staticmethod
-    def _default_scheduler(tarea_id: UUID, delay_seconds: int, callback: Callable[[UUID], None]) -> None:
+    def _default_scheduler(
+        tarea_id: UUID, delay_seconds: int, callback: Callable[[UUID], None]
+    ) -> None:
         timer = threading.Timer(delay_seconds, callback, kwargs={"tarea_id": tarea_id})
         timer.daemon = True
         timer.start()
@@ -238,7 +271,9 @@ class VentaSriAsyncService:
 
         venta = session.get(Venta, venta_id)
         if not venta or not venta.activo:
-            raise HTTPException(status_code=404, detail="Venta no encontrada para envío SRI.")
+            raise HTTPException(
+                status_code=404, detail="Venta no encontrada para envío SRI."
+            )
 
         detalles_db = list(
             session.exec(
@@ -250,7 +285,9 @@ class VentaSriAsyncService:
         )
         detalle_ids = [detalle.id for detalle in detalles_db]
 
-        impuestos_por_detalle: dict[UUID, list[VentaDetalleImpuesto]] = defaultdict(list)
+        impuestos_por_detalle: dict[UUID, list[VentaDetalleImpuesto]] = defaultdict(
+            list
+        )
         if detalle_ids:
             impuestos_db = list(
                 session.exec(
@@ -337,11 +374,16 @@ class VentaSriAsyncService:
         if not venta or not venta.activo:
             raise HTTPException(status_code=404, detail="Venta no encontrada")
         if venta.tipo_emision != TipoEmisionVenta.ELECTRONICA:
-            raise HTTPException(status_code=400, detail="Solo se encolan ventas con tipo de emisión ELECTRONICA.")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se encolan ventas con tipo de emisión ELECTRONICA.",
+            )
 
         empresa = session.get(Empresa, venta.empresa_id) if venta.empresa_id else None
         if not empresa:
-            raise HTTPException(status_code=400, detail="La venta electrónica requiere empresa emisora.")
+            raise HTTPException(
+                status_code=400, detail="La venta electrónica requiere empresa emisora."
+            )
         if not empresa.firma_electronica_configurada:
             raise HTTPException(
                 status_code=400,
@@ -367,8 +409,16 @@ class VentaSriAsyncService:
                 background_tasks.add_task(self.procesar_documento_sri, existente.id)
             return existente
 
-        punto = session.get(PuntoEmision, venta.punto_emision_id) if venta.punto_emision_id else None
-        sucursal = session.get(Sucursal, punto.sucursal_id) if punto and punto.sucursal_id else None
+        punto = (
+            session.get(PuntoEmision, venta.punto_emision_id)
+            if venta.punto_emision_id
+            else None
+        )
+        sucursal = (
+            session.get(Sucursal, punto.sucursal_id)
+            if punto and punto.sucursal_id
+            else None
+        )
 
         venta_read = self._venta_read(session, venta.id)
         payload = self.fe_mapper.venta_to_fe_ec_payload(
@@ -380,7 +430,11 @@ class VentaSriAsyncService:
             obligado_contabilidad=empresa.obligado_contabilidad,
             estab=(sucursal.codigo if sucursal and sucursal.codigo else "001"),
             pto_emi=(punto.codigo if punto and punto.codigo else "001"),
-            dir_establecimiento=(sucursal.direccion if sucursal and sucursal.direccion else empresa.direccion_matriz),
+            dir_establecimiento=(
+                sucursal.direccion
+                if sucursal and sucursal.direccion
+                else empresa.direccion_matriz
+            ),
         )
 
         clave_acceso = payload["infoTributaria"]["claveAcceso"]
@@ -405,7 +459,9 @@ class VentaSriAsyncService:
             documento.tipo_documento = TipoDocumentoElectronico.FACTURA
             documento.referencia_id = venta.id
             documento.clave_acceso = clave_acceso
-            self._sync_estado_documento(documento, EstadoDocumentoElectronico.EN_COLA, mensaje=None)
+            self._sync_estado_documento(
+                documento, EstadoDocumentoElectronico.EN_COLA, mensaje=None
+            )
             documento.usuario_auditoria = usuario_id
         session.add(documento)
         session.flush()
@@ -455,8 +511,14 @@ class VentaSriAsyncService:
         email_dispatcher: Callable[[UUID], None] | None = None,
     ) -> None:
         gateway_impl = gateway or self.gateway
-        scheduler_impl = scheduler or (lambda task_id, delay: self._default_scheduler(task_id, delay, self.procesar_documento_sri))
-        email_dispatcher_impl = email_dispatcher or (lambda venta_id: self.correo_service.encolar_envio_factura(venta_id))
+        scheduler_impl = scheduler or (
+            lambda task_id, delay: self._default_scheduler(
+                task_id, delay, self.procesar_documento_sri
+            )
+        )
+        email_dispatcher_impl = email_dispatcher or (
+            lambda venta_id: self.correo_service.encolar_envio_factura(venta_id)
+        )
 
         with Session(self.db_engine) as session:
             tarea = session.get(DocumentoSriCola, tarea_id)
@@ -498,11 +560,20 @@ class VentaSriAsyncService:
             payload = json.loads(tarea.payload_json)
             try:
                 if isinstance(gateway_impl, FEECVentaGatewayDefault):
-                    empresa = session.get(Empresa, venta.empresa_id) if venta.empresa_id else None
+                    empresa = (
+                        session.get(Empresa, venta.empresa_id)
+                        if venta.empresa_id
+                        else None
+                    )
                     if not empresa:
-                        raise HTTPException(status_code=400, detail="La venta electrónica requiere empresa emisora.")
+                        raise HTTPException(
+                            status_code=400,
+                            detail="La venta electrónica requiere empresa emisora.",
+                        )
                     try:
-                        signature_content, signature_password = EmpresaSignatureService().credentials(empresa)
+                        signature_content, signature_password = (
+                            EmpresaSignatureService().credentials(empresa)
+                        )
                     except HTTPException as exc:
                         respuesta = {"estado": "RECHAZADO", "mensaje": str(exc.detail)}
                     else:
@@ -523,12 +594,16 @@ class VentaSriAsyncService:
                 if tarea.intentos_realizados < tarea.max_intentos:
                     delay = 2 ** (tarea.intentos_realizados - 1)
                     tarea.estado = EstadoColaSri.REINTENTO_PROGRAMADO
-                    tarea.proximo_intento_en = datetime.utcnow() + timedelta(seconds=delay)
+                    tarea.proximo_intento_en = datetime.utcnow() + timedelta(
+                        seconds=delay
+                    )
                     tarea.ultimo_error = error
 
                     venta.estado_sri = EstadoSriDocumento.ENVIADO
                     venta.sri_ultimo_error = error
-                    self._sync_estado_documento(documento, EstadoDocumentoElectronico.EN_COLA, mensaje=error)
+                    self._sync_estado_documento(
+                        documento, EstadoDocumentoElectronico.EN_COLA, mensaje=error
+                    )
 
                     session.add(tarea)
                     session.add(venta)
@@ -563,7 +638,9 @@ class VentaSriAsyncService:
                 tarea.ultimo_error = None
                 venta.estado_sri = EstadoSriDocumento.AUTORIZADO
                 venta.sri_ultimo_error = None
-                self._sync_estado_documento(documento, EstadoDocumentoElectronico.AUTORIZADO, mensaje=None)
+                self._sync_estado_documento(
+                    documento, EstadoDocumentoElectronico.AUTORIZADO, mensaje=None
+                )
                 session.add(tarea)
                 session.add(venta)
                 session.add(documento)
@@ -607,7 +684,9 @@ class VentaSriAsyncService:
                 delay = 2 ** max(tarea.intentos_realizados - 1, 1)
                 tarea.estado = EstadoColaSri.REINTENTO_PROGRAMADO
                 tarea.proximo_intento_en = datetime.utcnow() + timedelta(seconds=delay)
-                tarea.ultimo_error = mensaje or "Documento recibido por SRI, pendiente de autorización."
+                tarea.ultimo_error = (
+                    mensaje or "Documento recibido por SRI, pendiente de autorización."
+                )
                 venta.estado_sri = EstadoSriDocumento.ENVIADO
                 venta.sri_ultimo_error = tarea.ultimo_error
                 self._sync_estado_documento(
@@ -631,7 +710,9 @@ class VentaSriAsyncService:
                 return
 
             tarea.estado = EstadoColaSri.FALLIDO
-            tarea.ultimo_error = mensaje or f"Respuesta SRI desconocida: {estado or 'VACIO'}"
+            tarea.ultimo_error = (
+                mensaje or f"Respuesta SRI desconocida: {estado or 'VACIO'}"
+            )
             venta.estado_sri = EstadoSriDocumento.ERROR
             venta.sri_ultimo_error = tarea.ultimo_error
             session.add(tarea)

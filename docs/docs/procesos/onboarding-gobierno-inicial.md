@@ -177,4 +177,3 @@ El bootstrap `a9c3d6e41f82` crea módulos `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES
 **APIs involucradas:**
 
 - Contrato de sesión multiempresa ([doc API](../api/common/empresa-seleccionada-sesion))
-

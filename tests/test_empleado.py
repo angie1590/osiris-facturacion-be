@@ -29,15 +29,19 @@ def _mk_session():
     s.add = MagicMock()
     s.commit = MagicMock()
     s.refresh = MagicMock()
+
     def execute(statement):
         result = MagicMock()
         sql = str(statement)
         parameters = statement.compile().params
         if "FROM tbl_persona" in sql or "FROM tbl_empresa" in sql:
-            result.first.return_value = SimpleNamespace(id=parameters.get("id_1"), activo=True)
+            result.first.return_value = SimpleNamespace(
+                id=parameters.get("id_1"), activo=True
+            )
         else:
             result.first.return_value = None
         return result
+
     s.exec.side_effect = execute
     return s
 
@@ -58,14 +62,16 @@ def test_empleado_create_crea_usuario_y_empleado(monkeypatch):
     # Mock repo.create para el empleado
     svc = EmpleadoService(strategy=strategy)
     svc.repo = MagicMock()
-    svc.repo.create = MagicMock(return_value=Empleado(
-        persona_id=uuid4(),
-        empresa_id=uuid4(),
-        salario=1000.00,
-        fecha_ingreso=date(2024, 1, 1),
-        foto=None,
-        usuario_auditoria="tester",
-    ))
+    svc.repo.create = MagicMock(
+        return_value=Empleado(
+            persona_id=uuid4(),
+            empresa_id=uuid4(),
+            salario=1000.00,
+            fecha_ingreso=date(2024, 1, 1),
+            foto=None,
+            usuario_auditoria="tester",
+        )
+    )
 
     persona_id = uuid4()
     empresa_id = uuid4()
@@ -106,14 +112,16 @@ def test_empleado_create_con_foto_pasa_a_repo(monkeypatch):
 
     svc = EmpleadoService(strategy=strategy)
     svc.repo = MagicMock()
-    svc.repo.create = MagicMock(return_value=Empleado(
-        persona_id=uuid4(),
-        empresa_id=uuid4(),
-        salario=1200.00,
-        fecha_ingreso=date(2024, 1, 1),
-        foto="https://cdn.example.com/fotos/emp123.jpg",
-        usuario_auditoria="tester",
-    ))
+    svc.repo.create = MagicMock(
+        return_value=Empleado(
+            persona_id=uuid4(),
+            empresa_id=uuid4(),
+            salario=1200.00,
+            fecha_ingreso=date(2024, 1, 1),
+            foto="https://cdn.example.com/fotos/emp123.jpg",
+            usuario_auditoria="tester",
+        )
+    )
 
     payload = {
         "persona_id": str(uuid4()),
@@ -121,7 +129,11 @@ def test_empleado_create_con_foto_pasa_a_repo(monkeypatch):
         "salario": "1200.00",
         "fecha_ingreso": str(date(2024, 1, 1)),
         "foto": "https://cdn.example.com/fotos/emp123.jpg",
-        "usuario": {"username": "jdoe", "password": "secret123", "rol_id": str(uuid4())},
+        "usuario": {
+            "username": "jdoe",
+            "password": "secret123",
+            "rol_id": str(uuid4()),
+        },
         "usuario_auditoria": "tester",
     }
 
@@ -251,12 +263,14 @@ def test_empleado_create_valida_rol_en_strategy(monkeypatch):
 
     # Simular que select(Rol.id) -> first() = None => 404
     original_execute = session.exec.side_effect
+
     def execute(statement):
         if "FROM tbl_rol" in str(statement):
             cursor = MagicMock()
             cursor.first.return_value = None
             return cursor
         return original_execute(statement)
+
     session.exec.side_effect = execute
 
     svc = EmpleadoService()  # usa estrategia real con validación de rol
@@ -301,7 +315,11 @@ def test_empleado_create_rollback_si_falla_repo():
         "empresa_id": str(uuid4()),
         "salario": "1000.00",
         "fecha_ingreso": str(date.today()),
-        "usuario": {"username": "jdoe", "password": "secret123", "rol_id": str(uuid4())},
+        "usuario": {
+            "username": "jdoe",
+            "password": "secret123",
+            "rol_id": str(uuid4()),
+        },
         "usuario_auditoria": "tester",
     }
 
@@ -332,7 +350,9 @@ def test_empleado_create_empresa_id_es_obligatorio():
 
     # Verifica que el error menciona empresa_id
     errors = exc.value.errors()
-    assert any(e["loc"] == ("empresa_id",) for e in errors), "Falta validación de empresa_id obligatorio"
+    assert any(
+        e["loc"] == ("empresa_id",) for e in errors
+    ), "Falta validación de empresa_id obligatorio"
 
 
 def test_empleado_create_valida_empresa_existe(monkeypatch):

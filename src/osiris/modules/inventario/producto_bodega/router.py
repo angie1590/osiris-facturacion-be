@@ -17,7 +17,6 @@ from osiris.modules.inventario.producto_bodega.models import (
 )
 from osiris.modules.inventario.producto_bodega.service import ProductoBodegaService
 
-
 COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Solicitud inválida para la operación de inventario."},
     404: {"description": "Recurso no encontrado."},
@@ -118,4 +117,3 @@ def consultar_stock_disponible(
         producto_id=producto_id,
         bodega_id=bodega_id,
     )
-

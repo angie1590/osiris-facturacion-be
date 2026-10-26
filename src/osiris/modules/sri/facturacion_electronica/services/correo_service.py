@@ -30,7 +30,9 @@ class CorreoFacturaService:
         timer.daemon = True
         timer.start()
 
-    def enviar_correo_factura(self, venta_id: UUID) -> dict[str, str | bool | list[str]]:
+    def enviar_correo_factura(
+        self, venta_id: UUID
+    ) -> dict[str, str | bool | list[str]]:
         # MVP: envío mockeado. En etapas futuras se integra SMTP/provider real.
         return {
             "venta_id": str(venta_id),

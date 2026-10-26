@@ -32,14 +32,14 @@ Persona es global y exclusivamente natural. Cliente, Proveedor Persona, Empleado
 
 ### Contrato compuesto y Search-or-Create
 
-| Operación | Alternativas excluyentes | Datos adicionales |
-|---|---|---|
-| POST /api/v1/clientes | `persona_id` XOR `persona_nueva` | `tipo_cliente_id` activo |
-| POST /api/v1/proveedores-persona | `persona_id` XOR `persona_nueva` | RUC natural y TipoContribuyente compatible activo |
-| POST /api/v1/empleados | `persona_id` XOR `persona_nueva` | Empresa activa/autorizada, datos laborales y bloque `usuario` obligatorio |
-| POST /api/v1/usuarios | `persona_id` XOR `persona_nueva` | `rol_id`, `username`, `password`; no exige Empleado |
-| POST /api/v1/proveedores-sociedad | `persona_contacto_id` XOR `persona_contacto_nueva` | Identidad jurídica, dirección, email y catálogo activo |
-| PUT /api/v1/proveedores-sociedad/{id} | Como máximo una alternativa de contacto | Omitir ambas conserva el contacto; no admite contacto nulo |
+| Operación                             | Alternativas excluyentes                           | Datos adicionales                                                         |
+| ------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
+| POST /api/v1/clientes                 | `persona_id` XOR `persona_nueva`                   | `tipo_cliente_id` activo                                                  |
+| POST /api/v1/proveedores-persona      | `persona_id` XOR `persona_nueva`                   | RUC natural y TipoContribuyente compatible activo                         |
+| POST /api/v1/empleados                | `persona_id` XOR `persona_nueva`                   | Empresa activa/autorizada, datos laborales y bloque `usuario` obligatorio |
+| POST /api/v1/usuarios                 | `persona_id` XOR `persona_nueva`                   | `rol_id`, `username`, `password`; no exige Empleado                       |
+| POST /api/v1/proveedores-sociedad     | `persona_contacto_id` XOR `persona_contacto_nueva` | Identidad jurídica, dirección, email y catálogo activo                    |
+| PUT /api/v1/proveedores-sociedad/{id} | Como máximo una alternativa de contacto            | Omitir ambas conserva el contacto; no admite contacto nulo                |
 
 En POST debe existir exactamente una alternativa no nula: ambas o ninguna producen `422`. `persona_nueva` y `persona_contacto_nueva` usan PersonaCreate. Su `usuario_auditoria` es opcional por compatibilidad técnica, no un input de producción: el actor autoritativo es el JWT. Los ejemplos por ID siguen vigentes; los ejemplos Read muestran campos base, no la proyección completa.
 
@@ -76,14 +76,14 @@ Las proyecciones Read comerciales incluyen `persona` (también el contacto de So
 
 DELETE Persona devuelve `409` mientras exista Cliente, Proveedor Persona, Empleado, Usuario o Sociedad-contacto activo; TipoCliente también bloquea baja con Clientes activos. Bajar Cliente/proveedores no baja Persona ni contacto. Los cambios efectivos de `persona_id` en Cliente, Proveedor Persona, Empleado y Usuario, y de `username` en Usuario, devuelven `409`; no se ignoran. `rol_id` de Usuario puede cambiar a un Rol activo. `activo` no es un bypass aceptado por PUT.
 
-| Acción | Endpoint | Resultado |
-|---|---|---|
-| Reactivar Persona | POST /api/v1/personas/{id}/reactivar | Mismo ID, revalidación y auditoría |
-| Reactivar TipoCliente | POST /api/v1/tipos-cliente/{id}/reactivar | Mismo ID y validación del catálogo |
-| Reactivar Cliente | POST /api/v1/clientes/{id}/reactivar | Persona y TipoCliente activos |
-| Reactivar Proveedor Persona | POST /api/v1/proveedores-persona/{id}/reactivar | Persona activa, RUC natural y catálogo compatible |
-| Reactivar Sociedad | POST /api/v1/proveedores-sociedad/{id}/reactivar | Contacto activo, RUC jurídico y catálogo compatible |
-| Reactivar Empleado | POST /api/v1/empleados/{id}/reactivar | Empresa/Persona activas; no reactiva Usuario |
+| Acción                      | Endpoint                                         | Resultado                                           |
+| --------------------------- | ------------------------------------------------ | --------------------------------------------------- |
+| Reactivar Persona           | POST /api/v1/personas/{id}/reactivar             | Mismo ID, revalidación y auditoría                  |
+| Reactivar TipoCliente       | POST /api/v1/tipos-cliente/{id}/reactivar        | Mismo ID y validación del catálogo                  |
+| Reactivar Cliente           | POST /api/v1/clientes/{id}/reactivar             | Persona y TipoCliente activos                       |
+| Reactivar Proveedor Persona | POST /api/v1/proveedores-persona/{id}/reactivar  | Persona activa, RUC natural y catálogo compatible   |
+| Reactivar Sociedad          | POST /api/v1/proveedores-sociedad/{id}/reactivar | Contacto activo, RUC jurídico y catálogo compatible |
+| Reactivar Empleado          | POST /api/v1/empleados/{id}/reactivar            | Empresa/Persona activas; no reactiva Usuario        |
 
 DELETE Empleado desactiva Empleado y Usuario asociado e invalida access/refresh mediante `sesion_invalidada_en` en una transacción; no altera Persona ni roles comerciales. Usuario previo al alta Empleado produce conflicto administrativo: no se duplican cuentas ni sobrescriben credenciales. Restaurar acceso requiere la acción separada descrita en [Seguridad](./seguridad-accesos).
 
@@ -96,6 +96,7 @@ Errores transversales: `400` regla funcional, `401` autenticación, `403` permis
 ### Descripción
 
 Tabla central de personas naturales con validación local de documentos de identificación:
+
 - **Cédula (10 dígitos)**: Identidad personal ecuatoriana.
 - **RUC (13 dígitos)**: Registro Único de Contribuyente. Para personas naturales el RUC contiene los 10 dígitos de la cédula más 3 dígitos de secuencia.
 - **Pasaporte**: Documento internacional (mínimo 5 caracteres).
@@ -110,11 +111,13 @@ Tabla central de personas naturales con validación local de documentos de ident
 Obtiene una lista paginada de personas activas (por defecto) o todas.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50) - Registros por página (min: 1, max: 1000)
 - `offset` (int, default: 0) - Desplazamiento desde el inicio
 - `only_active` (bool, default: true) - Si es `true`, solo personas activas
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -151,9 +154,11 @@ Obtiene una lista paginada de personas activas (por defecto) o todas.
 Obtiene los detalles de una persona específica.
 
 **Parámetros de Path:**
+
 - `id` (UUID) - ID de la persona
 
 **Response 200:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -173,6 +178,7 @@ Obtiene los detalles de una persona específica.
 ```
 
 **Response 404:**
+
 ```json
 {
   "detail": "Persona 550e8400-e29b-41d4-a716-446655440000 not found"
@@ -188,6 +194,7 @@ Obtiene los detalles de una persona específica.
 Crea una nueva persona con validación local de identificación; no consulta existencia o estado tributario SRI.
 
 **Request Body:**
+
 ```json
 {
   "identificacion": "1234567890",
@@ -202,6 +209,7 @@ Crea una nueva persona con validación local de identificación; no consulta exi
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -221,6 +229,7 @@ Crea una nueva persona con validación local de identificación; no consulta exi
 ```
 
 **Response 422 (Validación local del DTO fallida):**
+
 ```json
 {
   "detail": [
@@ -243,9 +252,11 @@ Crea una nueva persona con validación local de identificación; no consulta exi
 Actualiza parcialmente una persona. Al enviar identificación o tipo, se deben enviar ambos para revalidar la combinación completa.
 
 **Parámetros de Path:**
+
 - `id` (UUID) - ID de la persona
 
 **Request Body:**
+
 ```json
 {
   "nombre": "Juan Carlos",
@@ -255,6 +266,7 @@ Actualiza parcialmente una persona. Al enviar identificación o tipo, se deben e
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -274,6 +286,7 @@ Actualiza parcialmente una persona. Al enviar identificación o tipo, se deben e
 ```
 
 **Response 404:**
+
 ```json
 {
   "detail": "Persona 550e8400-e29b-41d4-a716-446655440000 not found"
@@ -289,11 +302,13 @@ Actualiza parcialmente una persona. Al enviar identificación o tipo, se deben e
 Realiza un borrado lógico (soft delete) marcando la persona como inactiva.
 
 **Parámetros de Path:**
+
 - `id` (UUID) - ID de la persona
 
 **Response 204:** No content
 
 **Response 404:**
+
 ```json
 {
   "detail": "Persona 550e8400-e29b-41d4-a716-446655440000 not found"
@@ -305,21 +320,21 @@ Realiza un borrado lógico (soft delete) marcando la persona como inactiva.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único de la persona |
-| `identificacion` | String(50) | Unique, Not Null | Documento normalizado, con validación local de cédula o RUC natural; no certifica estado SRI. |
-| `tipo_identificacion` | Enum | Not Null | Tipo: `CEDULA` (10 dígitos), `RUC` (13 dígitos persona natural), `PASAPORTE` (mín. 5 caracteres) |
-| `nombre` | String(120) | Not Null | Nombre de la persona |
-| `apellido` | String(120) | Not Null | Apellido de la persona |
-| `direccion` | String(255) | Optional | Domicilio |
-| `telefono` | String(30) | Optional | Número de contacto |
-| `ciudad` | String(120) | Optional | Ciudad de residencia |
-| `email` | Email | Optional | Correo electrónico (formato válido) |
-| `activo` | Boolean | Default: true | Indicador de estado (soft delete) |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Not Null | Usuario que realizó la acción |
+| Campo                 | Tipo        | Restricción      | Descripción                                                                                      |
+| --------------------- | ----------- | ---------------- | ------------------------------------------------------------------------------------------------ |
+| `id`                  | UUID        | PK, Auto         | Identificador único de la persona                                                                |
+| `identificacion`      | String(50)  | Unique, Not Null | Documento normalizado, con validación local de cédula o RUC natural; no certifica estado SRI.    |
+| `tipo_identificacion` | Enum        | Not Null         | Tipo: `CEDULA` (10 dígitos), `RUC` (13 dígitos persona natural), `PASAPORTE` (mín. 5 caracteres) |
+| `nombre`              | String(120) | Not Null         | Nombre de la persona                                                                             |
+| `apellido`            | String(120) | Not Null         | Apellido de la persona                                                                           |
+| `direccion`           | String(255) | Optional         | Domicilio                                                                                        |
+| `telefono`            | String(30)  | Optional         | Número de contacto                                                                               |
+| `ciudad`              | String(120) | Optional         | Ciudad de residencia                                                                             |
+| `email`               | Email       | Optional         | Correo electrónico (formato válido)                                                              |
+| `activo`              | Boolean     | Default: true    | Indicador de estado (soft delete)                                                                |
+| `creado_en`           | DateTime    | Auto             | Timestamp de creación                                                                            |
+| `actualizado_en`      | DateTime    | Auto             | Timestamp de última actualización                                                                |
+| `usuario_auditoria`   | String      | Not Null         | Usuario que realizó la acción                                                                    |
 
 ---
 
@@ -339,18 +354,20 @@ Catálogo de tipos/categorías de cliente. Cada tipo define un descuento base qu
 Obtiene una lista paginada de tipos de cliente.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50) - Registros por página
 - `offset` (int, default: 0) - Desplazamiento
 - `only_active` (bool, default: true) - Solo activos
 
 **Response 200:**
+
 ```json
 {
   "items": [
     {
       "id": "660e8400-e29b-41d4-a716-446655440000",
       "nombre": "Cliente Mayorista",
-      "descuento": 15.50,
+      "descuento": 15.5,
       "activo": true,
       "creado_en": "2024-01-10T09:00:00Z",
       "actualizado_en": "2024-01-10T09:00:00Z",
@@ -359,7 +376,7 @@ Obtiene una lista paginada de tipos de cliente.
     {
       "id": "770e8400-e29b-41d4-a716-446655440000",
       "nombre": "Cliente Minorista",
-      "descuento": 5.00,
+      "descuento": 5.0,
       "activo": true,
       "creado_en": "2024-01-10T09:05:00Z",
       "actualizado_en": "2024-01-10T09:05:00Z",
@@ -383,11 +400,12 @@ Obtiene una lista paginada de tipos de cliente.
 Obtiene los detalles de un tipo de cliente específico.
 
 **Response 200:**
+
 ```json
 {
   "id": "660e8400-e29b-41d4-a716-446655440000",
   "nombre": "Cliente Mayorista",
-  "descuento": 15.50,
+  "descuento": 15.5,
   "activo": true,
   "creado_en": "2024-01-10T09:00:00Z",
   "actualizado_en": "2024-01-10T09:00:00Z",
@@ -404,19 +422,21 @@ Obtiene los detalles de un tipo de cliente específico.
 Crea una nueva categoría de cliente.
 
 **Request Body:**
+
 ```json
 {
   "nombre": "Cliente Especial",
-  "descuento": 20.00
+  "descuento": 20.0
 }
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "880e8400-e29b-41d4-a716-446655440000",
   "nombre": "Cliente Especial",
-  "descuento": 20.00,
+  "descuento": 20.0,
   "activo": true,
   "creado_en": "2024-01-16T11:45:00Z",
   "actualizado_en": "2024-01-16T11:45:00Z",
@@ -425,6 +445,7 @@ Crea una nueva categoría de cliente.
 ```
 
 **Response 422 (Descuento fuera de rango en DTO):**
+
 ```json
 {
   "detail": [
@@ -432,7 +453,7 @@ Crea una nueva categoría de cliente.
       "type": "value_error",
       "loc": ["body", "descuento"],
       "msg": "Input should be less than or equal to 100",
-      "input": 150.00
+      "input": 150.0
     }
   ]
 }
@@ -447,18 +468,20 @@ Crea una nueva categoría de cliente.
 Actualiza parcialmente un tipo de cliente.
 
 **Request Body:**
+
 ```json
 {
-  "descuento": 18.00
+  "descuento": 18.0
 }
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "660e8400-e29b-41d4-a716-446655440000",
   "nombre": "Cliente Mayorista",
-  "descuento": 18.00,
+  "descuento": 18.0,
   "activo": true,
   "creado_en": "2024-01-10T09:00:00Z",
   "actualizado_en": "2024-01-16T12:00:00Z",
@@ -481,15 +504,15 @@ Realiza un borrado lógico del tipo de cliente.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único |
-| `nombre` | String(255) | Unique, Not Null | Nombre de la categoría (ej: "Mayorista", "Minorista", "Especial") |
-| `descuento` | Decimal(5,2) | Default: 0, Range: [0-100] | Porcentaje de descuento base aplicable a este tipo de cliente |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Not Null | Usuario auditor |
+| Campo               | Tipo         | Restricción                | Descripción                                                       |
+| ------------------- | ------------ | -------------------------- | ----------------------------------------------------------------- |
+| `id`                | UUID         | PK, Auto                   | Identificador único                                               |
+| `nombre`            | String(255)  | Unique, Not Null           | Nombre de la categoría (ej: "Mayorista", "Minorista", "Especial") |
+| `descuento`         | Decimal(5,2) | Default: 0, Range: [0-100] | Porcentaje de descuento base aplicable a este tipo de cliente     |
+| `activo`            | Boolean      | Default: true              | Indicador de estado                                               |
+| `creado_en`         | DateTime     | Auto                       | Timestamp de creación                                             |
+| `actualizado_en`    | DateTime     | Auto                       | Timestamp de última actualización                                 |
+| `usuario_auditoria` | String       | Not Null                   | Usuario auditor                                                   |
 
 ---
 
@@ -509,11 +532,13 @@ Asociación entre una Persona y un Tipo de Cliente. Permite vincular personas na
 Obtiene una lista paginada de clientes.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50)
 - `offset` (int, default: 0)
 - `only_active` (bool, default: true)
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -544,6 +569,7 @@ Obtiene una lista paginada de clientes.
 Obtiene los detalles de un cliente específico.
 
 **Response 200:**
+
 ```json
 {
   "id": "990e8400-e29b-41d4-a716-446655440000",
@@ -565,6 +591,7 @@ Obtiene los detalles de un cliente específico.
 Crea una asociación entre una Persona y un Tipo de Cliente.
 
 **Request Body:**
+
 ```json
 {
   "persona_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -573,6 +600,7 @@ Crea una asociación entre una Persona y un Tipo de Cliente.
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "990e8400-e29b-41d4-a716-446655440000",
@@ -586,6 +614,7 @@ Crea una asociación entre una Persona y un Tipo de Cliente.
 ```
 
 **Response 404 (Persona referenciada no existe):**
+
 ```json
 {
   "detail": "Persona no encontrada"
@@ -601,6 +630,7 @@ Crea una asociación entre una Persona y un Tipo de Cliente.
 Actualiza el tipo de cliente asociado. No se puede cambiar la persona.
 
 **Request Body:**
+
 ```json
 {
   "tipo_cliente_id": "770e8400-e29b-41d4-a716-446655440000"
@@ -608,6 +638,7 @@ Actualiza el tipo de cliente asociado. No se puede cambiar la persona.
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "990e8400-e29b-41d4-a716-446655440000",
@@ -635,15 +666,15 @@ Realiza un borrado lógico del cliente.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único del cliente |
-| `persona_id` | UUID | FK (tbl_persona.id), Unique, Not Null | Referencia a la persona vinculada como cliente. **Restricción**: Cada persona solo puede ser cliente una vez. |
-| `tipo_cliente_id` | UUID | FK (tbl_tipo_cliente.id), Not Null | Referencia a la categoría de cliente |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Optional | Usuario auditor |
+| Campo               | Tipo     | Restricción                           | Descripción                                                                                                   |
+| ------------------- | -------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `id`                | UUID     | PK, Auto                              | Identificador único del cliente                                                                               |
+| `persona_id`        | UUID     | FK (tbl_persona.id), Unique, Not Null | Referencia a la persona vinculada como cliente. **Restricción**: Cada persona solo puede ser cliente una vez. |
+| `tipo_cliente_id`   | UUID     | FK (tbl_tipo_cliente.id), Not Null    | Referencia a la categoría de cliente                                                                          |
+| `activo`            | Boolean  | Default: true                         | Indicador de estado                                                                                           |
+| `creado_en`         | DateTime | Auto                                  | Timestamp de creación                                                                                         |
+| `actualizado_en`    | DateTime | Auto                                  | Timestamp de última actualización                                                                             |
+| `usuario_auditoria` | String   | Optional                              | Usuario auditor                                                                                               |
 
 ---
 
@@ -654,6 +685,7 @@ Realiza un borrado lógico del cliente.
 Registro de proveedores que son personas naturales. Debe estar vinculado a una Persona y contiene información comercial específica del proveedor.
 
 Reglas de negocio backend (importantes para frontend):
+
 - `persona_id` debe apuntar a una Persona con `tipo_identificacion = RUC`.
 - El RUC de la persona debe ser de persona natural válido (no sociedad).
 - El catálogo debe estar activo y tener `aplica_persona_natural=true`; no se infiere por nombre ni se excluye `04` cuando su flag aprobado permite natural.
@@ -669,11 +701,13 @@ Reglas de negocio backend (importantes para frontend):
 Obtiene una lista paginada de proveedores persona.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50)
 - `offset` (int, default: 0)
 - `only_active` (bool, default: true)
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -705,6 +739,7 @@ Obtiene una lista paginada de proveedores persona.
 Obtiene los detalles de un proveedor persona específico.
 
 **Response 200:**
+
 ```json
 {
   "id": "aaa0e8400-e29b-41d4-a716-446655440000",
@@ -727,6 +762,7 @@ Obtiene los detalles de un proveedor persona específico.
 Crea un nuevo proveedor persona.
 
 **Request Body:**
+
 ```json
 {
   "nombre_comercial": "Distribuidora Pérez y Cía",
@@ -736,6 +772,7 @@ Crea un nuevo proveedor persona.
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "aaa0e8400-e29b-41d4-a716-446655440000",
@@ -758,6 +795,7 @@ Crea un nuevo proveedor persona.
 Actualiza un proveedor persona. No se puede cambiar la persona_id.
 
 **Request Body:**
+
 ```json
 {
   "nombre_comercial": "Distribuidora Pérez, López y Asociados"
@@ -765,6 +803,7 @@ Actualiza un proveedor persona. No se puede cambiar la persona_id.
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "aaa0e8400-e29b-41d4-a716-446655440000",
@@ -793,16 +832,16 @@ Realiza un borrado lógico del proveedor persona.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único |
-| `nombre_comercial` | String(255) | Optional | Nombre bajo el cual opera comercialmente el proveedor |
-| `tipo_contribuyente_id` | String(2) | FK (aux_tipo_contribuyente.codigo), Not Null | Clasificación SRI del contribuyente (ej: "01" = Persona Natural, "02" = Empresa) |
-| `persona_id` | UUID | FK (tbl_persona.id), Unique, Not Null | Una sola asociación Proveedor Persona por identidad, incluyendo inactivos |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Not Null | Usuario auditor |
+| Campo                   | Tipo        | Restricción                                  | Descripción                                                                      |
+| ----------------------- | ----------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
+| `id`                    | UUID        | PK, Auto                                     | Identificador único                                                              |
+| `nombre_comercial`      | String(255) | Optional                                     | Nombre bajo el cual opera comercialmente el proveedor                            |
+| `tipo_contribuyente_id` | String(2)   | FK (aux_tipo_contribuyente.codigo), Not Null | Clasificación SRI del contribuyente (ej: "01" = Persona Natural, "02" = Empresa) |
+| `persona_id`            | UUID        | FK (tbl_persona.id), Unique, Not Null        | Una sola asociación Proveedor Persona por identidad, incluyendo inactivos        |
+| `activo`                | Boolean     | Default: true                                | Indicador de estado                                                              |
+| `creado_en`             | DateTime    | Auto                                         | Timestamp de creación                                                            |
+| `actualizado_en`        | DateTime    | Auto                                         | Timestamp de última actualización                                                |
+| `usuario_auditoria`     | String      | Not Null                                     | Usuario auditor                                                                  |
 
 ---
 
@@ -813,6 +852,7 @@ Realiza un borrado lógico del proveedor persona.
 Registro de proveedores que son empresas (sociedades). Contiene información detallada de la empresa y requiere un RUC válido de 13 dígitos.
 
 Reglas de negocio backend (importantes para frontend):
+
 - El `ruc` debe ser válido y no puede ser RUC de persona natural.
 - El catálogo debe estar activo y tener `aplica_sociedad=true`.
 - `telefono`, si se envía, debe tener exactamente 10 dígitos numéricos.
@@ -829,11 +869,13 @@ Reglas de negocio backend (importantes para frontend):
 Obtiene una lista paginada de proveedores sociedad.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50)
 - `offset` (int, default: 0)
 - `only_active` (bool, default: true)
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -870,6 +912,7 @@ Obtiene una lista paginada de proveedores sociedad.
 Obtiene los detalles de un proveedor sociedad específico.
 
 **Response 200:**
+
 ```json
 {
   "id": "bbb0e8400-e29b-41d4-a716-446655440000",
@@ -897,6 +940,7 @@ Obtiene los detalles de un proveedor sociedad específico.
 Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
 
 **Request Body:**
+
 ```json
 {
   "ruc": "1234567890001",
@@ -911,6 +955,7 @@ Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "bbb0e8400-e29b-41d4-a716-446655440000",
@@ -930,6 +975,7 @@ Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
 ```
 
 **Response 422 (RUC inválido en DTO):**
+
 ```json
 {
   "detail": [
@@ -952,6 +998,7 @@ Crea un nuevo proveedor sociedad. El RUC debe ser exactamente 13 dígitos.
 Actualiza un proveedor sociedad; permite cambiar el contacto natural existente o crear uno nuevo en la misma transacción, sin modificar la Persona anterior.
 
 **Request Body:**
+
 ```json
 {
   "razon_social": "Distribuidora Nacional de Productos S.A.",
@@ -960,6 +1007,7 @@ Actualiza un proveedor sociedad; permite cambiar el contacto natural existente o
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "bbb0e8400-e29b-41d4-a716-446655440000",
@@ -993,21 +1041,21 @@ Realiza un borrado lógico del proveedor sociedad.
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único |
-| `ruc` | String(13) | Unique, Not Null, Exactly 13 | RUC jurídico validado localmente; no es la cédula del contacto ni certifica estado SRI. |
-| `razon_social` | String(255) | Not Null | Nombre legal de la empresa registrado en SRI |
-| `nombre_comercial` | String(255) | Optional | Nombre comercial bajo el que opera |
-| `direccion` | String(255) | Not Null | Domicilio principal de la empresa |
-| `telefono` | String | Optional | Si se envía, debe tener exactamente 10 dígitos numéricos. |
-| `email` | Email | Not Null | Correo electrónico principal (formato válido) |
-| `tipo_contribuyente_id` | String(2) | FK (aux_tipo_contribuyente.codigo), Not Null | Catálogo activo con `aplica_sociedad=true`. |
-| `persona_contacto_id` | UUID | FK (tbl_persona.id), Not Null | Contacto natural activo y mutable; una Persona puede contactar varias sociedades. |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Not Null | Usuario auditor |
+| Campo                   | Tipo        | Restricción                                  | Descripción                                                                             |
+| ----------------------- | ----------- | -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `id`                    | UUID        | PK, Auto                                     | Identificador único                                                                     |
+| `ruc`                   | String(13)  | Unique, Not Null, Exactly 13                 | RUC jurídico validado localmente; no es la cédula del contacto ni certifica estado SRI. |
+| `razon_social`          | String(255) | Not Null                                     | Nombre legal de la empresa registrado en SRI                                            |
+| `nombre_comercial`      | String(255) | Optional                                     | Nombre comercial bajo el que opera                                                      |
+| `direccion`             | String(255) | Not Null                                     | Domicilio principal de la empresa                                                       |
+| `telefono`              | String      | Optional                                     | Si se envía, debe tener exactamente 10 dígitos numéricos.                               |
+| `email`                 | Email       | Not Null                                     | Correo electrónico principal (formato válido)                                           |
+| `tipo_contribuyente_id` | String(2)   | FK (aux_tipo_contribuyente.codigo), Not Null | Catálogo activo con `aplica_sociedad=true`.                                             |
+| `persona_contacto_id`   | UUID        | FK (tbl_persona.id), Not Null                | Contacto natural activo y mutable; una Persona puede contactar varias sociedades.       |
+| `activo`                | Boolean     | Default: true                                | Indicador de estado                                                                     |
+| `creado_en`             | DateTime    | Auto                                         | Timestamp de creación                                                                   |
+| `actualizado_en`        | DateTime    | Auto                                         | Timestamp de última actualización                                                       |
+| `usuario_auditoria`     | String      | Not Null                                     | Usuario auditor                                                                         |
 
 ---
 
@@ -1018,6 +1066,7 @@ Realiza un borrado lógico del proveedor sociedad.
 Vinculación única global de una Persona como Empleado de una Empresa. Incluye datos laborales y exige crear Usuario asociado en la misma unidad de trabajo.
 
 Reglas de negocio backend (importantes para frontend):
+
 - `POST /empleados` exige el bloque `usuario` para crear la cuenta en la misma transacción.
 - `fecha_ingreso` no puede ser futura.
 - `fecha_salida`, cuando existe, debe ser posterior a `fecha_ingreso`.
@@ -1033,11 +1082,13 @@ Reglas de negocio backend (importantes para frontend):
 Obtiene una lista paginada de empleados.
 
 **Parámetros de Query:**
+
 - `limit` (int, default: 50)
 - `offset` (int, default: 0)
 - `only_active` (bool, default: true)
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -1045,7 +1096,7 @@ Obtiene una lista paginada de empleados.
       "id": "ccc0e8400-e29b-41d4-a716-446655440000",
       "persona_id": "550e8400-e29b-41d4-a716-446655440000",
       "empresa_id": "ddd0e8400-e29b-41d4-a716-446655440000",
-      "salario": 1500.00,
+      "salario": 1500.0,
       "fecha_ingreso": "2024-01-01",
       "fecha_nacimiento": "1990-06-15",
       "fecha_salida": null,
@@ -1073,12 +1124,13 @@ Obtiene una lista paginada de empleados.
 Obtiene los detalles de un empleado específico.
 
 **Response 200:**
+
 ```json
 {
   "id": "ccc0e8400-e29b-41d4-a716-446655440000",
   "persona_id": "550e8400-e29b-41d4-a716-446655440000",
   "empresa_id": "ddd0e8400-e29b-41d4-a716-446655440000",
-  "salario": 1500.00,
+  "salario": 1500.0,
   "fecha_ingreso": "2024-01-01",
   "fecha_nacimiento": "1990-06-15",
   "fecha_salida": null,
@@ -1099,11 +1151,12 @@ Obtiene los detalles de un empleado específico.
 Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define validaciones por edad mínima y secuencia de fechas.
 
 **Request Body:**
+
 ```json
 {
   "persona_id": "550e8400-e29b-41d4-a716-446655440000",
   "empresa_id": "ddd0e8400-e29b-41d4-a716-446655440000",
-  "salario": 1500.00,
+  "salario": 1500.0,
   "fecha_ingreso": "2024-01-01",
   "fecha_nacimiento": "1990-06-15",
   "foto": "https://storage.example.com/empleados/juan_perez.jpg",
@@ -1116,12 +1169,13 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
 ```
 
 **Response 201:**
+
 ```json
 {
   "id": "ccc0e8400-e29b-41d4-a716-446655440000",
   "persona_id": "550e8400-e29b-41d4-a716-446655440000",
   "empresa_id": "ddd0e8400-e29b-41d4-a716-446655440000",
-  "salario": 1500.00,
+  "salario": 1500.0,
   "fecha_ingreso": "2024-01-01",
   "fecha_nacimiento": "1990-06-15",
   "fecha_salida": null,
@@ -1134,6 +1188,7 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
 ```
 
 **Response 422 (Edad mínima no cumplida en DTO, default EMP_MIN_AGE=16):**
+
 ```json
 {
   "detail": [
@@ -1148,6 +1203,7 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
 ```
 
 **Response 422 (Fecha de salida anterior a ingreso en DTO):**
+
 ```json
 {
   "detail": [
@@ -1170,20 +1226,22 @@ Crea un nuevo empleado e inmediatamente genera un usuario asociado. Define valid
 Actualiza parcialmente un empleado. No se puede cambiar persona_id.
 
 **Request Body:**
+
 ```json
 {
-  "salario": 1800.00,
+  "salario": 1800.0,
   "fecha_salida": "2024-12-31"
 }
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "ccc0e8400-e29b-41d4-a716-446655440000",
   "persona_id": "550e8400-e29b-41d4-a716-446655440000",
   "empresa_id": "ddd0e8400-e29b-41d4-a716-446655440000",
-  "salario": 1800.00,
+  "salario": 1800.0,
   "fecha_ingreso": "2024-01-01",
   "fecha_nacimiento": "1990-06-15",
   "fecha_salida": "2024-12-31",
@@ -1210,20 +1268,20 @@ Realiza la baja lógica de Empleado y Usuario asociado e invalida sus sesiones e
 
 ### Diccionario de Datos
 
-| Campo | Tipo | Restricción | Descripción |
-|-------|------|-----------|-------------|
-| `id` | UUID | PK, Auto | Identificador único |
-| `persona_id` | UUID | FK (tbl_persona.id), Unique, Not Null | Referencia a la Persona vinculada. Cada persona solo puede ser empleado una vez. |
-| `empresa_id` | UUID | FK (tbl_empresa.id), Not Null | Referencia a la Empresa que lo emplea |
-| `salario` | Decimal(10,2) | Not Null, no negativo | Salario mensual en USD, hasta dos decimales |
-| `fecha_ingreso` | Date | Not Null | Fecha de inicio laboral. No puede ser futura. |
-| `fecha_nacimiento` | Date | Optional | Fecha de nacimiento. Si se proporciona, se valida **edad mínima** (default EMP_MIN_AGE=16, configurable por env var). |
-| `fecha_salida` | Date | Optional | Fecha de cese laboral. Si está presente, debe ser posterior a fecha_ingreso. |
-| `foto` | String(500) | Optional | URL o ruta a foto del empleado |
-| `activo` | Boolean | Default: true | Indicador de estado |
-| `creado_en` | DateTime | Auto | Timestamp de creación |
-| `actualizado_en` | DateTime | Auto | Timestamp de última actualización |
-| `usuario_auditoria` | String | Optional | Usuario auditor |
+| Campo               | Tipo          | Restricción                           | Descripción                                                                                                           |
+| ------------------- | ------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `id`                | UUID          | PK, Auto                              | Identificador único                                                                                                   |
+| `persona_id`        | UUID          | FK (tbl_persona.id), Unique, Not Null | Referencia a la Persona vinculada. Cada persona solo puede ser empleado una vez.                                      |
+| `empresa_id`        | UUID          | FK (tbl_empresa.id), Not Null         | Referencia a la Empresa que lo emplea                                                                                 |
+| `salario`           | Decimal(10,2) | Not Null, no negativo                 | Salario mensual en USD, hasta dos decimales                                                                           |
+| `fecha_ingreso`     | Date          | Not Null                              | Fecha de inicio laboral. No puede ser futura.                                                                         |
+| `fecha_nacimiento`  | Date          | Optional                              | Fecha de nacimiento. Si se proporciona, se valida **edad mínima** (default EMP_MIN_AGE=16, configurable por env var). |
+| `fecha_salida`      | Date          | Optional                              | Fecha de cese laboral. Si está presente, debe ser posterior a fecha_ingreso.                                          |
+| `foto`              | String(500)   | Optional                              | URL o ruta a foto del empleado                                                                                        |
+| `activo`            | Boolean       | Default: true                         | Indicador de estado                                                                                                   |
+| `creado_en`         | DateTime      | Auto                                  | Timestamp de creación                                                                                                 |
+| `actualizado_en`    | DateTime      | Auto                                  | Timestamp de última actualización                                                                                     |
+| `usuario_auditoria` | String        | Optional                              | Usuario auditor                                                                                                       |
 
 ---
 
@@ -1232,17 +1290,20 @@ Realiza la baja lógica de Empleado y Usuario asociado e invalida sus sesiones e
 ### Persona: Tipos de Identificación
 
 1. **CEDULA** (10 dígitos)
-  - Identidad natural, con algoritmo local vigente de cédula; no se modifica en este refactor.
-  - Los números de los ejemplos JSON son ilustrativos, no documentos certificados ni necesariamente aceptados por el validador.
+
+- Identidad natural, con algoritmo local vigente de cédula; no se modifica en este refactor.
+- Los números de los ejemplos JSON son ilustrativos, no documentos certificados ni necesariamente aceptados por el validador.
 
 2. **RUC** (13 dígitos, para personas naturales)
    - Compuesto por: 10 primeros dígitos (cédula) + 3 dígitos de secuencia
    - Aplicable a personas naturales que son contribuyentes
-  - Se valida con la política local vigente de RUC natural, no como RUC jurídico.
+
+- Se valida con la política local vigente de RUC natural, no como RUC jurídico.
 
 3. **PASAPORTE** (mín. 5 caracteres)
    - Documento internacional
-  - Normalización: trim y mayúsculas; mínimo 5 caracteres.
+
+- Normalización: trim y mayúsculas; mínimo 5 caracteres.
 
 ### Proveedor Sociedad: RUC Empresas
 
@@ -1256,12 +1317,12 @@ La normalización compartida aplica trim, elimina espacios y convierte a mayúsc
 
 TipoContribuyente expone `aplica_persona_natural` y `aplica_sociedad`. Backfill aprobado de `f8b2c5d30e71`:
 
-| Código | Natural | Sociedad |
-|---|---|---|
-| `01`, `03` | Sí | No |
-| `02`, `05` | No | Sí |
-| `04` | Sí | Sí |
-| Desconocido | No | No |
+| Código      | Natural | Sociedad |
+| ----------- | ------- | -------- |
+| `01`, `03`  | Sí      | No       |
+| `02`, `05`  | No      | Sí       |
+| `04`        | Sí      | Sí       |
+| Desconocido | No      | No       |
 
 Los servicios consultan flags y `activo`, no el texto del nombre ni una inferencia libre de códigos.
 
@@ -1272,6 +1333,7 @@ Los servicios consultan flags y `activo`, no el texto del nombre ni una inferenc
 ### Soft Delete
 
 Todas las entidades del módulo Directorio implementan **borrado lógico** (soft delete):
+
 - Campo `activo: boolean` (default: `true`)
 - DELETE endpoint realiza update a `activo=false`
 - GET con parámetro `only_active=true` filtran automáticamente registros inactivos
@@ -1279,6 +1341,7 @@ Todas las entidades del módulo Directorio implementan **borrado lógico** (soft
 ### Auditoría
 
 Todas las entidades registran:
+
 - `creado_en`: Timestamp de creación (auto)
 - `actualizado_en`: Timestamp de última actualización (auto)
 - `usuario_auditoria`: actor derivado del contexto autenticado; no se solicita en formularios productivos. Su aceptación opcional para scripts/tests confiables no permite suplantar el JWT.
@@ -1321,35 +1384,35 @@ Capacidades futuras propuestas para planificar en OpenSpec (no implementadas ni 
 
 ## Matriz de Errores por Endpoint
 
-| Endpoint | Códigos esperados |
-|---|---|
-| `GET /api/v1/personas` | `200`, `422` |
-| `GET /api/v1/personas/{id}` | `200`, `404` |
-| `POST /api/v1/personas` | `201`, `400`, `409`, `422` |
-| `PUT /api/v1/personas/{id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/personas/{id}` | `204`, `404`, `409` |
-| `GET /api/v1/tipos-cliente` | `200`, `422` |
-| `GET /api/v1/tipos-cliente/{id}` | `200`, `404` |
-| `POST /api/v1/tipos-cliente` | `201`, `409`, `422` |
-| `PUT /api/v1/tipos-cliente/{id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/tipos-cliente/{id}` | `204`, `404`, `409` |
-| `GET /api/v1/clientes` | `200`, `422` |
-| `GET /api/v1/clientes/{id}` | `200`, `404` |
-| `POST /api/v1/clientes` | `201`, `404`, `409`, `422` |
-| `PUT /api/v1/clientes/{id}` | `200`, `404`, `409`, `422` |
-| `DELETE /api/v1/clientes/{id}` | `204`, `404` |
-| `GET /api/v1/proveedores-persona` | `200`, `422` |
-| `GET /api/v1/proveedores-persona/{id}` | `200`, `404` |
-| `POST /api/v1/proveedores-persona` | `201`, `400`, `404`, `409`, `422` |
-| `PUT /api/v1/proveedores-persona/{id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/proveedores-persona/{id}` | `204`, `404` |
-| `GET /api/v1/proveedores-sociedad` | `200`, `422` |
-| `GET /api/v1/proveedores-sociedad/{id}` | `200`, `404` |
-| `POST /api/v1/proveedores-sociedad` | `201`, `400`, `404`, `409`, `422` |
-| `PUT /api/v1/proveedores-sociedad/{id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/proveedores-sociedad/{id}` | `204`, `404` |
-| `GET /api/v1/empleados` | `200`, `422` |
-| `GET /api/v1/empleados/{id}` | `200`, `404` |
-| `POST /api/v1/empleados` | `201`, `400`, `404`, `409`, `422` |
-| `PUT /api/v1/empleados/{id}` | `200`, `400`, `404`, `409`, `422` |
-| `DELETE /api/v1/empleados/{id}` | `204`, `404` |
+| Endpoint                                   | Códigos esperados                 |
+| ------------------------------------------ | --------------------------------- |
+| `GET /api/v1/personas`                     | `200`, `422`                      |
+| `GET /api/v1/personas/{id}`                | `200`, `404`                      |
+| `POST /api/v1/personas`                    | `201`, `400`, `409`, `422`        |
+| `PUT /api/v1/personas/{id}`                | `200`, `400`, `404`, `409`, `422` |
+| `DELETE /api/v1/personas/{id}`             | `204`, `404`, `409`               |
+| `GET /api/v1/tipos-cliente`                | `200`, `422`                      |
+| `GET /api/v1/tipos-cliente/{id}`           | `200`, `404`                      |
+| `POST /api/v1/tipos-cliente`               | `201`, `409`, `422`               |
+| `PUT /api/v1/tipos-cliente/{id}`           | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/tipos-cliente/{id}`        | `204`, `404`, `409`               |
+| `GET /api/v1/clientes`                     | `200`, `422`                      |
+| `GET /api/v1/clientes/{id}`                | `200`, `404`                      |
+| `POST /api/v1/clientes`                    | `201`, `404`, `409`, `422`        |
+| `PUT /api/v1/clientes/{id}`                | `200`, `404`, `409`, `422`        |
+| `DELETE /api/v1/clientes/{id}`             | `204`, `404`                      |
+| `GET /api/v1/proveedores-persona`          | `200`, `422`                      |
+| `GET /api/v1/proveedores-persona/{id}`     | `200`, `404`                      |
+| `POST /api/v1/proveedores-persona`         | `201`, `400`, `404`, `409`, `422` |
+| `PUT /api/v1/proveedores-persona/{id}`     | `200`, `400`, `404`, `409`, `422` |
+| `DELETE /api/v1/proveedores-persona/{id}`  | `204`, `404`                      |
+| `GET /api/v1/proveedores-sociedad`         | `200`, `422`                      |
+| `GET /api/v1/proveedores-sociedad/{id}`    | `200`, `404`                      |
+| `POST /api/v1/proveedores-sociedad`        | `201`, `400`, `404`, `409`, `422` |
+| `PUT /api/v1/proveedores-sociedad/{id}`    | `200`, `400`, `404`, `409`, `422` |
+| `DELETE /api/v1/proveedores-sociedad/{id}` | `204`, `404`                      |
+| `GET /api/v1/empleados`                    | `200`, `422`                      |
+| `GET /api/v1/empleados/{id}`               | `200`, `404`                      |
+| `POST /api/v1/empleados`                   | `201`, `400`, `404`, `409`, `422` |
+| `PUT /api/v1/empleados/{id}`               | `200`, `400`, `404`, `409`, `422` |
+| `DELETE /api/v1/empleados/{id}`            | `204`, `404`                      |

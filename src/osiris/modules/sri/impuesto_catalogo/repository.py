@@ -13,12 +13,16 @@ from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo, TipoIm
 class ImpuestoCatalogoRepository(BaseRepository):
     model = ImpuestoCatalogo
 
-    def get_by_codigo_sri(self, session: Session, codigo_sri: str) -> Optional[ImpuestoCatalogo]:
+    def get_by_codigo_sri(
+        self, session: Session, codigo_sri: str
+    ) -> Optional[ImpuestoCatalogo]:
         """Obtiene un impuesto por su código SRI."""
         stmt = select(ImpuestoCatalogo).where(ImpuestoCatalogo.codigo_sri == codigo_sri)
         return session.exec(stmt).first()
 
-    def list_activos_vigentes(self, session: Session, fecha: Optional[date] = None) -> List[ImpuestoCatalogo]:
+    def list_activos_vigentes(
+        self, session: Session, fecha: Optional[date] = None
+    ) -> List[ImpuestoCatalogo]:
         """
         Lista impuestos activos y vigentes en una fecha dada.
         Si fecha es None, usa la fecha actual.
@@ -33,7 +37,8 @@ class ImpuestoCatalogoRepository(BaseRepository):
 
         # vigente_hasta puede ser null (vigencia indefinida) o >= fecha
         stmt = stmt.where(
-            (col(ImpuestoCatalogo.vigente_hasta).is_(None)) | (col(ImpuestoCatalogo.vigente_hasta) >= fecha)
+            (col(ImpuestoCatalogo.vigente_hasta).is_(None))
+            | (col(ImpuestoCatalogo.vigente_hasta) >= fecha)
         )
 
         return list(session.exec(stmt).all())
@@ -43,12 +48,12 @@ class ImpuestoCatalogoRepository(BaseRepository):
         session: Session,
         tipo: TipoImpuesto,
         solo_vigentes: bool = False,
-        fecha: Optional[date] = None
+        fecha: Optional[date] = None,
     ) -> List[ImpuestoCatalogo]:
         """Lista impuestos por tipo, opcionalmente filtrando por vigencia."""
         stmt = select(ImpuestoCatalogo).where(
             col(ImpuestoCatalogo.tipo_impuesto) == tipo,
-            col(ImpuestoCatalogo.activo).is_(True)
+            col(ImpuestoCatalogo.activo).is_(True),
         )
 
         if solo_vigentes:
@@ -56,12 +61,15 @@ class ImpuestoCatalogoRepository(BaseRepository):
                 fecha = date.today()
             stmt = stmt.where(
                 col(ImpuestoCatalogo.vigente_desde) <= fecha,
-                (col(ImpuestoCatalogo.vigente_hasta).is_(None)) | (col(ImpuestoCatalogo.vigente_hasta) >= fecha)
+                (col(ImpuestoCatalogo.vigente_hasta).is_(None))
+                | (col(ImpuestoCatalogo.vigente_hasta) >= fecha),
             )
 
         return list(session.exec(stmt).all())
 
-    def es_vigente(self, impuesto: ImpuestoCatalogo, fecha: Optional[date] = None) -> bool:
+    def es_vigente(
+        self, impuesto: ImpuestoCatalogo, fecha: Optional[date] = None
+    ) -> bool:
         """Verifica si un impuesto está vigente en una fecha dada."""
         if fecha is None:
             fecha = date.today()
@@ -82,12 +90,12 @@ class ImpuestoCatalogoRepository(BaseRepository):
         session: Session,
         codigo_sri: str | None,
         descripcion: str | None,
-        exclude_id: Optional[UUID] = None
+        exclude_id: Optional[UUID] = None,
     ) -> None:
         """Valida que no exista otro impuesto con la misma combinación de código SRI y descripción."""
         stmt = select(ImpuestoCatalogo).where(
             ImpuestoCatalogo.codigo_sri == codigo_sri,
-            ImpuestoCatalogo.descripcion == descripcion
+            ImpuestoCatalogo.descripcion == descripcion,
         )
 
         if exclude_id:
@@ -97,5 +105,5 @@ class ImpuestoCatalogoRepository(BaseRepository):
         if existente:
             raise HTTPException(
                 status_code=409,
-                detail=f"Ya existe un impuesto con código SRI '{codigo_sri}' y descripción '{descripcion}'"
+                detail=f"Ya existe un impuesto con código SRI '{codigo_sri}' y descripción '{descripcion}'",
             )

@@ -14,10 +14,10 @@ from osiris.modules.common.cliente.entity import Cliente
 from osiris.modules.common.persona.entity import Persona, TipoIdentificacion
 from osiris.modules.common.tipo_cliente.entity import TipoCliente
 
-
 # -----------------------
 # Helpers para IntegrityError de PG
 # -----------------------
+
 
 class _Diag:
     def __init__(self, constraint_name=None, column_name=None, table_name=None):
@@ -25,8 +25,10 @@ class _Diag:
         self.column_name = column_name
         self.table_name = table_name
 
+
 class _PGOrig:
     """Simula error PostgreSQL con pgcode y diag.*"""
+
     def __init__(self, pgcode, constraint=None, column=None, table=None, text=""):
         self.pgcode = pgcode
         self.diag = _Diag(constraint, column, table)
@@ -43,6 +45,7 @@ def _mk_integrity_error(pgcode, *, constraint=None, column=None, table=None, tex
 # -----------------------
 # Test: CREATE (unique -> 409)
 # -----------------------
+
 
 def test_cliente_create_unique_persona_mapea_a_409_con_mensaje_claro():
     """
@@ -67,14 +70,23 @@ def test_cliente_create_unique_persona_mapea_a_409_con_mensaje_claro():
         usuario_auditoria="admin",
     )
 
-    persona = Persona(id=dto.persona_id, identificacion="ABC123", tipo_identificacion=TipoIdentificacion.PASAPORTE,
-                      nombre="Ana", apellido="Perez")
+    persona = Persona(
+        id=dto.persona_id,
+        identificacion="ABC123",
+        tipo_identificacion=TipoIdentificacion.PASAPORTE,
+        nombre="Ana",
+        apellido="Perez",
+    )
     catalog = TipoCliente(id=dto.tipo_cliente_id, nombre="Regular", descuento=0)
 
     def query(statement):
         cursor = MagicMock()
         text = str(statement)
-        cursor.first.return_value = persona if "tbl_persona" in text else catalog if "tbl_tipo_cliente" in text else None
+        cursor.first.return_value = (
+            persona
+            if "tbl_persona" in text
+            else catalog if "tbl_tipo_cliente" in text else None
+        )
         return cursor
 
     session.exec.side_effect = query
@@ -91,6 +103,7 @@ def test_cliente_create_unique_persona_mapea_a_409_con_mensaje_claro():
 # Test: UPDATE (FK -> 409)
 # -----------------------
 
+
 def test_repository_update_fk_violation_mapea_a_409():
     """
     Simula violación de FK (23503) al hacer update; el repo debe traducir a 409 con detalle útil.
@@ -102,7 +115,9 @@ def test_repository_update_fk_violation_mapea_a_409():
     )
 
     repo = ClienteRepository()
-    db_obj = Cliente(persona_id=uuid4(), tipo_cliente_id=uuid4(), usuario_auditoria="x")  # instancia válida
+    db_obj = Cliente(
+        persona_id=uuid4(), tipo_cliente_id=uuid4(), usuario_auditoria="x"
+    )  # instancia válida
 
     with pytest.raises(HTTPException) as exc:
         repo.update(session, db_obj, {"tipo_cliente_id": uuid4()})
@@ -116,11 +131,13 @@ def test_repository_update_fk_violation_mapea_a_409():
 # Test: DELETE (FK -> 409) en hard delete
 # -----------------------
 
+
 def test_repository_delete_fk_violation_mapea_a_409_en_hard_delete():
     """
     Si el modelo NO tiene 'activo', BaseRepository.delete hace hard delete.
     Simulamos FK violation 23503 en commit -> 409.
     """
+
     # Modelo simple sin 'activo' para forzar hard delete
     class SinActivo:
         __tablename__ = "tbl_otro"
@@ -150,12 +167,15 @@ def test_repository_delete_fk_violation_mapea_a_409_en_hard_delete():
 # Test: DELETE (soft delete) NO debe lanzar si no hay error
 # -----------------------
 
+
 def test_repository_delete_soft_ok():
     """
     Si el modelo tiene 'activo', delete es lógico y commit no lanza -> True
     """
+
     class ConActivo:
         __tablename__ = "tbl_soft"
+
         def __init__(self):
             self.activo = True
 

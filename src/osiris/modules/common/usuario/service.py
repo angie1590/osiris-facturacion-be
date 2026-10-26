@@ -14,7 +14,9 @@ from osiris.domain.service import BaseService, FkSpec
 from osiris.core import security
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.core.audit_context import get_current_user_id
-from osiris.core.directory_permissions import require_directory_permission as requiere_permiso
+from osiris.core.directory_permissions import (
+    require_directory_permission as requiere_permiso,
+)
 from .repository import UsuarioRepository
 from .entity import Usuario
 from osiris.modules.common.persona.entity import Persona
@@ -24,16 +26,22 @@ from osiris.modules.common.empleado.entity import Empleado
 from .models import UsuarioRead
 
 
-def check_directory_references(session: Session, data: dict[str, Any], references: dict[str, FkSpec]) -> None:
+def check_directory_references(
+    session: Session, data: dict[str, Any], references: dict[str, FkSpec]
+) -> None:
     for field, specification in references.items():
         if data.get(field) is None:
             continue
         model, primary_key, require_active = BaseService._parse_fk_spec(specification)
-        reference: Any = session.exec(select(model).where(getattr(model, primary_key) == data[field]).execution_options(
-            **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
-        )).first()
+        reference: Any = session.exec(
+            select(model)
+            .where(getattr(model, primary_key) == data[field])
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        ).first()
         if reference is None:
-            raise HTTPException(status_code=404, detail=f"{model.__name__} no encontrado")
+            raise HTTPException(
+                status_code=404, detail=f"{model.__name__} no encontrado"
+            )
         if require_active and getattr(reference, "activo", True) is False:
             raise HTTPException(status_code=409, detail=f"{model.__name__} inactivo")
 
@@ -44,13 +52,16 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
     - Unicidades (username, persona_id único) se delegan al BaseRepository (maneja IntegrityError -> 409).
     - Reglas de negocio aquí: hash de password, campos no editables en update.
     """
+
     repo = UsuarioRepository()
     fk_models = {
         "persona_id": Persona,
         "rol_id": Rol,
     }
 
-    def _check_fk_active_and_exists(self, session: Session, data: dict[str, Any]) -> None:
+    def _check_fk_active_and_exists(
+        self, session: Session, data: dict[str, Any]
+    ) -> None:
         check_directory_references(session, data, self.fk_models)
 
     # ---------- helpers ----------
@@ -62,13 +73,19 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
         elif isinstance(data, dict):
             payload = data.copy()
         else:
-            payload = {key: value for key, value in vars(data).items() if not key.startswith("_")}
+            payload = {
+                key: value
+                for key, value in vars(data).items()
+                if not key.startswith("_")
+            }
         for field in ("persona_id", "rol_id"):
             if payload.get(field) is not None:
                 try:
                     payload[field] = UUID(str(payload[field]))
                 except (TypeError, ValueError) as exc:
-                    raise HTTPException(status_code=422, detail=f"{field} debe ser UUID") from exc
+                    raise HTTPException(
+                        status_code=422, detail=f"{field} debe ser UUID"
+                    ) from exc
         actor = get_current_user_id()
         if actor:
             payload["usuario_auditoria"] = actor
@@ -92,16 +109,30 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
                 requiere_permiso(session, UUID(actor), "USUARIOS", "crear")
             payload = resolve_persona(session, self._ensure_dict(data).copy())
             if not payload.get("password"):
-                raise HTTPException(status_code=400, detail="La contrasena es obligatoria")
+                raise HTTPException(
+                    status_code=400, detail="La contrasena es obligatoria"
+                )
             username = str(payload.get("username", "")).strip().lower()
             if not 3 <= len(username) <= 120:
-                raise HTTPException(status_code=400, detail="Username debe tener entre 3 y 120 caracteres")
-            existing = session.exec(select(Usuario).where(or_(
-                Usuario.persona_id == payload["persona_id"],
-                func.lower(func.trim(Usuario.username)) == username,
-            )).execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})).first()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Username debe tener entre 3 y 120 caracteres",
+                )
+            existing = session.exec(
+                select(Usuario)
+                .where(
+                    or_(
+                        Usuario.persona_id == payload["persona_id"],
+                        func.lower(func.trim(Usuario.username)) == username,
+                    )
+                )
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).first()
             if existing is not None:
-                raise HTTPException(status_code=409, detail="Usuario ya registrado; requiere una decision administrativa o reactivacion explicita")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Usuario ya registrado; requiere una decision administrativa o reactivacion explicita",
+                )
             payload["username"] = username
             payload["requiere_cambio_password"] = True
             self._pop_and_hash_password(payload)
@@ -115,19 +146,26 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
             self._handle_transaction_error(session, exc)
 
     # ---------- UPDATE (solo rol_id, password, usuario_auditoria) ----------
-    def update(self, session: Session, item_id: UUID, data: Any, *, commit: bool = True) -> Usuario | None:
+    def update(
+        self, session: Session, item_id: UUID, data: Any, *, commit: bool = True
+    ) -> Usuario | None:
         try:
             incoming = self._ensure_dict(data).copy()
             current = self.repo.get(session, item_id)
             if current is None:
                 return None
             for field in ("persona_id", "username"):
-                if field in incoming and str(incoming[field]) != str(getattr(current, field)):
+                if field in incoming and str(incoming[field]) != str(
+                    getattr(current, field)
+                ):
                     raise HTTPException(status_code=409, detail=f"{field} es inmutable")
                 incoming.pop(field, None)
             allowed = {"rol_id", "password", "usuario_auditoria"}
             if incoming.keys() - allowed:
-                raise HTTPException(status_code=422, detail="Campos no editables; use acciones explicitas de ciclo de vida")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Campos no editables; use acciones explicitas de ciclo de vida",
+                )
             if "rol_id" in incoming and incoming["rol_id"] is None:
                 raise HTTPException(status_code=422, detail="rol_id no puede ser null")
             if incoming.get("password") is not None:
@@ -146,8 +184,14 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
             self._handle_transaction_error(session, exc)
 
     # ---------- Auth opcional ----------
-    def authenticate(self, session: Session, username: str, password: str) -> Usuario | None:
-        user = session.exec(select(Usuario).where(func.lower(func.trim(Usuario.username)) == username.strip().lower())).first()
+    def authenticate(
+        self, session: Session, username: str, password: str
+    ) -> Usuario | None:
+        user = session.exec(
+            select(Usuario).where(
+                func.lower(func.trim(Usuario.username)) == username.strip().lower()
+            )
+        ).first()
         if not user or not user.activo:
             return None
         if not security.verify_password(password, user.password_hash):
@@ -162,7 +206,9 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
         alphabet = string.ascii_letters + string.digits
         return "".join(secrets.choice(alphabet) for _ in range(length))
 
-    def reset_password(self, session: Session, item_id: UUID, *, usuario_auditoria: str | None = None) -> tuple[Usuario, str]:
+    def reset_password(
+        self, session: Session, item_id: UUID, *, usuario_auditoria: str | None = None
+    ) -> tuple[Usuario, str]:
         try:
             user = self.repo.get(session, item_id)
             if not user:
@@ -190,38 +236,76 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
-    def delete(self, session: Session, item_id: UUID, *, commit: bool = True) -> bool | None:
+    def delete(
+        self, session: Session, item_id: UUID, *, commit: bool = True
+    ) -> bool | None:
         try:
-            user = session.exec(select(Usuario).where(Usuario.id == item_id).execution_options(
-                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
-            ).with_for_update()).first()
+            user = session.exec(
+                select(Usuario)
+                .where(Usuario.id == item_id)
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+                .with_for_update()
+            ).first()
             if user is None:
                 return None
-            self.repo.update(session, user, {"activo": False, "sesion_invalidada_en": datetime.utcnow()})
+            self.repo.update(
+                session,
+                user,
+                {"activo": False, "sesion_invalidada_en": datetime.utcnow()},
+            )
             if commit:
                 session.commit()
             return True
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
-    def reactivate(self, session: Session, item_id: UUID, *, confirmar_empleado_inactivo: bool = False,
-                   usuario_auditoria: str | None = None, commit: bool = True) -> Usuario:
+    def reactivate(
+        self,
+        session: Session,
+        item_id: UUID,
+        *,
+        confirmar_empleado_inactivo: bool = False,
+        usuario_auditoria: str | None = None,
+        commit: bool = True,
+    ) -> Usuario:
         try:
-            user = session.exec(select(Usuario).where(Usuario.id == item_id).execution_options(
-                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
-            ).with_for_update()).first()
+            user = session.exec(
+                select(Usuario)
+                .where(Usuario.id == item_id)
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+                .with_for_update()
+            ).first()
             if user is None:
                 raise HTTPException(status_code=404, detail="Usuario no encontrado")
             resolve_persona(session, {"persona_id": user.persona_id})
             self._check_fk_active_and_exists(session, {"rol_id": user.rol_id})
-            employee = session.exec(select(Empleado).where(Empleado.persona_id == user.persona_id).execution_options(
-                **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
-            )).first()
-            if employee is not None and not employee.activo and not confirmar_empleado_inactivo:
-                raise HTTPException(status_code=409, detail="Empleado inactivo; confirmar_empleado_inactivo requiere decision administrativa explicita")
-            updated = cast(Usuario, self.repo.update(session, user, self._ensure_dict({
-                "activo": True, "usuario_auditoria": usuario_auditoria,
-            })))
+            employee = session.exec(
+                select(Empleado)
+                .where(Empleado.persona_id == user.persona_id)
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).first()
+            if (
+                employee is not None
+                and not employee.activo
+                and not confirmar_empleado_inactivo
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Empleado inactivo; confirmar_empleado_inactivo requiere decision administrativa explicita",
+                )
+            updated = cast(
+                Usuario,
+                self.repo.update(
+                    session,
+                    user,
+                    self._ensure_dict(
+                        {
+                            "activo": True,
+                            "usuario_auditoria": usuario_auditoria,
+                        }
+                    ),
+                ),
+            )
             if commit:
                 session.commit()
                 session.refresh(updated)
@@ -236,13 +320,25 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
-    def change_password(self, session: Session, user: Usuario, *, new_password: str,
-                        current_password: str | None = None) -> None:
+    def change_password(
+        self,
+        session: Session,
+        user: Usuario,
+        *,
+        new_password: str,
+        current_password: str | None = None,
+    ) -> None:
         try:
             if not user.requiere_cambio_password and not current_password:
-                raise HTTPException(status_code=400, detail="La contrasena actual es obligatoria")
-            if current_password and not security.verify_password(current_password, user.password_hash):
-                raise HTTPException(status_code=400, detail="Contrasena actual incorrecta")
+                raise HTTPException(
+                    status_code=400, detail="La contrasena actual es obligatoria"
+                )
+            if current_password and not security.verify_password(
+                current_password, user.password_hash
+            ):
+                raise HTTPException(
+                    status_code=400, detail="Contrasena actual incorrecta"
+                )
             payload: dict[str, Any] = {"password": new_password}
             self._pop_and_hash_password(payload)
             payload["requiere_cambio_password"] = False
@@ -253,18 +349,25 @@ class UsuarioService(BaseService[Usuario, UsuarioRead]):
 
     def set_approval_code(self, session: Session, user: Usuario, code: str) -> None:
         try:
-            self.repo.update(session, user, {"codigo_aprobacion_hash": security.hash_password(code)})
+            self.repo.update(
+                session, user, {"codigo_aprobacion_hash": security.hash_password(code)}
+            )
             session.commit()
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
     @staticmethod
     def to_read(session: Session, user: Usuario) -> UsuarioRead:
-        return UsuarioRead.model_validate({
-            **user.model_dump(), "persona": session.get(Persona, user.persona_id),
-            "tiene_codigo_aprobacion": user.codigo_aprobacion_hash is not None,
-            "rol_nombre": (role.nombre if (role := session.get(Rol, user.rol_id)) else None),
-        })
+        return UsuarioRead.model_validate(
+            {
+                **user.model_dump(),
+                "persona": session.get(Persona, user.persona_id),
+                "tiene_codigo_aprobacion": user.codigo_aprobacion_hash is not None,
+                "rol_nombre": (
+                    role.nombre if (role := session.get(Rol, user.rol_id)) else None
+                ),
+            }
+        )
 
     # ---------- Verify password ----------
     def verify_password(self, session: Session, item_id: UUID, password: str) -> bool:
