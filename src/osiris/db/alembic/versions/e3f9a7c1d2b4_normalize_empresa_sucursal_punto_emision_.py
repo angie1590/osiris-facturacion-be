@@ -17,7 +17,6 @@ from sqlalchemy.sql.selectable import TableClause
 from alembic import context
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "e3f9a7c1d2b4"
 down_revision: Union[str, None] = "d4e5f6a7b8c9"
@@ -31,7 +30,9 @@ def _table_columns(table_name: str) -> set[str]:
 
 
 def _table_clause(table_name: str) -> TableClause:
-    columns: list[ColumnClause[object]] = [sa.column(column_name) for column_name in _table_columns(table_name)]
+    columns: list[ColumnClause[object]] = [
+        sa.column(column_name) for column_name in _table_columns(table_name)
+    ]
     return sa.table(table_name, *columns)
 
 
@@ -45,7 +46,10 @@ def _drop_fk_for_column(table_name: str, column_name: str) -> None:
 
 def _drop_unique_if_exists(table_name: str, constraint_name: str) -> None:
     inspector = sa.inspect(op.get_bind())
-    existing = {constraint["name"] for constraint in inspector.get_unique_constraints(table_name)}
+    existing = {
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints(table_name)
+    }
     if constraint_name in existing:
         op.drop_constraint(constraint_name, table_name, type_="unique")
 
@@ -53,11 +57,14 @@ def _drop_unique_if_exists(table_name: str, constraint_name: str) -> None:
 def _unique_exists(table_name: str, constraint_name: str) -> bool:
     inspector = sa.inspect(op.get_bind())
     return constraint_name in {
-        constraint["name"] for constraint in inspector.get_unique_constraints(table_name)
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints(table_name)
     }
 
 
-def _next_sucursal_codigo(bind: sa.Connection, sucursal: TableClause, empresa_id: object) -> str:
+def _next_sucursal_codigo(
+    bind: sa.Connection, sucursal: TableClause, empresa_id: object
+) -> str:
     existing_codes = {
         code
         for code in bind.execute(
@@ -77,18 +84,33 @@ def upgrade() -> None:
         op.drop_column("tbl_empresa", "codigo_establecimiento")
         op.add_column(
             "tbl_sucursal",
-            sa.Column("es_matriz", sa.Boolean(), nullable=True, server_default=sa.text("false")),
+            sa.Column(
+                "es_matriz",
+                sa.Boolean(),
+                nullable=True,
+                server_default=sa.text("false"),
+            ),
         )
         op.execute(
             "UPDATE tbl_sucursal SET es_matriz = "
             "CASE WHEN codigo = '001' THEN true ELSE COALESCE(es_matriz, false) END"
         )
-        op.alter_column("tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), nullable=False)
-        op.alter_column("tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), server_default=None)
-        op.drop_constraint("uq_pe_empresa_sucursal_codigo", "tbl_punto_emision", type_="unique")
-        op.alter_column("tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=False)
+        op.alter_column(
+            "tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), nullable=False
+        )
+        op.alter_column(
+            "tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), server_default=None
+        )
+        op.drop_constraint(
+            "uq_pe_empresa_sucursal_codigo", "tbl_punto_emision", type_="unique"
+        )
+        op.alter_column(
+            "tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=False
+        )
         op.drop_column("tbl_punto_emision", "empresa_id")
-        op.create_unique_constraint("uq_pe_sucursal_codigo", "tbl_punto_emision", ["sucursal_id", "codigo"])
+        op.create_unique_constraint(
+            "uq_pe_sucursal_codigo", "tbl_punto_emision", ["sucursal_id", "codigo"]
+        )
         return
 
     bind = op.get_bind()
@@ -101,7 +123,12 @@ def upgrade() -> None:
     if "es_matriz" not in sucursal_columns:
         op.add_column(
             "tbl_sucursal",
-            sa.Column("es_matriz", sa.Boolean(), nullable=True, server_default=sa.text("false")),
+            sa.Column(
+                "es_matriz",
+                sa.Boolean(),
+                nullable=True,
+                server_default=sa.text("false"),
+            ),
         )
 
     op.execute(
@@ -110,8 +137,12 @@ def upgrade() -> None:
             "SET es_matriz = CASE WHEN codigo = '001' THEN true ELSE COALESCE(es_matriz, false) END"
         )
     )
-    op.alter_column("tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), nullable=False)
-    op.alter_column("tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), server_default=None)
+    op.alter_column(
+        "tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), nullable=False
+    )
+    op.alter_column(
+        "tbl_sucursal", "es_matriz", existing_type=sa.Boolean(), server_default=None
+    )
 
     punto_columns = _table_columns("tbl_punto_emision")
     if "empresa_id" in punto_columns and "sucursal_id" in punto_columns:
@@ -120,9 +151,9 @@ def upgrade() -> None:
         _drop_unique_if_exists("tbl_punto_emision", "uq_pe_empresa_sucursal_codigo")
 
         rows_without_sucursal = bind.execute(
-            sa.select(punto_emision.c.id, punto_emision.c.empresa_id, punto_emision.c.codigo).where(
-                punto_emision.c.sucursal_id.is_(None)
-            )
+            sa.select(
+                punto_emision.c.id, punto_emision.c.empresa_id, punto_emision.c.codigo
+            ).where(punto_emision.c.sucursal_id.is_(None))
         ).all()
 
         for row in rows_without_sucursal:
@@ -168,7 +199,9 @@ def upgrade() -> None:
             else:
                 if "es_matriz" in sucursal.c:
                     bind.execute(
-                        sa.update(sucursal).where(sucursal.c.id == matriz_id).values(es_matriz=True)
+                        sa.update(sucursal)
+                        .where(sucursal.c.id == matriz_id)
+                        .values(es_matriz=True)
                     )
 
             target_sucursal_id = matriz_id
@@ -222,7 +255,9 @@ def upgrade() -> None:
 
         _drop_fk_for_column("tbl_punto_emision", "empresa_id")
 
-        op.alter_column("tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=False)
+        op.alter_column(
+            "tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=False
+        )
 
         op.drop_column("tbl_punto_emision", "empresa_id")
 
@@ -237,15 +272,24 @@ def upgrade() -> None:
 def downgrade() -> None:
     if context.is_offline_mode():
         op.drop_constraint("uq_pe_sucursal_codigo", "tbl_punto_emision", type_="unique")
-        op.add_column("tbl_punto_emision", sa.Column("empresa_id", sa.Uuid(), nullable=True))
-        op.alter_column("tbl_punto_emision", "empresa_id", existing_type=sa.Uuid(), nullable=False)
-        op.alter_column("tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=True)
+        op.add_column(
+            "tbl_punto_emision", sa.Column("empresa_id", sa.Uuid(), nullable=True)
+        )
+        op.alter_column(
+            "tbl_punto_emision", "empresa_id", existing_type=sa.Uuid(), nullable=False
+        )
+        op.alter_column(
+            "tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=True
+        )
         op.create_unique_constraint(
             "uq_pe_empresa_sucursal_codigo",
             "tbl_punto_emision",
             ["empresa_id", "sucursal_id", "codigo"],
         )
-        op.add_column("tbl_empresa", sa.Column("codigo_establecimiento", sa.String(length=3), nullable=True))
+        op.add_column(
+            "tbl_empresa",
+            sa.Column("codigo_establecimiento", sa.String(length=3), nullable=True),
+        )
         op.drop_column("tbl_sucursal", "es_matriz")
         return
 
@@ -260,7 +304,9 @@ def downgrade() -> None:
 
     punto_columns = _table_columns("tbl_punto_emision")
     if "empresa_id" not in punto_columns:
-        op.add_column("tbl_punto_emision", sa.Column("empresa_id", sa.Uuid(), nullable=True))
+        op.add_column(
+            "tbl_punto_emision", sa.Column("empresa_id", sa.Uuid(), nullable=True)
+        )
 
     punto_emision = _table_clause("tbl_punto_emision")
     sucursal = _table_clause("tbl_sucursal")
@@ -276,7 +322,9 @@ def downgrade() -> None:
             .where(punto_emision.c.sucursal_id.is_not(None))
             .values(empresa_id=empresa_subquery)
         )
-        op.alter_column("tbl_punto_emision", "empresa_id", existing_type=sa.Uuid(), nullable=False)
+        op.alter_column(
+            "tbl_punto_emision", "empresa_id", existing_type=sa.Uuid(), nullable=False
+        )
 
     _drop_unique_if_exists("tbl_punto_emision", "uq_pe_sucursal_codigo")
     if not _unique_exists("tbl_punto_emision", "uq_pe_empresa_sucursal_codigo"):
@@ -300,7 +348,9 @@ def downgrade() -> None:
             ["id"],
         )
 
-    op.alter_column("tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=True)
+    op.alter_column(
+        "tbl_punto_emision", "sucursal_id", existing_type=sa.Uuid(), nullable=True
+    )
 
     sucursal_columns = _table_columns("tbl_sucursal")
     if "es_matriz" in sucursal_columns:

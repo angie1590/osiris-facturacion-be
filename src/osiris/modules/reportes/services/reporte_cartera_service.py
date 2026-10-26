@@ -11,7 +11,10 @@ from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.compras.models import Compra, CuentaPorPagar
 from osiris.modules.sri.core_sri.schemas import q2
-from osiris.modules.sri.core_sri.types import EstadoCuentaPorCobrar, EstadoCuentaPorPagar
+from osiris.modules.sri.core_sri.types import (
+    EstadoCuentaPorCobrar,
+    EstadoCuentaPorPagar,
+)
 from osiris.modules.reportes.schemas import (
     ReporteCarteraCobrarItemRead,
     ReporteCarteraPagarItemRead,
@@ -30,12 +33,16 @@ class ReporteCarteraService:
             return Decimal(default)
         return Decimal(str(value))
 
-    def obtener_cartera_cobrar(self, session: Session) -> list[ReporteCarteraCobrarItemRead]:
+    def obtener_cartera_cobrar(
+        self, session: Session
+    ) -> list[ReporteCarteraCobrarItemRead]:
         empresa_scope = self._empresa_scope()
         stmt = (
             select(
                 col(Venta.cliente_id),
-                func.coalesce(func.sum(col(CuentaPorCobrar.saldo_pendiente)), 0).label("saldo"),
+                func.coalesce(func.sum(col(CuentaPorCobrar.saldo_pendiente)), 0).label(
+                    "saldo"
+                ),
             )
             .select_from(CuentaPorCobrar)
             .join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
@@ -62,12 +69,16 @@ class ReporteCarteraService:
             for cliente_id, saldo in rows
         ]
 
-    def obtener_cartera_pagar(self, session: Session) -> list[ReporteCarteraPagarItemRead]:
+    def obtener_cartera_pagar(
+        self, session: Session
+    ) -> list[ReporteCarteraPagarItemRead]:
         empresa_scope = self._empresa_scope()
         stmt = (
             select(
                 col(Compra.proveedor_id),
-                func.coalesce(func.sum(col(CuentaPorPagar.saldo_pendiente)), 0).label("saldo"),
+                func.coalesce(func.sum(col(CuentaPorPagar.saldo_pendiente)), 0).label(
+                    "saldo"
+                ),
             )
             .select_from(CuentaPorPagar)
             .join(Compra, col(Compra.id) == col(CuentaPorPagar.compra_id))
@@ -83,7 +94,9 @@ class ReporteCarteraService:
             .order_by(func.sum(col(CuentaPorPagar.saldo_pendiente)).desc())
         )
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+            stmt = stmt.join(
+                Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+            ).where(
                 col(Sucursal.activo).is_(True),
                 col(Sucursal.empresa_id) == empresa_scope,
             )

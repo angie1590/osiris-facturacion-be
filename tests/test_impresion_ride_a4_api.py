@@ -17,10 +17,17 @@ from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.punto_emision.entity import PuntoEmision
 from osiris.modules.common.sucursal.entity import Sucursal
-from osiris.modules.impresion.strategies.plantilla_preimpresa_strategy import PlantillaPreimpresaStrategy
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy, checked_html_output
+from osiris.modules.impresion.strategies.plantilla_preimpresa_strategy import (
+    PlantillaPreimpresaStrategy,
+)
+from osiris.modules.impresion.strategies.render_strategy import (
+    RenderStrategy,
+    checked_html_output,
+)
 from osiris.modules.impresion.strategies.ride_a4_strategy import RideA4Strategy
-from osiris.modules.impresion.strategies.ticket_termico_strategy import TicketTermicoStrategy
+from osiris.modules.impresion.strategies.ticket_termico_strategy import (
+    TicketTermicoStrategy,
+)
 from osiris.modules.sri.core_sri.types import (
     EstadoDocumentoElectronico,
     EstadoVenta,

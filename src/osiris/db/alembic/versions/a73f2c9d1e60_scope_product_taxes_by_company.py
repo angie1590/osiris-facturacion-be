@@ -13,7 +13,6 @@ from uuid import UUID
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "a73f2c9d1e60"
 down_revision = "f61a8d3c2b90"
 branch_labels = None
@@ -44,17 +43,24 @@ def _canonical_iva_zero(bind: sa.Connection) -> UUID:
         sa.column("vigente_hasta", sa.Date()),
         sa.column("activo", sa.Boolean()),
     )
-    rows = bind.execute(
-        sa.select(tax_id).where(
-            sa.cast(taxes.c.tipo_impuesto, sa.String()) == "IVA",
-            taxes.c.porcentaje_iva == 0,
-            taxes.c.clasificacion_iva.is_(None),
-            sa.cast(taxes.c.aplica_a, sa.String()) == "AMBOS",
-            taxes.c.activo.is_(True),
-            taxes.c.vigente_desde <= date.today(),
-            sa.or_(taxes.c.vigente_hasta.is_(None), taxes.c.vigente_hasta >= date.today()),
+    rows = (
+        bind.execute(
+            sa.select(tax_id).where(
+                sa.cast(taxes.c.tipo_impuesto, sa.String()) == "IVA",
+                taxes.c.porcentaje_iva == 0,
+                taxes.c.clasificacion_iva.is_(None),
+                sa.cast(taxes.c.aplica_a, sa.String()) == "AMBOS",
+                taxes.c.activo.is_(True),
+                taxes.c.vigente_desde <= date.today(),
+                sa.or_(
+                    taxes.c.vigente_hasta.is_(None),
+                    taxes.c.vigente_hasta >= date.today(),
+                ),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if len(rows) != 1:
         raise RuntimeError(
             "Cannot migrate product tax profiles: expected exactly one active, current canonical IVA 0% "
@@ -110,10 +116,7 @@ def _preflight(bind: sa.Connection) -> tuple[dict[UUID, UUID], UUID]:
         row.id: (bool(row.activo), _company_tax_ids(row.impuesto_catalogo_ids))
         for row in company_rows
     }
-    tax_data = {
-        row.id: row
-        for row in bind.execute(sa.select(taxes)).all()
-    }
+    tax_data = {row.id: row for row in bind.execute(sa.select(taxes)).all()}
     product_data = {
         row.id: str(row.tipo)
         for row in bind.execute(sa.select(products.c.id, products.c.tipo)).all()
@@ -126,23 +129,29 @@ def _preflight(bind: sa.Connection) -> tuple[dict[UUID, UUID], UUID]:
         sa.select(assignments).where(assignments.c.activo.is_(True))
     ).all()
     for assignment in active_assignments:
-        scopes = bind.execute(
-            sa.select(warehouses.c.empresa_id)
-            .select_from(
-                product_warehouses.join(
-                    warehouses, product_warehouses.c.bodega_id == warehouses.c.id
+        scopes = (
+            bind.execute(
+                sa.select(warehouses.c.empresa_id)
+                .select_from(
+                    product_warehouses.join(
+                        warehouses, product_warehouses.c.bodega_id == warehouses.c.id
+                    )
                 )
+                .where(
+                    product_warehouses.c.producto_id == assignment.producto_id,
+                    product_warehouses.c.activo.is_(True),
+                    warehouses.c.activo.is_(True),
+                )
+                .distinct()
             )
-            .where(
-                product_warehouses.c.producto_id == assignment.producto_id,
-                product_warehouses.c.activo.is_(True),
-                warehouses.c.activo.is_(True),
-            )
-            .distinct()
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         reasons: list[str] = []
         if len(scopes) != 1:
-            reasons.append(f"active warehouse scope resolves to {len(scopes)} companies")
+            reasons.append(
+                f"active warehouse scope resolves to {len(scopes)} companies"
+            )
             company_id = None
         else:
             company_id = scopes[0]
@@ -159,12 +168,16 @@ def _preflight(bind: sa.Connection) -> tuple[dict[UUID, UUID], UUID]:
             reasons.append(f"unsupported product tax type {tax.tipo_impuesto}")
         else:
             today = date.today()
-            if tax.vigente_desde > today or (tax.vigente_hasta and tax.vigente_hasta < today):
+            if tax.vigente_desde > today or (
+                tax.vigente_hasta and tax.vigente_hasta < today
+            ):
                 reasons.append("tax is outside its validity period")
             applies_to = str(tax.aplica_a)
             product_type = product_data.get(assignment.producto_id)
             if applies_to not in {"AMBOS", product_type}:
-                reasons.append(f"tax applies to {applies_to}, product type is {product_type}")
+                reasons.append(
+                    f"tax applies to {applies_to}, product type is {product_type}"
+                )
             if company_id is not None and tax.tipo_impuesto in {"IVA", "ICE"}:
                 type_key = (company_id, assignment.producto_id, str(tax.tipo_impuesto))
                 if type_key in per_type:
@@ -219,7 +232,10 @@ def upgrade() -> None:
             sa.select(tax_catalog.c.id, tax_catalog.c.tipo_impuesto).where(
                 tax_catalog.c.activo.is_(True),
                 tax_catalog.c.vigente_desde <= today,
-                sa.or_(tax_catalog.c.vigente_hasta.is_(None), tax_catalog.c.vigente_hasta >= today),
+                sa.or_(
+                    tax_catalog.c.vigente_hasta.is_(None),
+                    tax_catalog.c.vigente_hasta >= today,
+                ),
             )
         ).all()
         if tax_type == "IVA"
@@ -280,7 +296,9 @@ def downgrade() -> None:
         "uq_producto_impuesto_empresa_producto_impuesto_activo",
         table_name="tbl_producto_impuesto",
     )
-    op.drop_index("ix_tbl_producto_impuesto_empresa_id", table_name="tbl_producto_impuesto")
+    op.drop_index(
+        "ix_tbl_producto_impuesto_empresa_id", table_name="tbl_producto_impuesto"
+    )
     with op.batch_alter_table("tbl_producto_impuesto") as batch_op:
         batch_op.drop_constraint("ck_producto_impuesto_activo_empresa", type_="check")
         batch_op.drop_constraint("fk_tbl_producto_impuesto_empresa", type_="foreignkey")

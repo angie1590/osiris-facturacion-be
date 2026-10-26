@@ -32,16 +32,25 @@ from osiris.modules.impresion.schemas import (
 from osiris.modules.impresion.strategies.plantilla_preimpresa_strategy import (
     PlantillaPreimpresaStrategy,
 )
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy, checked_html_output
+from osiris.modules.impresion.strategies.render_strategy import (
+    RenderStrategy,
+    checked_html_output,
+)
 from osiris.modules.impresion.strategies.ride_a4_strategy import RideA4Strategy
-from osiris.modules.impresion.strategies.ticket_termico_strategy import TicketTermicoStrategy
+from osiris.modules.impresion.strategies.ticket_termico_strategy import (
+    TicketTermicoStrategy,
+)
 
 
 class ImpresionService:
     def __init__(self, strategy: RenderStrategy | None = None) -> None:
         self.strategy = strategy or RideA4Strategy()
-        self.ticket_strategy = TicketTermicoStrategy(Path(__file__).resolve().parents[1] / "templates")
-        self.preimpresa_strategy = PlantillaPreimpresaStrategy(Path(__file__).resolve().parents[1] / "templates")
+        self.ticket_strategy = TicketTermicoStrategy(
+            Path(__file__).resolve().parents[1] / "templates"
+        )
+        self.preimpresa_strategy = PlantillaPreimpresaStrategy(
+            Path(__file__).resolve().parents[1] / "templates"
+        )
         self.templates_dir = Path(__file__).resolve().parents[1] / "templates"
 
     @staticmethod
@@ -73,7 +82,9 @@ class ImpresionService:
     def _render_html(self, context: dict[str, str]) -> str:
         template_path = self.templates_dir / "ride_a4.html"
         if not template_path.exists():
-            raise HTTPException(status_code=500, detail="Plantilla RIDE A4 no encontrada.")
+            raise HTTPException(
+                status_code=500, detail="Plantilla RIDE A4 no encontrada."
+            )
 
         try:
             from jinja2 import Environment, FileSystemLoader, select_autoescape  # type: ignore
@@ -96,7 +107,9 @@ class ImpresionService:
             html = html.replace("{{ subtotal }}", str(context["subtotal"]))
             html = html.replace("{{ iva_total }}", str(context["iva_total"]))
             html = html.replace("{{ total }}", str(context["total"]))
-            html = html.replace("{{ barcode_data_uri }}", str(context["barcode_data_uri"]))
+            html = html.replace(
+                "{{ barcode_data_uri }}", str(context["barcode_data_uri"])
+            )
             html = html.replace("{{ logo_url }}", str(context["logo_url"]))
             return html
 
@@ -109,9 +122,15 @@ class ImpresionService:
             if venta_id is not None:
                 venta = session.get(Venta, venta_id)
 
-        empresa = session.get(Empresa, venta.empresa_id) if venta and venta.empresa_id else None
+        empresa = (
+            session.get(Empresa, venta.empresa_id)
+            if venta and venta.empresa_id
+            else None
+        )
         settings = get_settings()
-        ambiente = "Pruebas" if settings.FEEC_AMBIENTE.lower() == "pruebas" else "Produccion"
+        ambiente = (
+            "Pruebas" if settings.FEEC_AMBIENTE.lower() == "pruebas" else "Produccion"
+        )
 
         subtotal = "0.00"
         iva_total = "0.00"
@@ -140,9 +159,14 @@ class ImpresionService:
     def generar_ride_a4(self, session: Session, *, documento_id: UUID) -> bytes:
         documento = session.get(DocumentoElectronico, documento_id)
         if not documento or not documento.activo:
-            raise HTTPException(status_code=404, detail="Documento electrónico no encontrado.")
+            raise HTTPException(
+                status_code=404, detail="Documento electrónico no encontrado."
+            )
         if documento.estado_sri != EstadoDocumentoElectronico.AUTORIZADO:
-            raise HTTPException(status_code=400, detail="Solo se puede imprimir RIDE de documentos AUTORIZADOS.")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede imprimir RIDE de documentos AUTORIZADOS.",
+            )
 
         payload = self._payload_from_documento(session, documento)
         html = self._render_html(payload)
@@ -156,13 +180,20 @@ class ImpresionService:
         ancho: str = "80mm",
     ) -> str:
         if ancho not in {"58mm", "80mm"}:
-            raise HTTPException(status_code=400, detail="El parámetro 'ancho' debe ser '58mm' o '80mm'.")
+            raise HTTPException(
+                status_code=400, detail="El parámetro 'ancho' debe ser '58mm' o '80mm'."
+            )
 
         documento = session.get(DocumentoElectronico, documento_id)
         if not documento or not documento.activo:
-            raise HTTPException(status_code=404, detail="Documento electrónico no encontrado.")
+            raise HTTPException(
+                status_code=404, detail="Documento electrónico no encontrado."
+            )
         if documento.estado_sri != EstadoDocumentoElectronico.AUTORIZADO:
-            raise HTTPException(status_code=400, detail="Solo se puede imprimir ticket de documentos AUTORIZADOS.")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede imprimir ticket de documentos AUTORIZADOS.",
+            )
 
         venta = None
         if documento.tipo_documento == TipoDocumentoElectronico.FACTURA:
@@ -170,7 +201,9 @@ class ImpresionService:
             if venta_id is not None:
                 venta = session.get(Venta, venta_id)
         if venta is None:
-            raise HTTPException(status_code=404, detail="Venta asociada al documento no encontrada.")
+            raise HTTPException(
+                status_code=404, detail="Venta asociada al documento no encontrada."
+            )
 
         empresa = session.get(Empresa, venta.empresa_id) if venta.empresa_id else None
         cxc = session.exec(
@@ -192,7 +225,11 @@ class ImpresionService:
 
         total_pagado = sum((pago.monto for pago in pagos), start=0)
         total_efectivo = sum(
-            (pago.monto for pago in pagos if pago.forma_pago_sri == FormaPagoSRI.EFECTIVO),
+            (
+                pago.monto
+                for pago in pagos
+                if pago.forma_pago_sri == FormaPagoSRI.EFECTIVO
+            ),
             start=0,
         )
         cambio: Decimal | int = total_efectivo - venta.valor_total
@@ -225,7 +262,11 @@ class ImpresionService:
     def _leer_config_impresion(punto_emision: PuntoEmision | None) -> tuple[str, int]:
         default_margen = 5.0
         default_max_items = 15
-        config = punto_emision.config_impresion if punto_emision and isinstance(punto_emision.config_impresion, dict) else {}
+        config = (
+            punto_emision.config_impresion
+            if punto_emision and isinstance(punto_emision.config_impresion, dict)
+            else {}
+        )
 
         margen_superior = default_margen
         max_items_por_pagina = default_max_items
@@ -238,7 +279,9 @@ class ImpresionService:
             margen_superior = default_margen
 
         try:
-            max_items_por_pagina = int(config.get("max_items_por_pagina", default_max_items))
+            max_items_por_pagina = int(
+                config.get("max_items_por_pagina", default_max_items)
+            )
             if max_items_por_pagina <= 0:
                 max_items_por_pagina = default_max_items
         except (TypeError, ValueError):
@@ -254,9 +297,14 @@ class ImpresionService:
     ) -> PreimpresaHTMLResult:
         documento = session.get(DocumentoElectronico, documento_id)
         if not documento or not documento.activo:
-            raise HTTPException(status_code=404, detail="Documento electrónico no encontrado.")
+            raise HTTPException(
+                status_code=404, detail="Documento electrónico no encontrado."
+            )
         if documento.estado_sri != EstadoDocumentoElectronico.AUTORIZADO:
-            raise HTTPException(status_code=400, detail="Solo se puede imprimir preimpresa de documentos AUTORIZADOS.")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede imprimir preimpresa de documentos AUTORIZADOS.",
+            )
 
         venta = None
         if documento.tipo_documento == TipoDocumentoElectronico.FACTURA:
@@ -264,10 +312,18 @@ class ImpresionService:
             if venta_id is not None:
                 venta = session.get(Venta, venta_id)
         if venta is None:
-            raise HTTPException(status_code=404, detail="Venta asociada al documento no encontrada.")
+            raise HTTPException(
+                status_code=404, detail="Venta asociada al documento no encontrada."
+            )
 
-        punto_emision = session.get(PuntoEmision, venta.punto_emision_id) if venta.punto_emision_id else None
-        margen_superior_cm, max_items_por_pagina = self._leer_config_impresion(punto_emision)
+        punto_emision = (
+            session.get(PuntoEmision, venta.punto_emision_id)
+            if venta.punto_emision_id
+            else None
+        )
+        margen_superior_cm, max_items_por_pagina = self._leer_config_impresion(
+            punto_emision
+        )
 
         detalles = list(
             session.exec(
@@ -280,7 +336,9 @@ class ImpresionService:
             ).all()
         )
         if not detalles:
-            raise HTTPException(status_code=400, detail="No se puede imprimir una venta sin detalles.")
+            raise HTTPException(
+                status_code=400, detail="No se puede imprimir una venta sin detalles."
+            )
 
         items = [
             {
@@ -319,7 +377,9 @@ class ImpresionService:
         *,
         documento_id: UUID,
     ) -> PreimpresaPDFResult:
-        resultado_html = self.generar_preimpresa_html(session, documento_id=documento_id)
+        resultado_html = self.generar_preimpresa_html(
+            session, documento_id=documento_id
+        )
         return {
             "pdf": self.preimpresa_strategy.render_pdf(str(resultado_html["html"])),
             "warning": resultado_html["warning"],
@@ -332,7 +392,9 @@ class ImpresionService:
         try:
             user_uuid = UUID(str(user_id))
         except (TypeError, ValueError):
-            raise HTTPException(status_code=403, detail="Usuario autenticado inválido.") from None
+            raise HTTPException(
+                status_code=403, detail="Usuario autenticado inválido."
+            ) from None
 
         row = session.exec(
             select(Usuario, Rol)
@@ -344,11 +406,15 @@ class ImpresionService:
             )
         ).first()
         if not row:
-            raise HTTPException(status_code=403, detail="Usuario no autorizado para reimpresión.")
+            raise HTTPException(
+                status_code=403, detail="Usuario no autorizado para reimpresión."
+            )
 
         _, rol = row
         if rol.nombre.strip().upper() not in {"CAJERO", "ADMIN", "ADMINISTRADOR"}:
-            raise HTTPException(status_code=403, detail="Solo Cajero o Administrador pueden reimprimir.")
+            raise HTTPException(
+                status_code=403, detail="Solo Cajero o Administrador pueden reimprimir."
+            )
         return user_uuid
 
     def reimprimir_documento(
@@ -364,13 +430,20 @@ class ImpresionService:
 
         documento = session.get(DocumentoElectronico, documento_id)
         if not documento or not documento.activo:
-            raise HTTPException(status_code=404, detail="Documento electrónico no encontrado.")
+            raise HTTPException(
+                status_code=404, detail="Documento electrónico no encontrado."
+            )
         if documento.estado_sri != EstadoDocumentoElectronico.AUTORIZADO:
-            raise HTTPException(status_code=400, detail="Solo se puede reimprimir un documento AUTORIZADO.")
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede reimprimir un documento AUTORIZADO.",
+            )
 
         motivo_limpio = (motivo or "").strip()
         if not motivo_limpio:
-            raise HTTPException(status_code=400, detail="El motivo de reimpresión es obligatorio.")
+            raise HTTPException(
+                status_code=400, detail="El motivo de reimpresión es obligatorio."
+            )
 
         venta = None
         if documento.tipo_documento == TipoDocumentoElectronico.FACTURA:
@@ -433,18 +506,24 @@ class ImpresionService:
                 "filename": f"ride-{documento.id}.pdf",
             }
         if formato_normalizado == "TICKET_58MM":
-            html = self.generar_ticket_termico_html(session, documento_id=documento.id, ancho="58mm")
+            html = self.generar_ticket_termico_html(
+                session, documento_id=documento.id, ancho="58mm"
+            )
             return {
                 "content": html,
                 "media_type": "text/html",
                 "filename": f"ticket-{documento.id}-58mm.html",
             }
         if formato_normalizado == "TICKET_80MM":
-            html = self.generar_ticket_termico_html(session, documento_id=documento.id, ancho="80mm")
+            html = self.generar_ticket_termico_html(
+                session, documento_id=documento.id, ancho="80mm"
+            )
             return {
                 "content": html,
                 "media_type": "text/html",
                 "filename": f"ticket-{documento.id}-80mm.html",
             }
 
-        raise HTTPException(status_code=400, detail="Formato no soportado para reimpresión.")
+        raise HTTPException(
+            status_code=400, detail="Formato no soportado para reimpresión."
+        )

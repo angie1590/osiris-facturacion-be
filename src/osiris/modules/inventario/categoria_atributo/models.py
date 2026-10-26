@@ -6,6 +6,7 @@ from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
+
 class CategoriaAtributoBase(BaseModel):
     categoria_id: UUID
     atributo_id: UUID
@@ -14,8 +15,10 @@ class CategoriaAtributoBase(BaseModel):
     valor_default: Optional[str] = None
     usuario_auditoria: Optional[str] = None
 
+
 class CategoriaAtributoCreate(CategoriaAtributoBase):
     pass
+
 
 class CategoriaAtributoUpdate(BaseModel):
     orden: Optional[int] = None
@@ -24,10 +27,12 @@ class CategoriaAtributoUpdate(BaseModel):
     aplicar_default_a_existentes: Optional[bool] = None
     usuario_auditoria: Optional[str] = None
 
+
 class AtributoRead(BaseModel):
     id: UUID
     nombre: str
     tipo_dato: str
+
 
 class CategoriaAtributoRead(CategoriaAtributoBase):
     model_config = ConfigDict(from_attributes=True)

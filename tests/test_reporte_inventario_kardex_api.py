@@ -188,7 +188,10 @@ def test_kardex_default_dates_calcula_un_anio():
         assert data["fecha_inicio"] == expected_inicio.isoformat()
         assert data["fecha_fin"] == expected_fin.isoformat()
         assert len(data["movimientos"]) == 1
-        assert data["movimientos"][0]["fecha"] == (date.today() - timedelta(days=30)).isoformat()
+        assert (
+            data["movimientos"][0]["fecha"]
+            == (date.today() - timedelta(days=30)).isoformat()
+        )
 
         kardex_stmt = next(
             stmt

@@ -5,18 +5,36 @@ from typing import Optional, Annotated
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from osiris.utils.validacion_identificacion import ValidacionCedulaRucService
 from .entity import RegimenTributario, ModoEmisionEmpresa, TipoContribuyenteJuridico
 
-
 # Atajos de tipos con restricciones
-RazonSocial = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
-NombreComercial = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r'^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s\.\,\-]+$')]
-RUC = Annotated[str, StringConstraints(min_length=13, max_length=13, pattern=r'^\d{13}$')]
-Telefono = Annotated[str, StringConstraints(pattern=r'^\d{7,10}$')]
+RazonSocial = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
+NombreComercial = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, pattern=r"^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s\.\,\-]+$"
+    ),
+]
+RUC = Annotated[
+    str, StringConstraints(min_length=13, max_length=13, pattern=r"^\d{13}$")
+]
+Telefono = Annotated[str, StringConstraints(pattern=r"^\d{7,10}$")]
 TipoContribuyenteID = Annotated[str, StringConstraints(min_length=2, max_length=2)]
-NumeroResolucion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+NumeroResolucion = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)
+]
 
 
 class EmpresaBase(BaseModel):
@@ -79,17 +97,24 @@ class EmpresaBase(BaseModel):
             self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
             or self.artesano_calificado
         )
-        if self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA and not puede_emitir_nota_venta:
+        if (
+            self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA
+            and not puede_emitir_nota_venta
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="NOTA_VENTA_FISICA solo está permitido para RIMPE Negocio Popular o artesanos calificados.",
             )
-        if puede_emitir_nota_venta and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO:
+        if (
+            puede_emitir_nota_venta
+            and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="RIMPE Negocio Popular y artesanos calificados deben emitir notas de venta físicas.",
             )
         return self
+
 
 class EmpresaCreate(EmpresaBase):
     """POST/PUT (reemplazo total)."""
@@ -131,7 +156,10 @@ class EmpresaUpdate(BaseModel):
             self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
             or self.artesano_calificado is True
         )
-        if self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA and not puede_emitir_nota_venta:
+        if (
+            self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA
+            and not puede_emitir_nota_venta
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -139,7 +167,10 @@ class EmpresaUpdate(BaseModel):
                     "o artesanos calificados."
                 ),
             )
-        if puede_emitir_nota_venta and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO:
+        if (
+            puede_emitir_nota_venta
+            and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="RIMPE Negocio Popular y artesanos calificados deben emitir notas de venta físicas.",
@@ -152,18 +183,36 @@ class EmpresaUpdate(BaseModel):
             self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
             and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
         ):
-            raise ValueError("La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida.")
+            raise ValueError(
+                "La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida."
+            )
 
-        if self.contribuyente_especial is True and not (self.contribuyente_especial_resolucion or "").strip():
-            raise ValueError("El número de resolución es obligatorio para contribuyente especial.")
+        if (
+            self.contribuyente_especial is True
+            and not (self.contribuyente_especial_resolucion or "").strip()
+        ):
+            raise ValueError(
+                "El número de resolución es obligatorio para contribuyente especial."
+            )
 
-        if self.gran_contribuyente is True and not (self.gran_contribuyente_resolucion or "").strip():
-            raise ValueError("El número de resolución es obligatorio para gran contribuyente.")
+        if (
+            self.gran_contribuyente is True
+            and not (self.gran_contribuyente_resolucion or "").strip()
+        ):
+            raise ValueError(
+                "El número de resolución es obligatorio para gran contribuyente."
+            )
 
-        if self.agente_retencion is True and not (self.agente_retencion_resolucion or "").strip():
-            raise ValueError("El número de resolución es obligatorio para agente de retención.")
+        if (
+            self.agente_retencion is True
+            and not (self.agente_retencion_resolucion or "").strip()
+        ):
+            raise ValueError(
+                "El número de resolución es obligatorio para agente de retención."
+            )
 
         return self
+
 
 class EmpresaRead(EmpresaBase):
     id: UUID
@@ -192,11 +241,17 @@ class EmpresaRegimenModoRules(BaseModel):
             self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
             or self.artesano_calificado
         )
-        if self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA and not puede_emitir_nota_venta:
+        if (
+            self.modo_emision == ModoEmisionEmpresa.NOTA_VENTA_FISICA
+            and not puede_emitir_nota_venta
+        ):
             raise ValueError(
                 "NOTA_VENTA_FISICA solo está permitido para RIMPE Negocio Popular o artesanos calificados."
             )
-        if puede_emitir_nota_venta and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO:
+        if (
+            puede_emitir_nota_venta
+            and self.modo_emision == ModoEmisionEmpresa.ELECTRONICO
+        ):
             raise ValueError(
                 "RIMPE Negocio Popular y artesanos calificados deben emitir notas de venta físicas."
             )
@@ -205,15 +260,32 @@ class EmpresaRegimenModoRules(BaseModel):
             self.tipo_contribuyente_juridico == TipoContribuyenteJuridico.SOCIEDAD
             and self.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
         ):
-            raise ValueError("La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida.")
+            raise ValueError(
+                "La combinación SOCIEDAD + RIMPE_NEGOCIO_POPULAR no está permitida."
+            )
 
-        if self.contribuyente_especial and not (self.contribuyente_especial_resolucion or "").strip():
-            raise ValueError("El número de resolución es obligatorio para contribuyente especial.")
+        if (
+            self.contribuyente_especial
+            and not (self.contribuyente_especial_resolucion or "").strip()
+        ):
+            raise ValueError(
+                "El número de resolución es obligatorio para contribuyente especial."
+            )
 
-        if self.gran_contribuyente and not (self.gran_contribuyente_resolucion or "").strip():
-            raise ValueError("El número de resolución es obligatorio para gran contribuyente.")
+        if (
+            self.gran_contribuyente
+            and not (self.gran_contribuyente_resolucion or "").strip()
+        ):
+            raise ValueError(
+                "El número de resolución es obligatorio para gran contribuyente."
+            )
 
-        if self.agente_retencion and not (self.agente_retencion_resolucion or "").strip():
-            raise ValueError("El número de resolución es obligatorio para agente de retención.")
+        if (
+            self.agente_retencion
+            and not (self.agente_retencion_resolucion or "").strip()
+        ):
+            raise ValueError(
+                "El número de resolución es obligatorio para agente de retención."
+            )
 
         return self

@@ -5,16 +5,16 @@ Revises: b2e4f6a8c0d2
 Create Date: 2026-02-22 21:29:28.985350
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 
-
 # revision identifiers, used by Alembic.
-revision: str = '2485b897f986'
-down_revision: Union[str, None] = 'b2e4f6a8c0d2'
+revision: str = "2485b897f986"
+down_revision: Union[str, None] = "b2e4f6a8c0d2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -26,9 +26,15 @@ def upgrade() -> None:
         sa.Column("activo", sa.Boolean(), nullable=False),
         sa.Column("creado_en", sa.DateTime(), nullable=False),
         sa.Column("actualizado_en", sa.DateTime(), nullable=False),
-        sa.Column("created_by", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
-        sa.Column("updated_by", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
-        sa.Column("usuario_auditoria", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column(
+            "created_by", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True
+        ),
+        sa.Column(
+            "updated_by", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True
+        ),
+        sa.Column(
+            "usuario_auditoria", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("producto_id", sa.Uuid(), nullable=False),
         sa.Column("atributo_id", sa.Uuid(), nullable=False),

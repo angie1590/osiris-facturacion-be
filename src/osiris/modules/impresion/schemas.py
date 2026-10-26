@@ -24,4 +24,3 @@ class ReimpresionResult(TypedDict):
 class ReimpresionRequest(BaseModel):
     motivo: str = Field(min_length=1, max_length=255)
     formato: Literal["A4", "TICKET_80MM", "TICKET_58MM"]
-

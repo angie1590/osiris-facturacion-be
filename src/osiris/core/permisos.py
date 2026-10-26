@@ -8,15 +8,11 @@ from osiris.modules.common.usuario.entity import Usuario
 from osiris.modules.common.rol_modulo_permiso.entity import RolModuloPermiso
 from osiris.modules.common.modulo.entity import Modulo
 
-
 AccionPermiso = Literal["leer", "crear", "actualizar", "eliminar"]
 
 
 def verificar_permiso(
-    session: Session,
-    usuario_id: UUID,
-    codigo_modulo: str,
-    accion: AccionPermiso
+    session: Session, usuario_id: UUID, codigo_modulo: str, accion: AccionPermiso
 ) -> bool:
     """
     Verifica si un usuario tiene permiso para realizar una acción en un módulo.
@@ -36,7 +32,9 @@ def verificar_permiso(
         return False
 
     # Obtener módulo
-    modulo_stmt = select(Modulo).where(Modulo.codigo == codigo_modulo, col(Modulo.activo).is_(True))
+    modulo_stmt = select(Modulo).where(
+        Modulo.codigo == codigo_modulo, col(Modulo.activo).is_(True)
+    )
     modulo = session.exec(modulo_stmt).first()
     if not modulo:
         return False
@@ -45,7 +43,7 @@ def verificar_permiso(
     permiso_stmt = select(RolModuloPermiso).where(
         RolModuloPermiso.rol_id == usuario.rol_id,
         RolModuloPermiso.modulo_id == modulo.id,
-        col(RolModuloPermiso.activo).is_(True)
+        col(RolModuloPermiso.activo).is_(True),
     )
     permiso = session.exec(permiso_stmt).first()
 
@@ -66,10 +64,7 @@ def verificar_permiso(
 
 
 def requiere_permiso(
-    session: Session,
-    usuario_id: UUID,
-    codigo_modulo: str,
-    accion: AccionPermiso
+    session: Session, usuario_id: UUID, codigo_modulo: str, accion: AccionPermiso
 ) -> None:
     """
     Valida permiso y lanza HTTPException 403 si no tiene acceso.
@@ -87,5 +82,5 @@ def requiere_permiso(
     if not verificar_permiso(session, usuario_id, codigo_modulo, accion):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"No tiene permiso para {accion} en el módulo {codigo_modulo}"
+            detail=f"No tiene permiso para {accion} en el módulo {codigo_modulo}",
         )

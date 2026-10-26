@@ -36,13 +36,19 @@ class SucursalService(BaseService[Sucursal]):
         if "latitud" in data:
             latitud = self._as_decimal(data.get("latitud"), field_name="latitud")
             if latitud is not None and not (Decimal("-90") <= latitud <= Decimal("90")):
-                raise HTTPException(status_code=400, detail="La latitud debe estar entre -90 y 90")
+                raise HTTPException(
+                    status_code=400, detail="La latitud debe estar entre -90 y 90"
+                )
             data["latitud"] = latitud
 
         if "longitud" in data:
             longitud = self._as_decimal(data.get("longitud"), field_name="longitud")
-            if longitud is not None and not (Decimal("-180") <= longitud <= Decimal("180")):
-                raise HTTPException(status_code=400, detail="La longitud debe estar entre -180 y 180")
+            if longitud is not None and not (
+                Decimal("-180") <= longitud <= Decimal("180")
+            ):
+                raise HTTPException(
+                    status_code=400, detail="La longitud debe estar entre -180 y 180"
+                )
             data["longitud"] = longitud
 
     @staticmethod
@@ -54,7 +60,8 @@ class SucursalService(BaseService[Sucursal]):
         if (
             constraint_name == "uq_sucursal_empresa_codigo"
             or "uq_sucursal_empresa_codigo" in lower_error
-            or "unique constraint failed: tbl_sucursal.empresa_id, tbl_sucursal.codigo" in lower_error
+            or "unique constraint failed: tbl_sucursal.empresa_id, tbl_sucursal.codigo"
+            in lower_error
         ):
             raise HTTPException(
                 status_code=400,
@@ -71,15 +78,29 @@ class SucursalService(BaseService[Sucursal]):
                 detail="La sucursal matriz debe tener código '001' y las demás no pueden marcarse como matriz",
             ) from exc
 
-        if constraint_name == "ck_sucursal_latitud_rango" or "ck_sucursal_latitud_rango" in lower_error:
-            raise HTTPException(status_code=400, detail="La latitud debe estar entre -90 y 90") from exc
+        if (
+            constraint_name == "ck_sucursal_latitud_rango"
+            or "ck_sucursal_latitud_rango" in lower_error
+        ):
+            raise HTTPException(
+                status_code=400, detail="La latitud debe estar entre -90 y 90"
+            ) from exc
 
-        if constraint_name == "ck_sucursal_longitud_rango" or "ck_sucursal_longitud_rango" in lower_error:
-            raise HTTPException(status_code=400, detail="La longitud debe estar entre -180 y 180") from exc
+        if (
+            constraint_name == "ck_sucursal_longitud_rango"
+            or "ck_sucursal_longitud_rango" in lower_error
+        ):
+            raise HTTPException(
+                status_code=400, detail="La longitud debe estar entre -180 y 180"
+            ) from exc
 
-        raise HTTPException(status_code=400, detail="Error de integridad al guardar sucursal") from exc
+        raise HTTPException(
+            status_code=400, detail="Error de integridad al guardar sucursal"
+        ) from exc
 
-    def create(self, session: Session, data: dict[str, Any], *, commit: bool = True) -> Sucursal:
+    def create(
+        self, session: Session, data: dict[str, Any], *, commit: bool = True
+    ) -> Sucursal:
         self.validate_create(data, session)
         self._check_fk_active_and_exists(session, data)
         self._validate_geo_coordinates(data)
@@ -98,7 +119,14 @@ class SucursalService(BaseService[Sucursal]):
             session.rollback()
             self._raise_integrity_error(exc)
 
-    def update(self, session: Session, item_id: UUID, data: dict[str, Any], *, commit: bool = True) -> Optional[Sucursal]:
+    def update(
+        self,
+        session: Session,
+        item_id: UUID,
+        data: dict[str, Any],
+        *,
+        commit: bool = True,
+    ) -> Optional[Sucursal]:
         db_obj = self.get(session, item_id)
         if not db_obj:
             return None

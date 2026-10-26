@@ -13,6 +13,7 @@ from sqlmodel import Field
 from osiris.domain.base_models import BaseTable, AuditMixin, SoftDeleteMixin
 from osiris.modules.common.catalogo.entity import Catalogo  # noqa: F401
 
+
 class TipoDato(str, Enum):
     STRING = "string"
     INTEGER = "integer"
@@ -22,16 +23,25 @@ class TipoDato(str, Enum):
     SELECT = "select"
     CATALOG = "catalog"
 
+
 class Atributo(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     __tablename__ = "tbl_atributo"
 
     nombre: str = Field(index=True, nullable=False, max_length=120)
     tipo_dato: TipoDato = Field(nullable=False)
-    select_options: list[str] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
-    catalog_id: UUID | None = Field(default=None, foreign_key="tbl_catalogo.id", index=True)
+    select_options: list[str] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    catalog_id: UUID | None = Field(
+        default=None, foreign_key="tbl_catalogo.id", index=True
+    )
     allow_negative: bool = Field(default=False, nullable=False)
-    min_value: Decimal | None = Field(default=None, sa_column=Column(Numeric(18, 6), nullable=True))
-    max_value: Decimal | None = Field(default=None, sa_column=Column(Numeric(18, 6), nullable=True))
+    min_value: Decimal | None = Field(
+        default=None, sa_column=Column(Numeric(18, 6), nullable=True)
+    )
+    max_value: Decimal | None = Field(
+        default=None, sa_column=Column(Numeric(18, 6), nullable=True)
+    )
 
 
 class AtributoCambio(BaseTable, AuditMixin, table=True):
@@ -41,11 +51,23 @@ class AtributoCambio(BaseTable, AuditMixin, table=True):
     operacion: str = Field(nullable=False, max_length=20)
     definicion_anterior: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     definicion_posterior: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
-    asignaciones_anteriores: list[dict[str, Any]] = Field(sa_column=Column(JSON, nullable=False))
-    asignaciones_posteriores: list[dict[str, Any]] = Field(sa_column=Column(JSON, nullable=False))
-    valores_anteriores: list[dict[str, Any]] = Field(sa_column=Column(JSON, nullable=False))
-    valores_posteriores: list[dict[str, Any]] = Field(sa_column=Column(JSON, nullable=False))
-    remapeos_anteriores: list[dict[str, Any]] = Field(sa_column=Column(JSON, nullable=False))
-    remapeos_posteriores: list[dict[str, Any]] = Field(sa_column=Column(JSON, nullable=False))
+    asignaciones_anteriores: list[dict[str, Any]] = Field(
+        sa_column=Column(JSON, nullable=False)
+    )
+    asignaciones_posteriores: list[dict[str, Any]] = Field(
+        sa_column=Column(JSON, nullable=False)
+    )
+    valores_anteriores: list[dict[str, Any]] = Field(
+        sa_column=Column(JSON, nullable=False)
+    )
+    valores_posteriores: list[dict[str, Any]] = Field(
+        sa_column=Column(JSON, nullable=False)
+    )
+    remapeos_anteriores: list[dict[str, Any]] = Field(
+        sa_column=Column(JSON, nullable=False)
+    )
+    remapeos_posteriores: list[dict[str, Any]] = Field(
+        sa_column=Column(JSON, nullable=False)
+    )
     revertido: bool = Field(default=False, nullable=False, index=True)
     revertido_en: datetime | None = Field(default=None, nullable=True)

@@ -5,7 +5,15 @@ from decimal import Decimal
 from typing import Any, Optional, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationInfo, computed_field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    RootModel,
+    ValidationInfo,
+    computed_field,
+    model_validator,
+)
 
 from osiris.modules.common.empresa.entity import RegimenTributario
 from osiris.modules.sri.core_sri.schemas import (
@@ -49,13 +57,19 @@ class VentaCreate(BaseModel):
     def validar_regimen_y_tipo_emision(self) -> VentaCreate:
         if self.regimen_emisor != RegimenTributario.RIMPE_NEGOCIO_POPULAR:
             if self.tipo_emision == TipoEmisionVenta.NOTA_VENTA_FISICA:
-                raise ValueError("NOTA_VENTA_FISICA solo está permitido para régimen RIMPE_NEGOCIO_POPULAR.")
+                raise ValueError(
+                    "NOTA_VENTA_FISICA solo está permitido para régimen RIMPE_NEGOCIO_POPULAR."
+                )
             return self
 
         if self.tipo_emision is None:
-            tiene_actividad_excluida = any(d.es_actividad_excluida for d in self.detalles)
+            tiene_actividad_excluida = any(
+                d.es_actividad_excluida for d in self.detalles
+            )
             self.tipo_emision = (
-                TipoEmisionVenta.ELECTRONICA if tiene_actividad_excluida else TipoEmisionVenta.NOTA_VENTA_FISICA
+                TipoEmisionVenta.ELECTRONICA
+                if tiene_actividad_excluida
+                else TipoEmisionVenta.NOTA_VENTA_FISICA
             )
 
         for detalle in self.detalles:
@@ -64,7 +78,9 @@ class VentaCreate(BaseModel):
             iva = detalle.iva_impuesto()
             if iva and q2(iva.tarifa) > Decimal("0.00"):
                 if self.tipo_emision == TipoEmisionVenta.ELECTRONICA:
-                    raise ValueError("Los Negocios Populares solo pueden facturar electrónicamente con tarifa 0%")
+                    raise ValueError(
+                        "Los Negocios Populares solo pueden facturar electrónicamente con tarifa 0%"
+                    )
                 raise ValueError(
                     "Los Negocios Populares solo pueden facturar con tarifa 0% de IVA para sus actividades incluyentes"
                 )
@@ -72,7 +88,12 @@ class VentaCreate(BaseModel):
 
     @property
     def subtotal_sin_impuestos(self) -> Decimal:
-        return q2(sum((cast(Decimal, d.subtotal_sin_impuesto) for d in self.detalles), Decimal("0.00")))
+        return q2(
+            sum(
+                (cast(Decimal, d.subtotal_sin_impuesto) for d in self.detalles),
+                Decimal("0.00"),
+            )
+        )
 
     subtotal_sin_impuestos = computed_field(return_type=Decimal)(subtotal_sin_impuestos)
 
@@ -182,7 +203,9 @@ class VentaRegistroCreate(BaseModel):
 
 class VentaUpdate(BaseModel):
     tipo_identificacion_comprador: TipoIdentificacionSRI | None = None
-    identificacion_comprador: str | None = Field(default=None, min_length=3, max_length=20)
+    identificacion_comprador: str | None = Field(
+        default=None, min_length=3, max_length=20
+    )
     forma_pago: FormaPagoSRI | None = None
     tipo_emision: TipoEmisionVenta | None = None
     usuario_auditoria: str
@@ -235,7 +258,11 @@ class PagoCxCCreate(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _compat_forma_pago_legacy(cls, data: object) -> object:
-        if isinstance(data, dict) and "forma_pago_sri" not in data and "forma_pago" in data:
+        if (
+            isinstance(data, dict)
+            and "forma_pago_sri" not in data
+            and "forma_pago" in data
+        ):
             data = dict(data)
             data["forma_pago_sri"] = data["forma_pago"]
         return data
@@ -282,7 +309,9 @@ class RetencionRecibidaCreate(BaseModel):
     total_retenido = computed_field(return_type=Decimal)(total_retenido)
 
     @model_validator(mode="after")
-    def validar_reglas_tributarias_sri(self, info: ValidationInfo) -> RetencionRecibidaCreate:
+    def validar_reglas_tributarias_sri(
+        self, info: ValidationInfo
+    ) -> RetencionRecibidaCreate:
         contexto = info.context or {}
         if not contexto:
             return self
@@ -299,7 +328,9 @@ class RetencionRecibidaCreate(BaseModel):
 
             if detalle.codigo_impuesto_sri == "2":
                 if monto_iva_factura == Decimal("0.00"):
-                    raise ValueError("Es ilegal registrar una retencion de IVA sobre una factura que no genera IVA")
+                    raise ValueError(
+                        "Es ilegal registrar una retencion de IVA sobre una factura que no genera IVA"
+                    )
                 if base != monto_iva_factura:
                     raise ValueError(
                         "La base imponible de retencion IVA debe ser exactamente igual al monto IVA de la venta."

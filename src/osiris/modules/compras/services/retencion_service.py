@@ -23,8 +23,12 @@ from osiris.modules.sri.core_sri.models import (
     TipoDocumentoElectronico,
     TipoRetencionSRI,
 )
-from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import FEMapperService
-from osiris.modules.sri.facturacion_electronica.services.orquestador_fe_service import OrquestadorFEService
+from osiris.modules.sri.facturacion_electronica.services.fe_mapper_service import (
+    FEMapperService,
+)
+from osiris.modules.sri.facturacion_electronica.services.orquestador_fe_service import (
+    OrquestadorFEService,
+)
 from osiris.modules.sri.core_sri.all_schemas import (
     GuardarPlantillaRetencionRequest,
     PlantillaRetencionDetalleRead,
@@ -37,8 +41,12 @@ from osiris.modules.sri.core_sri.all_schemas import (
     RetencionSugeridaRead,
     q2,
 )
-from osiris.modules.sri.facturacion_electronica.services.sri_async_service import SriAsyncService
-from osiris.modules.compras.strategies.validacion_impuestos_sri_strategy import ValidacionImpuestosSRIStrategy
+from osiris.modules.sri.facturacion_electronica.services.sri_async_service import (
+    SriAsyncService,
+)
+from osiris.modules.compras.strategies.validacion_impuestos_sri_strategy import (
+    ValidacionImpuestosSRIStrategy,
+)
 from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 
 
@@ -47,7 +55,9 @@ class RetencionService:
         self.fe_mapper_service = FEMapperService()
         self.sri_async_service = SriAsyncService()
         self.validacion_impuestos_strategy = ValidacionImpuestosSRIStrategy()
-        self.orquestador_fe_service = OrquestadorFEService(retencion_sri_service=self.sri_async_service)
+        self.orquestador_fe_service = OrquestadorFEService(
+            retencion_sri_service=self.sri_async_service
+        )
 
     @staticmethod
     def _empresa_scope() -> UUID | None:
@@ -58,10 +68,16 @@ class RetencionService:
         if empresa_scope is None:
             return
         if compra.sucursal_id is None:
-            raise HTTPException(status_code=403, detail="No autorizado para operar compras de otra empresa.")
+            raise HTTPException(
+                status_code=403,
+                detail="No autorizado para operar compras de otra empresa.",
+            )
         sucursal = session.get(Sucursal, compra.sucursal_id)
         if not sucursal or not sucursal.activo or sucursal.empresa_id != empresa_scope:
-            raise HTTPException(status_code=403, detail="No autorizado para operar compras de otra empresa.")
+            raise HTTPException(
+                status_code=403,
+                detail="No autorizado para operar compras de otra empresa.",
+            )
 
     def _obtener_compra(self, session: Session, compra_id: UUID) -> Compra:
         compra = session.get(Compra, compra_id)
@@ -119,7 +135,9 @@ class RetencionService:
         self._obtener_compra(session, retencion.compra_id)
         return retencion
 
-    def _obtener_detalles_retencion(self, session: Session, retencion_id: UUID) -> list[RetencionDetalle]:
+    def _obtener_detalles_retencion(
+        self, session: Session, retencion_id: UUID
+    ) -> list[RetencionDetalle]:
         stmt = (
             select(RetencionDetalle)
             .where(
@@ -130,7 +148,9 @@ class RetencionService:
         )
         return list(session.exec(stmt).all())
 
-    def _obtener_cxp_bloqueada_por_compra(self, session: Session, compra_id: UUID) -> CuentaPorPagar:
+    def _obtener_cxp_bloqueada_por_compra(
+        self, session: Session, compra_id: UUID
+    ) -> CuentaPorPagar:
         self._obtener_compra(session, compra_id)
         cxp = session.exec(
             select(CuentaPorPagar)
@@ -141,12 +161,16 @@ class RetencionService:
             .with_for_update()
         ).one_or_none()
         if not cxp:
-            raise HTTPException(status_code=404, detail="Cuenta por pagar no encontrada para la compra.")
+            raise HTTPException(
+                status_code=404, detail="Cuenta por pagar no encontrada para la compra."
+            )
         return cxp
 
     @staticmethod
     def _actualizar_estado_cxp(cxp: CuentaPorPagar) -> None:
-        nuevo_saldo = q2(cxp.valor_total_factura - cxp.valor_retenido - cxp.pagos_acumulados)
+        nuevo_saldo = q2(
+            cxp.valor_total_factura - cxp.valor_retenido - cxp.pagos_acumulados
+        )
         if nuevo_saldo < Decimal("0.00"):
             raise HTTPException(
                 status_code=400,
@@ -155,12 +179,16 @@ class RetencionService:
         cxp.saldo_pendiente = nuevo_saldo
         if nuevo_saldo == Decimal("0.00"):
             cxp.estado = EstadoCuentaPorPagar.PAGADA
-        elif cxp.valor_retenido > Decimal("0.00") or cxp.pagos_acumulados > Decimal("0.00"):
+        elif cxp.valor_retenido > Decimal("0.00") or cxp.pagos_acumulados > Decimal(
+            "0.00"
+        ):
             cxp.estado = EstadoCuentaPorPagar.PARCIAL
         else:
             cxp.estado = EstadoCuentaPorPagar.PENDIENTE
 
-    def _validar_no_duplicidad_retencion_por_compra(self, session: Session, compra_id: UUID) -> None:
+    def _validar_no_duplicidad_retencion_por_compra(
+        self, session: Session, compra_id: UUID
+    ) -> None:
         existente = session.exec(
             select(Retencion).where(
                 col(Retencion.compra_id) == compra_id,
@@ -174,7 +202,9 @@ class RetencionService:
                 detail="Ya existe una retencion activa asociada a esta compra.",
             )
 
-    def sugerir_retencion(self, session: Session, compra_id: UUID) -> RetencionSugeridaRead:
+    def sugerir_retencion(
+        self, session: Session, compra_id: UUID
+    ) -> RetencionSugeridaRead:
         compra = self._obtener_compra(session, compra_id)
         plantilla = self._obtener_plantilla_para_proveedor(session, compra.proveedor_id)
         if not plantilla:
@@ -185,7 +215,9 @@ class RetencionService:
 
         detalles_plantilla = self._obtener_detalles_plantilla(session, plantilla.id)
         if not detalles_plantilla:
-            raise HTTPException(status_code=400, detail="La plantilla de retencion no tiene detalles.")
+            raise HTTPException(
+                status_code=400, detail="La plantilla de retencion no tiene detalles."
+            )
 
         sugeridos: list[RetencionSugeridaDetalleRead] = []
         total_retenido = Decimal("0.00")
@@ -215,23 +247,51 @@ class RetencionService:
             total_retenido=q2(total_retenido),
         )
 
-    def listar_retenciones(self, session: Session, *, limit: int, offset: int, texto: str | None = None) -> tuple[list[dict[str, UUID | date | Decimal | str]], PaginationMeta]:
-        stmt = select(Retencion).join(Compra, col(Compra.id) == col(Retencion.compra_id)).where(col(Retencion.activo).is_(True))
+    def listar_retenciones(
+        self, session: Session, *, limit: int, offset: int, texto: str | None = None
+    ) -> tuple[list[dict[str, UUID | date | Decimal | str]], PaginationMeta]:
+        stmt = (
+            select(Retencion)
+            .join(Compra, col(Compra.id) == col(Retencion.compra_id))
+            .where(col(Retencion.activo).is_(True))
+        )
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(col(Sucursal.empresa_id) == empresa_scope)
+            stmt = stmt.join(
+                Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+            ).where(col(Sucursal.empresa_id) == empresa_scope)
         if texto:
             pattern = f"%{texto.strip()}%"
             stmt = stmt.where(
-                or_(col(Compra.secuencial_factura).ilike(pattern), col(Compra.identificacion_proveedor).ilike(pattern))
+                or_(
+                    col(Compra.secuencial_factura).ilike(pattern),
+                    col(Compra.identificacion_proveedor).ilike(pattern),
+                )
             )
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
-        retenciones = list(session.exec(stmt.order_by(col(Retencion.fecha_emision).desc()).offset(offset).limit(limit)).all())
+        retenciones = list(
+            session.exec(
+                stmt.order_by(col(Retencion.fecha_emision).desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
+        )
         items: list[dict[str, UUID | date | Decimal | str]] = []
         for retencion in retenciones:
             compra = session.get(Compra, retencion.compra_id)
             if compra is not None:
-                items.append({"id": retencion.id, "compra_id": compra.id, "numero_factura": compra.secuencial_factura, "proveedor": compra.identificacion_proveedor, "fecha_emision": retencion.fecha_emision, "estado": retencion.estado, "estado_sri": retencion.estado_sri, "total_retenido": retencion.total_retenido})
+                items.append(
+                    {
+                        "id": retencion.id,
+                        "compra_id": compra.id,
+                        "numero_factura": compra.secuencial_factura,
+                        "proveedor": compra.identificacion_proveedor,
+                        "fecha_emision": retencion.fecha_emision,
+                        "estado": retencion.estado,
+                        "estado_sri": retencion.estado_sri,
+                        "total_retenido": retencion.total_retenido,
+                    }
+                )
         return items, build_pagination_meta(total=total, limit=limit, offset=offset)
 
     def crear_retencion(
@@ -309,7 +369,9 @@ class RetencionService:
         try:
             retencion = self._obtener_retencion(session, retencion_id)
             if retencion.estado == EstadoRetencion.ANULADA:
-                raise HTTPException(status_code=400, detail="No se puede emitir una retencion ANULADA.")
+                raise HTTPException(
+                    status_code=400, detail="No se puede emitir una retencion ANULADA."
+                )
             if retencion.estado in {EstadoRetencion.EMITIDA, EstadoRetencion.ENCOLADA}:
                 return self.obtener_retencion_read(session, retencion.id)
 
@@ -319,7 +381,9 @@ class RetencionService:
             cxp.usuario_auditoria = payload.usuario_auditoria
             session.add(cxp)
 
-            retencion.estado = EstadoRetencion.ENCOLADA if payload.encolar else EstadoRetencion.EMITIDA
+            retencion.estado = (
+                EstadoRetencion.ENCOLADA if payload.encolar else EstadoRetencion.EMITIDA
+            )
             retencion.usuario_auditoria = payload.usuario_auditoria
             session.add(retencion)
 
@@ -343,7 +407,9 @@ class RetencionService:
                 session.rollback()
             raise
 
-    def obtener_retencion_read(self, session: Session, retencion_id: UUID) -> RetencionRead:
+    def obtener_retencion_read(
+        self, session: Session, retencion_id: UUID
+    ) -> RetencionRead:
         retencion = self._obtener_retencion(session, retencion_id)
         detalles = self._obtener_detalles_retencion(session, retencion.id)
         return RetencionRead(
@@ -356,11 +422,14 @@ class RetencionService:
             sri_ultimo_error=retencion.sri_ultimo_error,
             total_retenido=retencion.total_retenido,
             detalles=[
-                RetencionDetalleRead.model_validate(detalle, from_attributes=True) for detalle in detalles
+                RetencionDetalleRead.model_validate(detalle, from_attributes=True)
+                for detalle in detalles
             ],
         )
 
-    def obtener_payload_fe_retencion(self, session: Session, retencion_id: UUID) -> dict[str, Any]:
+    def obtener_payload_fe_retencion(
+        self, session: Session, retencion_id: UUID
+    ) -> dict[str, Any]:
         retencion = self.obtener_retencion_read(session, retencion_id)
         return self.fe_mapper_service.retencion_to_fe_payload(retencion)
 
@@ -414,10 +483,14 @@ class RetencionService:
         session.commit()
         return self.obtener_plantilla_read(session, plantilla.id)
 
-    def obtener_plantilla_read(self, session: Session, plantilla_id: UUID) -> PlantillaRetencionRead:
+    def obtener_plantilla_read(
+        self, session: Session, plantilla_id: UUID
+    ) -> PlantillaRetencionRead:
         plantilla = session.get(PlantillaRetencion, plantilla_id)
         if not plantilla or not plantilla.activo:
-            raise HTTPException(status_code=404, detail="Plantilla de retencion no encontrada")
+            raise HTTPException(
+                status_code=404, detail="Plantilla de retencion no encontrada"
+            )
         detalles = self._obtener_detalles_plantilla(session, plantilla.id)
         return PlantillaRetencionRead(
             id=plantilla.id,
@@ -425,7 +498,9 @@ class RetencionService:
             nombre=plantilla.nombre,
             es_global=plantilla.es_global,
             detalles=[
-                PlantillaRetencionDetalleRead.model_validate(detalle, from_attributes=True)
+                PlantillaRetencionDetalleRead.model_validate(
+                    detalle, from_attributes=True
+                )
                 for detalle in detalles
             ],
         )

@@ -26,13 +26,22 @@ from osiris.modules.reportes.schemas import (
     ReporteVentasTendenciaRead,
 )
 from osiris.modules.reportes.services.reporte_caja_service import ReporteCajaService
-from osiris.modules.reportes.services.reporte_cartera_service import ReporteCarteraService
-from osiris.modules.reportes.services.reporte_compras_service import ReporteComprasService
-from osiris.modules.reportes.services.reporte_inventario_service import ReporteInventarioService
-from osiris.modules.reportes.services.reporte_monitor_sri_service import ReporteMonitorSRIService
-from osiris.modules.reportes.services.reporte_tributario_service import ReporteTributarioService
+from osiris.modules.reportes.services.reporte_cartera_service import (
+    ReporteCarteraService,
+)
+from osiris.modules.reportes.services.reporte_compras_service import (
+    ReporteComprasService,
+)
+from osiris.modules.reportes.services.reporte_inventario_service import (
+    ReporteInventarioService,
+)
+from osiris.modules.reportes.services.reporte_monitor_sri_service import (
+    ReporteMonitorSRIService,
+)
+from osiris.modules.reportes.services.reporte_tributario_service import (
+    ReporteTributarioService,
+)
 from osiris.modules.reportes.services.reportes_service import ReportesVentasService
-
 
 REPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "Parámetros inválidos para la consulta del reporte."},
@@ -49,7 +58,12 @@ reporte_compras_service = ReporteComprasService()
 reporte_monitor_sri_service = ReporteMonitorSRIService()
 
 
-@router.get("/ventas/resumen", response_model=ReporteVentasResumenRead, summary="Resumen de ventas", responses=REPORT_RESPONSES)
+@router.get(
+    "/ventas/resumen",
+    response_model=ReporteVentasResumenRead,
+    summary="Resumen de ventas",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_ventas_resumen(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
@@ -66,9 +80,16 @@ def obtener_reporte_ventas_resumen(
     )
 
 
-@router.get("/ventas/top-productos", response_model=list[ReporteTopProductoRead], summary="Top productos vendidos", responses=REPORT_RESPONSES)
+@router.get(
+    "/ventas/top-productos",
+    response_model=list[ReporteTopProductoRead],
+    summary="Top productos vendidos",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_top_productos_ventas(
-    fecha_inicio: date | None = Query(default=None, description="Fecha inicial opcional"),
+    fecha_inicio: date | None = Query(
+        default=None, description="Fecha inicial opcional"
+    ),
     fecha_fin: date | None = Query(default=None, description="Fecha final opcional"),
     punto_emision_id: UUID | None = Query(default=None),
     limite: int = Query(default=10, ge=1, le=100),
@@ -83,7 +104,12 @@ def obtener_reporte_top_productos_ventas(
     )
 
 
-@router.get("/ventas/tendencias", response_model=list[ReporteVentasTendenciaRead], summary="Tendencias de ventas", responses=REPORT_RESPONSES)
+@router.get(
+    "/ventas/tendencias",
+    response_model=list[ReporteVentasTendenciaRead],
+    summary="Tendencias de ventas",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_tendencias_ventas(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
@@ -98,9 +124,16 @@ def obtener_reporte_tendencias_ventas(
     )
 
 
-@router.get("/ventas/por-vendedor", response_model=list[ReporteVentasPorVendedorRead], summary="Rendimiento por vendedor", responses=REPORT_RESPONSES)
+@router.get(
+    "/ventas/por-vendedor",
+    response_model=list[ReporteVentasPorVendedorRead],
+    summary="Rendimiento por vendedor",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_ventas_por_vendedor(
-    fecha_inicio: date | None = Query(default=None, description="Fecha inicial opcional"),
+    fecha_inicio: date | None = Query(
+        default=None, description="Fecha inicial opcional"
+    ),
     fecha_fin: date | None = Query(default=None, description="Fecha final opcional"),
     session: Session = Depends(get_session),
 ) -> list[ReporteVentasPorVendedorRead]:
@@ -111,7 +144,12 @@ def obtener_reporte_ventas_por_vendedor(
     )
 
 
-@router.get("/compras/por-proveedor", response_model=list[ReporteComprasPorProveedorRead], summary="Volumen de compras por proveedor", responses=REPORT_RESPONSES)
+@router.get(
+    "/compras/por-proveedor",
+    response_model=list[ReporteComprasPorProveedorRead],
+    summary="Volumen de compras por proveedor",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_compras_por_proveedor(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
@@ -126,7 +164,12 @@ def obtener_reporte_compras_por_proveedor(
     )
 
 
-@router.get("/sri/monitor-estados", response_model=list[ReporteMonitorSRIEstadoRead], summary="Monitor de estados SRI", responses=REPORT_RESPONSES)
+@router.get(
+    "/sri/monitor-estados",
+    response_model=list[ReporteMonitorSRIEstadoRead],
+    summary="Monitor de estados SRI",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_monitor_estados_sri(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
@@ -141,7 +184,12 @@ def obtener_reporte_monitor_estados_sri(
     )
 
 
-@router.get("/rentabilidad/por-cliente", response_model=list[ReporteRentabilidadClienteRead], summary="Rentabilidad por cliente", responses=REPORT_RESPONSES)
+@router.get(
+    "/rentabilidad/por-cliente",
+    response_model=list[ReporteRentabilidadClienteRead],
+    summary="Rentabilidad por cliente",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_rentabilidad_por_cliente(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
@@ -154,7 +202,12 @@ def obtener_reporte_rentabilidad_por_cliente(
     )
 
 
-@router.get("/rentabilidad/transacciones", response_model=list[ReporteRentabilidadTransaccionRead], summary="Rentabilidad transaccional", responses=REPORT_RESPONSES)
+@router.get(
+    "/rentabilidad/transacciones",
+    response_model=list[ReporteRentabilidadTransaccionRead],
+    summary="Rentabilidad transaccional",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_rentabilidad_transaccional(
     fecha_inicio: date = Query(..., description="Fecha inicial del rango"),
     fecha_fin: date = Query(..., description="Fecha final del rango"),
@@ -167,7 +220,12 @@ def obtener_reporte_rentabilidad_transaccional(
     )
 
 
-@router.get("/impuestos/mensual", response_model=ReporteImpuestosMensualRead, summary="Resumen mensual tributario (Pre-104)", responses=REPORT_RESPONSES)
+@router.get(
+    "/impuestos/mensual",
+    response_model=ReporteImpuestosMensualRead,
+    summary="Resumen mensual tributario (Pre-104)",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_impuestos_mensual(
     mes: int = Query(..., ge=1, le=12, description="Mes fiscal (1-12)"),
     anio: int = Query(..., ge=2000, le=2100, description="Anio fiscal"),
@@ -182,17 +240,33 @@ def obtener_reporte_impuestos_mensual(
     )
 
 
-@router.get("/inventario/valoracion", response_model=ReporteInventarioValoracionRead, summary="Valoración de inventario", responses=REPORT_RESPONSES)
-def obtener_reporte_valoracion_inventario(session: Session = Depends(get_session)) -> ReporteInventarioValoracionRead:
+@router.get(
+    "/inventario/valoracion",
+    response_model=ReporteInventarioValoracionRead,
+    summary="Valoración de inventario",
+    responses=REPORT_RESPONSES,
+)
+def obtener_reporte_valoracion_inventario(
+    session: Session = Depends(get_session),
+) -> ReporteInventarioValoracionRead:
     return reporte_inventario_service.obtener_valoracion_inventario(session)
 
 
-@router.get("/inventario/kardex/{producto_id}", response_model=ReporteInventarioKardexRead, summary="Kárdex histórico NIIF", responses=REPORT_RESPONSES)
+@router.get(
+    "/inventario/kardex/{producto_id}",
+    response_model=ReporteInventarioKardexRead,
+    summary="Kárdex histórico NIIF",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_kardex_inventario(
     producto_id: UUID,
-    fecha_inicio: date | None = Query(default=None, description="Fecha inicial opcional"),
+    fecha_inicio: date | None = Query(
+        default=None, description="Fecha inicial opcional"
+    ),
     fecha_fin: date | None = Query(default=None, description="Fecha final opcional"),
-    sucursal_id: UUID | None = Query(default=None, description="Filtro opcional por sucursal"),
+    sucursal_id: UUID | None = Query(
+        default=None, description="Filtro opcional por sucursal"
+    ),
     session: Session = Depends(get_session),
 ) -> ReporteInventarioKardexRead:
     return reporte_inventario_service.obtener_kardex_historico(
@@ -204,20 +278,41 @@ def obtener_reporte_kardex_inventario(
     )
 
 
-@router.get("/cartera/cobrar", response_model=list[ReporteCarteraCobrarItemRead], summary="Cartera por cobrar", responses=REPORT_RESPONSES)
-def obtener_reporte_cartera_cobrar(session: Session = Depends(get_session)) -> list[ReporteCarteraCobrarItemRead]:
+@router.get(
+    "/cartera/cobrar",
+    response_model=list[ReporteCarteraCobrarItemRead],
+    summary="Cartera por cobrar",
+    responses=REPORT_RESPONSES,
+)
+def obtener_reporte_cartera_cobrar(
+    session: Session = Depends(get_session),
+) -> list[ReporteCarteraCobrarItemRead]:
     return reporte_cartera_service.obtener_cartera_cobrar(session)
 
 
-@router.get("/cartera/pagar", response_model=list[ReporteCarteraPagarItemRead], summary="Cartera por pagar", responses=REPORT_RESPONSES)
-def obtener_reporte_cartera_pagar(session: Session = Depends(get_session)) -> list[ReporteCarteraPagarItemRead]:
+@router.get(
+    "/cartera/pagar",
+    response_model=list[ReporteCarteraPagarItemRead],
+    summary="Cartera por pagar",
+    responses=REPORT_RESPONSES,
+)
+def obtener_reporte_cartera_pagar(
+    session: Session = Depends(get_session),
+) -> list[ReporteCarteraPagarItemRead]:
     return reporte_cartera_service.obtener_cartera_pagar(session)
 
 
-@router.get("/caja/cierre-diario", response_model=ReporteCajaCierreDiarioRead, summary="Cierre diario de caja", responses=REPORT_RESPONSES)
+@router.get(
+    "/caja/cierre-diario",
+    response_model=ReporteCajaCierreDiarioRead,
+    summary="Cierre diario de caja",
+    responses=REPORT_RESPONSES,
+)
 def obtener_reporte_cierre_caja_diario(
     fecha: date = Query(default_factory=date.today, description="Fecha del arqueo"),
-    usuario_id: UUID | None = Query(default=None, description="Filtro opcional por usuario"),
+    usuario_id: UUID | None = Query(
+        default=None, description="Filtro opcional por usuario"
+    ),
     sucursal_id: UUID | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> ReporteCajaCierreDiarioRead:

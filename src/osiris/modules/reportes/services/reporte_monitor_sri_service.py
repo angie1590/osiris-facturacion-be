@@ -55,21 +55,22 @@ class ReporteMonitorSRIService:
             .select_from(DocumentoElectronico)
             .where(
                 *filtros_base,
-                col(DocumentoElectronico.tipo_documento) == TipoDocumentoElectronico.FACTURA,
+                col(DocumentoElectronico.tipo_documento)
+                == TipoDocumentoElectronico.FACTURA,
             )
         )
         if sucursal_id is not None or empresa_scope is not None:
-            stmt_facturas = (
-                stmt_facturas.join(Venta, col(Venta.id) == col(DocumentoElectronico.venta_id))
+            stmt_facturas = stmt_facturas.join(
+                Venta, col(Venta.id) == col(DocumentoElectronico.venta_id)
             )
             if empresa_scope is not None:
-                stmt_facturas = stmt_facturas.where(col(Venta.empresa_id) == empresa_scope)
-            if sucursal_id is not None:
-                stmt_facturas = (
-                    stmt_facturas
-                    .join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
-                    .where(col(PuntoEmision.sucursal_id) == sucursal_id)
+                stmt_facturas = stmt_facturas.where(
+                    col(Venta.empresa_id) == empresa_scope
                 )
+            if sucursal_id is not None:
+                stmt_facturas = stmt_facturas.join(
+                    PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id)
+                ).where(col(PuntoEmision.sucursal_id) == sucursal_id)
         stmt_facturas = stmt_facturas.group_by(
             col(DocumentoElectronico.estado_sri),
             col(DocumentoElectronico.tipo_documento),
@@ -84,27 +85,33 @@ class ReporteMonitorSRIService:
             .select_from(DocumentoElectronico)
             .where(
                 *filtros_base,
-                col(DocumentoElectronico.tipo_documento) == TipoDocumentoElectronico.RETENCION,
+                col(DocumentoElectronico.tipo_documento)
+                == TipoDocumentoElectronico.RETENCION,
             )
         )
         if sucursal_id is not None or empresa_scope is not None:
-            stmt_retenciones = (
-                stmt_retenciones.join(Retencion, col(Retencion.id) == col(DocumentoElectronico.referencia_id))
-                .join(Compra, col(Compra.id) == col(Retencion.compra_id))
-            )
+            stmt_retenciones = stmt_retenciones.join(
+                Retencion, col(Retencion.id) == col(DocumentoElectronico.referencia_id)
+            ).join(Compra, col(Compra.id) == col(Retencion.compra_id))
             if empresa_scope is not None:
-                stmt_retenciones = stmt_retenciones.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+                stmt_retenciones = stmt_retenciones.join(
+                    Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+                ).where(
                     col(Sucursal.activo).is_(True),
                     col(Sucursal.empresa_id) == empresa_scope,
                 )
             if sucursal_id is not None:
-                stmt_retenciones = stmt_retenciones.where(col(Compra.sucursal_id) == sucursal_id)
+                stmt_retenciones = stmt_retenciones.where(
+                    col(Compra.sucursal_id) == sucursal_id
+                )
         stmt_retenciones = stmt_retenciones.group_by(
             col(DocumentoElectronico.estado_sri),
             col(DocumentoElectronico.tipo_documento),
         )
 
-        rows = list(session.exec(stmt_facturas).all()) + list(session.exec(stmt_retenciones).all())
+        rows = list(session.exec(stmt_facturas).all()) + list(
+            session.exec(stmt_retenciones).all()
+        )
         return [
             ReporteMonitorSRIEstadoRead(
                 estado=getattr(estado, "value", str(estado)),

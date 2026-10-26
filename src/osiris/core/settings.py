@@ -21,7 +21,9 @@ class Settings(BaseSettings):
         description="development|staging|production",
     )
 
-    SECRET_KEY: str = Field(default="dev-secret-key-change-in-production", min_length=16)
+    SECRET_KEY: str = Field(
+        default="dev-secret-key-change-in-production", min_length=16
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -83,7 +85,9 @@ class Settings(BaseSettings):
     @classmethod
     def _check_tipo_emision(cls, value: str) -> str:
         if value not in {"1", "2"}:
-            raise ValueError("FEEC_TIPO_EMISION debe ser '1' (normal) o '2' (contingencia)")
+            raise ValueError(
+                "FEEC_TIPO_EMISION debe ser '1' (normal) o '2' (contingencia)"
+            )
         return value
 
     @field_validator("FEEC_REGIMEN")
@@ -98,7 +102,9 @@ class Settings(BaseSettings):
         normalized = value.strip().upper()
         if normalized not in allowed:
             allowed_values = ", ".join(sorted(allowed))
-            raise ValueError(f"FEEC_REGIMEN invalido. Valores permitidos: {allowed_values}")
+            raise ValueError(
+                f"FEEC_REGIMEN invalido. Valores permitidos: {allowed_values}"
+            )
         return normalized
 
     @field_validator("FE_QUEUE_POLL_INTERVAL_SECONDS")
@@ -114,14 +120,18 @@ class Settings(BaseSettings):
         normalized = value.strip().upper()
         allowed = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
         if normalized not in allowed:
-            raise ValueError(f"LOG_LEVEL invalido. Valores permitidos: {', '.join(sorted(allowed))}")
+            raise ValueError(
+                f"LOG_LEVEL invalido. Valores permitidos: {', '.join(sorted(allowed))}"
+            )
         return normalized
 
     @field_validator("OBSERVABILITY_DB_SLOW_QUERY_THRESHOLD_MS")
     @classmethod
     def _check_db_slow_query_threshold_ms(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("OBSERVABILITY_DB_SLOW_QUERY_THRESHOLD_MS debe ser >= 1 ms")
+            raise ValueError(
+                "OBSERVABILITY_DB_SLOW_QUERY_THRESHOLD_MS debe ser >= 1 ms"
+            )
         return value
 
     @field_validator("SCALABILITY_MAX_IN_FLIGHT_REQUESTS")
@@ -151,10 +161,14 @@ class Settings(BaseSettings):
             if path_value is None:
                 continue
             resolved_path = (
-                path_value if path_value.is_absolute() else (PROJECT_ROOT / path_value).resolve()
+                path_value
+                if path_value.is_absolute()
+                else (PROJECT_ROOT / path_value).resolve()
             )
             if not resolved_path.exists():
-                raise ValueError(f"Archivo no encontrado en `{field_name}`: {resolved_path}")
+                raise ValueError(
+                    f"Archivo no encontrado en `{field_name}`: {resolved_path}"
+                )
             setattr(self, field_name, resolved_path)
 
         return self

@@ -11,7 +11,9 @@ from osiris.modules.common.modulo.entity import Modulo
 class RolModuloPermisoService(BaseService[RolModuloPermiso]):
     repo = RolModuloPermisoRepository()
 
-    def obtener_permisos_por_rol(self, session: Session, rol_id: UUID) -> List[ModuloPermisoRead]:
+    def obtener_permisos_por_rol(
+        self, session: Session, rol_id: UUID
+    ) -> List[ModuloPermisoRead]:
         """
         Retorna lista de módulos con sus permisos para un rol específico.
         Solo incluye registros activos y módulos activos.
@@ -22,7 +24,7 @@ class RolModuloPermisoService(BaseService[RolModuloPermiso]):
                 RolModuloPermiso,
                 (col(Modulo.id) == RolModuloPermiso.modulo_id)
                 & (col(RolModuloPermiso.rol_id) == rol_id)
-                & (col(RolModuloPermiso.activo).is_(True))
+                & (col(RolModuloPermiso.activo).is_(True)),
             )
             .where(col(Modulo.activo).is_(True))
             .order_by(col(Modulo.orden), Modulo.nombre)
@@ -45,7 +47,9 @@ class RolModuloPermisoService(BaseService[RolModuloPermiso]):
 
         return permisos_list
 
-    def obtener_menu_por_rol(self, session: Session, rol_id: UUID) -> List[ModuloPermisoRead]:
+    def obtener_menu_por_rol(
+        self, session: Session, rol_id: UUID
+    ) -> List[ModuloPermisoRead]:
         """
         Retorna solo los módulos donde el rol tiene puede_leer = True.
         Útil para generar el menú dinámico.

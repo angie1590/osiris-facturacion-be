@@ -14,7 +14,11 @@ from osiris.modules.inventario.atributo.entity import Atributo
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.categoria.service import CategoriaService
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import (
+    Producto,
+    ProductoCategoria,
+    TipoProducto,
+)
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 
 
@@ -48,7 +52,10 @@ def test_reject_duplicate_active_sibling_names(operation):
         session.add_all([parent, other_parent])
         session.flush()
         original = Categoria(nombre="Mouse", parent_id=parent.id)
-        candidate = Categoria(nombre="Teclado" if operation == "rename" else "Mouse", parent_id=other_parent.id if operation == "move" else parent.id)
+        candidate = Categoria(
+            nombre="Teclado" if operation == "rename" else "Mouse",
+            parent_id=other_parent.id if operation == "move" else parent.id,
+        )
         session.add(original)
         if operation != "create":
             session.add(candidate)
@@ -56,7 +63,10 @@ def test_reject_duplicate_active_sibling_names(operation):
         service = CategoriaService()
         with pytest.raises(HTTPException) as error:
             if operation == "create":
-                service.create(session, {"nombre": " mouse ", "parent_id": parent.id, "es_padre": False})
+                service.create(
+                    session,
+                    {"nombre": " mouse ", "parent_id": parent.id, "es_padre": False},
+                )
             elif operation == "rename":
                 service.update(session, candidate.id, {"nombre": " MOUSE "})
             else:
@@ -82,7 +92,9 @@ def test_category_names_allow_other_parents_and_inactive_history_but_reject_root
         assert error.value.status_code == 409
 
 
-def _seed_categoria_hoja_con_dos_productos(session: Session) -> tuple[Categoria, list[UUID]]:
+def _seed_categoria_hoja_con_dos_productos(
+    session: Session,
+) -> tuple[Categoria, list[UUID]]:
     categoria_a = Categoria(
         nombre=f"A-{uuid4().hex[:6]}",
         es_padre=False,
@@ -152,12 +164,16 @@ def test_regla_b3_migra_productos_a_sin_clasificar_hermana_al_crear_hija():
         assert categoria_b.parent_id == sin_clasificar.parent_id
 
         rows_parent = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == categoria_a.id)
+            select(ProductoCategoria).where(
+                ProductoCategoria.categoria_id == categoria_a.id
+            )
         ).all()
         assert len(rows_parent) == 0
 
         rows_unclassified = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == sin_clasificar.id)
+            select(ProductoCategoria).where(
+                ProductoCategoria.categoria_id == sin_clasificar.id
+            )
         ).all()
         assert len(rows_unclassified) == 2
         assert {row.producto_id for row in rows_unclassified} == set(producto_ids)
@@ -198,7 +214,9 @@ def test_regla_b3_reutiliza_sin_clasificar_en_siguiente_hija():
         assert defaults[0].nombre == "Sin clasificar"
 
         rows_parent = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == categoria_a.id)
+            select(ProductoCategoria).where(
+                ProductoCategoria.categoria_id == categoria_a.id
+            )
         ).all()
         assert len(rows_parent) == 0
 
@@ -244,12 +262,16 @@ def test_regla_b3_update_mueve_categoria_bajo_hoja_con_productos_y_migra_a_sin_c
         assert sin_clasificar.parent_id == updated.parent_id
 
         rows_x = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == categoria_x.id)
+            select(ProductoCategoria).where(
+                ProductoCategoria.categoria_id == categoria_x.id
+            )
         ).all()
         assert len(rows_x) == 0
 
         rows_unclassified = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == sin_clasificar.id)
+            select(ProductoCategoria).where(
+                ProductoCategoria.categoria_id == sin_clasificar.id
+            )
         ).all()
         assert len(rows_unclassified) == 2
         assert {row.producto_id for row in rows_unclassified} == set(producto_ids)

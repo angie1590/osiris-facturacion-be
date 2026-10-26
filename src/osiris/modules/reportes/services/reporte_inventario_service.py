@@ -25,7 +25,6 @@ from osiris.modules.reportes.schemas import (
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.producto.entity import Producto
 
-
 Q4 = Decimal("0.0001")
 Q2 = Decimal("0.01")
 
@@ -49,11 +48,16 @@ class ReporteInventarioService:
             return Decimal(default)
         return Decimal(str(value))
 
-    def obtener_valoracion_inventario(self, session: Session) -> ReporteInventarioValoracionRead:
+    def obtener_valoracion_inventario(
+        self, session: Session
+    ) -> ReporteInventarioValoracionRead:
         empresa_scope = self._empresa_scope()
         cantidad_expr = func.coalesce(func.sum(col(InventarioStock.cantidad_actual)), 0)
         valor_expr = func.coalesce(
-            func.sum(col(InventarioStock.cantidad_actual) * col(InventarioStock.costo_promedio_vigente)),
+            func.sum(
+                col(InventarioStock.cantidad_actual)
+                * col(InventarioStock.costo_promedio_vigente)
+            ),
             0,
         )
 
@@ -67,7 +71,8 @@ class ReporteInventarioService:
             .select_from(Producto)
             .join(
                 InventarioStock,
-                (col(InventarioStock.producto_id) == col(Producto.id)) & (col(InventarioStock.activo).is_(True)),
+                (col(InventarioStock.producto_id) == col(Producto.id))
+                & (col(InventarioStock.activo).is_(True)),
                 isouter=True,
             )
             .where(col(Producto.activo).is_(True))
@@ -75,12 +80,11 @@ class ReporteInventarioService:
             .order_by(col(Producto.nombre).asc())
         )
         if empresa_scope is not None:
-            stmt = (
-                stmt.join(Bodega, col(Bodega.id) == col(InventarioStock.bodega_id))
-                .where(
-                    col(Bodega.activo).is_(True),
-                    col(Bodega.empresa_id) == empresa_scope,
-                )
+            stmt = stmt.join(
+                Bodega, col(Bodega.id) == col(InventarioStock.bodega_id)
+            ).where(
+                col(Bodega.activo).is_(True),
+                col(Bodega.empresa_id) == empresa_scope,
             )
 
         rows = session.exec(stmt).all()
@@ -91,7 +95,11 @@ class ReporteInventarioService:
             cantidad_d = q4(self._d(cantidad_actual))
             valor_d = q2(self._d(valor_total))
             patrimonio_total = q2(patrimonio_total + valor_d)
-            costo_promedio = q4(valor_d / cantidad_d) if cantidad_d > Decimal("0") else Decimal("0.0000")
+            costo_promedio = (
+                q4(valor_d / cantidad_d)
+                if cantidad_d > Decimal("0")
+                else Decimal("0.0000")
+            )
 
             productos.append(
                 ReporteInventarioValoracionItemRead(
@@ -133,11 +141,16 @@ class ReporteInventarioService:
                 col(MovimientoInventarioDetalle.costo_unitario),
             )
             .select_from(MovimientoInventarioDetalle)
-            .join(MovimientoInventario, col(MovimientoInventario.id) == col(MovimientoInventarioDetalle.movimiento_inventario_id))
+            .join(
+                MovimientoInventario,
+                col(MovimientoInventario.id)
+                == col(MovimientoInventarioDetalle.movimiento_inventario_id),
+            )
             .where(
                 col(MovimientoInventarioDetalle.activo).is_(True),
                 col(MovimientoInventario.activo).is_(True),
-                col(MovimientoInventario.estado) == EstadoMovimientoInventario.CONFIRMADO,
+                col(MovimientoInventario.estado)
+                == EstadoMovimientoInventario.CONFIRMADO,
                 col(MovimientoInventarioDetalle.producto_id) == producto_id,
                 col(MovimientoInventario.fecha) >= inicio,
                 col(MovimientoInventario.fecha) <= fin,
@@ -149,7 +162,9 @@ class ReporteInventarioService:
             )
         )
         if sucursal_id is not None or empresa_scope is not None:
-            stmt = stmt.join(Bodega, col(Bodega.id) == col(MovimientoInventario.bodega_id)).where(col(Bodega.activo).is_(True))
+            stmt = stmt.join(
+                Bodega, col(Bodega.id) == col(MovimientoInventario.bodega_id)
+            ).where(col(Bodega.activo).is_(True))
             if empresa_scope is not None:
                 stmt = stmt.where(col(Bodega.empresa_id) == empresa_scope)
             if sucursal_id is not None:
@@ -158,10 +173,19 @@ class ReporteInventarioService:
         rows = session.execute(stmt).all()
         saldo = Decimal("0.0000")
         movimientos: list[ReporteInventarioKardexMovimientoRead] = []
-        for mov_fecha, tipo_movimiento, referencia_documento, cantidad, costo_unitario in rows:
+        for (
+            mov_fecha,
+            tipo_movimiento,
+            referencia_documento,
+            cantidad,
+            costo_unitario,
+        ) in rows:
             cantidad_d = q4(self._d(cantidad))
             costo_d = q4(self._d(costo_unitario))
-            if tipo_movimiento in {TipoMovimientoInventario.EGRESO, TipoMovimientoInventario.TRANSFERENCIA}:
+            if tipo_movimiento in {
+                TipoMovimientoInventario.EGRESO,
+                TipoMovimientoInventario.TRANSFERENCIA,
+            }:
                 saldo = q4(saldo - cantidad_d)
                 tipo_kardex = TipoMovimientoKardex.EGRESO
                 if (referencia_documento or "").startswith("VENTA:"):

@@ -5,7 +5,14 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, computed_field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    RootModel,
+    computed_field,
+    model_validator,
+)
 
 from osiris.modules.sri.core_sri.schemas import (
     IVA_0_CODES,
@@ -49,12 +56,19 @@ class CompraCreate(BaseModel):
             for detalle in self.detalles
             for impuesto in detalle.impuestos
         ):
-            raise ValueError("El cálculo ICE específico temporal solo está habilitado para ventas.")
+            raise ValueError(
+                "El cálculo ICE específico temporal solo está habilitado para ventas."
+            )
         return self
 
     @property
     def subtotal_sin_impuestos(self) -> Decimal:
-        return q2(sum((cast(Decimal, d.subtotal_sin_impuesto) for d in self.detalles), Decimal("0.00")))
+        return q2(
+            sum(
+                (cast(Decimal, d.subtotal_sin_impuesto) for d in self.detalles),
+                Decimal("0.00"),
+            )
+        )
 
     subtotal_sin_impuestos = computed_field(return_type=Decimal)(subtotal_sin_impuestos)
 
@@ -152,7 +166,9 @@ class CompraUpdate(BaseModel):
     fecha_emision: date | None = None
     sustento_tributario: SustentoTributarioSRI | None = None
     tipo_identificacion_proveedor: TipoIdentificacionSRI | None = None
-    identificacion_proveedor: str | None = Field(default=None, min_length=3, max_length=20)
+    identificacion_proveedor: str | None = Field(
+        default=None, min_length=3, max_length=20
+    )
     forma_pago: FormaPagoSRI | None = None
     usuario_auditoria: str
 

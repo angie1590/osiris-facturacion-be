@@ -12,7 +12,6 @@ from osiris.core.observability import record_db_query
 from osiris.core.settings import get_settings
 from osiris.domain.base_models import SoftDeleteMixin
 
-
 SOFT_DELETE_INCLUDE_INACTIVE_OPTION = "include_inactive"
 
 
@@ -23,7 +22,10 @@ def get_engine() -> Engine:
         echo=settings.SQL_ECHO,
         pool_pre_ping=True,
     )
-    if settings.OBSERVABILITY_METRICS_ENABLED and settings.OBSERVABILITY_DB_METRICS_ENABLED:
+    if (
+        settings.OBSERVABILITY_METRICS_ENABLED
+        and settings.OBSERVABILITY_DB_METRICS_ENABLED
+    ):
         attach_engine_observability(
             db_engine,
             slow_query_threshold_ms=settings.OBSERVABILITY_DB_SLOW_QUERY_THRESHOLD_MS,
@@ -31,7 +33,9 @@ def get_engine() -> Engine:
     return db_engine
 
 
-def attach_engine_observability(db_engine: Engine, *, slow_query_threshold_ms: int) -> None:
+def attach_engine_observability(
+    db_engine: Engine, *, slow_query_threshold_ms: int
+) -> None:
     if getattr(db_engine, "_osiris_observability_attached", False):
         return
 
@@ -109,4 +113,10 @@ def get_session() -> Generator[Session, None, None]:
         yield session
 
 
-__all__ = ["get_settings", "engine", "get_session", "SQLModel", "attach_engine_observability"]
+__all__ = [
+    "get_settings",
+    "engine",
+    "get_session",
+    "SQLModel",
+    "attach_engine_observability",
+]

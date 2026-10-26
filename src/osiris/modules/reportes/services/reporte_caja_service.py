@@ -17,7 +17,12 @@ from osiris.modules.reportes.schemas import (
     ReporteCajaDineroLiquidoRead,
     ReporteCajaFormaPagoRead,
 )
-from osiris.modules.ventas.models import CuentaPorCobrar, PagoCxC, RetencionRecibida, Venta
+from osiris.modules.ventas.models import (
+    CuentaPorCobrar,
+    PagoCxC,
+    RetencionRecibida,
+    Venta,
+)
 
 
 class ReporteCajaService:
@@ -67,26 +72,23 @@ class ReporteCajaService:
             filtros_pagos.append(col(PuntoEmision.sucursal_id) == sucursal_id)
             filtros_retenciones.append(col(PuntoEmision.sucursal_id) == sucursal_id)
 
-        pagos_stmt = (
-            select(
-                col(PagoCxC.forma_pago_sri),
-                func.coalesce(func.sum(col(PagoCxC.monto)), 0).label("monto"),
-            )
-            .select_from(PagoCxC)
-        )
+        pagos_stmt = select(
+            col(PagoCxC.forma_pago_sri),
+            func.coalesce(func.sum(col(PagoCxC.monto)), 0).label("monto"),
+        ).select_from(PagoCxC)
         if sucursal_id is not None or empresa_scope is not None:
-            pagos_stmt = (
-                pagos_stmt
-                .join(CuentaPorCobrar, col(CuentaPorCobrar.id) == col(PagoCxC.cuenta_por_cobrar_id))
-                .join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
-            )
+            pagos_stmt = pagos_stmt.join(
+                CuentaPorCobrar,
+                col(CuentaPorCobrar.id) == col(PagoCxC.cuenta_por_cobrar_id),
+            ).join(Venta, col(Venta.id) == col(CuentaPorCobrar.venta_id))
             if empresa_scope is not None:
                 pagos_stmt = pagos_stmt.where(col(Venta.empresa_id) == empresa_scope)
             if sucursal_id is not None:
-                pagos_stmt = pagos_stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
+                pagos_stmt = pagos_stmt.join(
+                    PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id)
+                )
         pagos_stmt = (
-            pagos_stmt
-            .where(*filtros_pagos)
+            pagos_stmt.where(*filtros_pagos)
             .group_by(col(PagoCxC.forma_pago_sri))
             .order_by(col(PagoCxC.forma_pago_sri).asc())
         )
@@ -100,18 +102,21 @@ class ReporteCajaService:
         ]
         total_dinero = q2(sum((pago.monto for pago in pagos), Decimal("0.00")))
 
-        retenciones_stmt = select(func.coalesce(func.sum(col(RetencionRecibida.total_retenido)), 0)).select_from(
-            RetencionRecibida
-        )
+        retenciones_stmt = select(
+            func.coalesce(func.sum(col(RetencionRecibida.total_retenido)), 0)
+        ).select_from(RetencionRecibida)
         if sucursal_id is not None or empresa_scope is not None:
-            retenciones_stmt = (
-                retenciones_stmt
-                .join(Venta, col(Venta.id) == col(RetencionRecibida.venta_id))
+            retenciones_stmt = retenciones_stmt.join(
+                Venta, col(Venta.id) == col(RetencionRecibida.venta_id)
             )
             if empresa_scope is not None:
-                retenciones_stmt = retenciones_stmt.where(col(Venta.empresa_id) == empresa_scope)
+                retenciones_stmt = retenciones_stmt.where(
+                    col(Venta.empresa_id) == empresa_scope
+                )
             if sucursal_id is not None:
-                retenciones_stmt = retenciones_stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
+                retenciones_stmt = retenciones_stmt.join(
+                    PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id)
+                )
         retenciones_stmt = retenciones_stmt.where(*filtros_retenciones)
         total_retenciones = q2(self._d(session.exec(retenciones_stmt).one()))
 

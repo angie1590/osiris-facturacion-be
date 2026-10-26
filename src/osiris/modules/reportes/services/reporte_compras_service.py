@@ -61,13 +61,17 @@ class ReporteComprasService:
                 facturas_expr.label("cantidad_facturas"),
             )
             .select_from(Compra)
-            .outerjoin(ProveedorSociedad, col(ProveedorSociedad.id) == col(Compra.proveedor_id))
+            .outerjoin(
+                ProveedorSociedad, col(ProveedorSociedad.id) == col(Compra.proveedor_id)
+            )
             .where(*filtros)
             .group_by(col(Compra.proveedor_id), razon_social_expr)
             .order_by(total_expr.desc(), razon_social_expr.asc())
         )
         if empresa_scope is not None:
-            stmt = stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+            stmt = stmt.join(
+                Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+            ).where(
                 col(Sucursal.activo).is_(True),
                 col(Sucursal.empresa_id) == empresa_scope,
             )

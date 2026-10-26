@@ -6,9 +6,12 @@ import os
 from contextvars import ContextVar, Token
 from typing import Any, Optional
 
-
-_current_user_id: ContextVar[Optional[str]] = ContextVar("current_user_id", default=None)
-_current_company_id: ContextVar[Optional[str]] = ContextVar("current_company_id", default=None)
+_current_user_id: ContextVar[Optional[str]] = ContextVar(
+    "current_user_id", default=None
+)
+_current_company_id: ContextVar[Optional[str]] = ContextVar(
+    "current_company_id", default=None
+)
 
 
 def set_current_user_id(user_id: Optional[str]) -> Token[Optional[str]]:
@@ -101,7 +104,9 @@ def extract_auth_context_from_request_headers(
     return user_id, company_id
 
 
-def extract_user_id_from_request_headers(*, authorization: Optional[str], x_user_id: Optional[str]) -> Optional[str]:
+def extract_user_id_from_request_headers(
+    *, authorization: Optional[str], x_user_id: Optional[str]
+) -> Optional[str]:
     user_id, _ = extract_auth_context_from_request_headers(
         authorization=authorization,
         x_user_id=x_user_id,

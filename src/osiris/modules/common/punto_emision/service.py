@@ -29,8 +29,13 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
 
     # ---------- atajos ----------
     def list_by_sucursal(
-        self, session: Session, *, sucursal_id: UUID,
-        limit: int, offset: int, only_active: bool = True
+        self,
+        session: Session,
+        *,
+        sucursal_id: UUID,
+        limit: int,
+        offset: int,
+        only_active: bool = True,
     ) -> tuple[list[PuntoEmision], PaginationMeta]:
         return self.list_paginated(
             session,
@@ -41,7 +46,12 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
         )
 
     def get_by_clave_natural(
-        self, session: Session, *, sucursal_id: UUID, codigo: str, only_active: Optional[bool] = None
+        self,
+        session: Session,
+        *,
+        sucursal_id: UUID,
+        codigo: str,
+        only_active: Optional[bool] = None,
     ) -> Optional[PuntoEmision]:
         stmt = select(PuntoEmision).where(
             PuntoEmision.sucursal_id == sucursal_id,
@@ -64,13 +74,20 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
         )
         row = session.exec(stmt).first()
         if not row:
-            raise HTTPException(status_code=403, detail="Usuario administrador invalido o inactivo")
+            raise HTTPException(
+                status_code=403, detail="Usuario administrador invalido o inactivo"
+            )
 
         _, rol = row
         if rol.nombre.strip().upper() not in {"ADMIN", "ADMINISTRADOR"}:
-            raise HTTPException(status_code=403, detail="Solo un administrador puede ajustar secuenciales")
+            raise HTTPException(
+                status_code=403,
+                detail="Solo un administrador puede ajustar secuenciales",
+            )
 
-    def _require_permiso_ajuste_secuencial(self, session: Session, usuario_id: UUID) -> None:
+    def _require_permiso_ajuste_secuencial(
+        self, session: Session, usuario_id: UUID
+    ) -> None:
         if not verificar_permiso(
             session,
             usuario_id,
@@ -99,7 +116,9 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
     ) -> PuntoEmisionSecuencial:
         punto_emision = session.get(PuntoEmision, punto_emision_id)
         if not punto_emision or not punto_emision.activo:
-            raise HTTPException(status_code=404, detail="Punto de emision no encontrado o inactivo")
+            raise HTTPException(
+                status_code=404, detail="Punto de emision no encontrado o inactivo"
+            )
 
         try:
             stmt = (
@@ -113,14 +132,19 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
             secuencial = session.exec(stmt).one()
         except NoResultFound:
             # PuntoEmision stores the next number; the ledger stores the last issued number.
-            inicial = max(punto_emision.secuencial_actual - 1, 0) if tipo_documento == TipoDocumentoSRI.FACTURA else 0
+            inicial = (
+                max(punto_emision.secuencial_actual - 1, 0)
+                if tipo_documento == TipoDocumentoSRI.FACTURA
+                else 0
+            )
             try:
                 with session.begin_nested():
                     secuencial_nuevo = PuntoEmisionSecuencial(
                         punto_emision_id=punto_emision_id,
                         tipo_documento=tipo_documento,
                         secuencial_actual=inicial,
-                        usuario_auditoria=usuario_auditoria or punto_emision.usuario_auditoria,
+                        usuario_auditoria=usuario_auditoria
+                        or punto_emision.usuario_auditoria,
                         activo=True,
                     )
                     session.add(secuencial_nuevo)
@@ -154,22 +178,31 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
         """Preview only: no counter reservation happens outside sale issue."""
         punto = session.get(PuntoEmision, punto_emision_id)
         if not punto or not punto.activo:
-            raise HTTPException(status_code=404, detail="Punto de emision no encontrado o inactivo")
+            raise HTTPException(
+                status_code=404, detail="Punto de emision no encontrado o inactivo"
+            )
         row = session.exec(
-            select(PuntoEmisionSecuencial).where(
+            select(PuntoEmisionSecuencial)
+            .where(
                 PuntoEmisionSecuencial.punto_emision_id == punto_emision_id,
                 PuntoEmisionSecuencial.tipo_documento == tipo_documento,
-            ).with_for_update()
+            )
+            .with_for_update()
         ).first()
         next_number = (
             row.secuencial_actual + 1
             if row
-            else punto.secuencial_actual
-            if tipo_documento == TipoDocumentoSRI.FACTURA
-            else 1
+            else (
+                punto.secuencial_actual
+                if tipo_documento == TipoDocumentoSRI.FACTURA
+                else 1
+            )
         )
         if next_number > 999999999:
-            raise HTTPException(status_code=409, detail="La serie alcanzó el máximo secuencial SRI (999999999).")
+            raise HTTPException(
+                status_code=409,
+                detail="La serie alcanzó el máximo secuencial SRI (999999999).",
+            )
         return self._sri_pad_9(next_number)
 
     def ajustar_secuencial_manual(
@@ -183,7 +216,9 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
         justificacion: str,
     ) -> PuntoEmisionSecuencial:
         if not justificacion or not justificacion.strip():
-            raise HTTPException(status_code=400, detail="La justificacion es obligatoria")
+            raise HTTPException(
+                status_code=400, detail="La justificacion es obligatoria"
+            )
 
         self._require_admin(session, usuario_id)
         self._require_permiso_ajuste_secuencial(session, usuario_id)
@@ -193,7 +228,9 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
             select(Venta.id)
             .where(
                 Venta.punto_emision_id == punto_emision_id,
-                cast(ColumnElement[str | None], Venta.secuencial_formateado).is_not(None),
+                cast(ColumnElement[str | None], Venta.secuencial_formateado).is_not(
+                    None
+                ),
             )
             .limit(1)
         ).first()
@@ -211,7 +248,10 @@ class PuntoEmisionService(BaseService[PuntoEmision]):
 
         secuencial_anterior = secuencial.secuencial_actual + 1
         if not 1 <= nuevo_secuencial <= 999999999:
-            raise HTTPException(status_code=400, detail="El secuencial inicial debe estar entre 1 y 999999999.")
+            raise HTTPException(
+                status_code=400,
+                detail="El secuencial inicial debe estar entre 1 y 999999999.",
+            )
         estado_anterior = {
             "punto_emision_id": str(punto_emision_id),
             "tipo_documento": tipo_documento.value,

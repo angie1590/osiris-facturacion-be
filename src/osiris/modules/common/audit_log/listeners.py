@@ -15,7 +15,6 @@ from osiris.modules.common.audit_log.entity import AuditAction, AuditLog
 from osiris.modules.sri.core_sri.models import Venta
 from osiris.modules.inventario.producto.entity import Producto
 
-
 _SKIP_DIFF_FIELDS = {
     "creado_en",
     "actualizado_en",
@@ -48,7 +47,9 @@ def _snapshot_model(target: Producto | Venta) -> dict[str, Any]:
     return data
 
 
-def _diff_model_update(target: Producto | Venta) -> tuple[dict[str, Any], dict[str, Any]]:
+def _diff_model_update(
+    target: Producto | Venta,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     state: InstanceState[Producto | Venta] = sa_inspect(target, raiseerr=True)
     before: dict[str, Any] = {}
     after: dict[str, Any] = {}
@@ -81,7 +82,14 @@ def _current_actor(target: Producto | Venta) -> str | None:
     )
 
 
-def _write_audit(connection: Connection, *, target: Producto | Venta, accion: AuditAction, before: dict[str, Any], after: dict[str, Any]) -> None:
+def _write_audit(
+    connection: Connection,
+    *,
+    target: Producto | Venta,
+    accion: AuditAction,
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> None:
     now = datetime.utcnow()
     table_name = target.__tablename__
     record_id = str(getattr(target, "id"))
@@ -111,7 +119,11 @@ def _write_audit(connection: Connection, *, target: Producto | Venta, accion: Au
 
 @sa.event.listens_for(Producto, "after_insert")
 @sa.event.listens_for(Venta, "after_insert")
-def _audit_after_insert(_mapper: Mapper[Producto] | Mapper[Venta], connection: Connection, target: Producto | Venta) -> None:
+def _audit_after_insert(
+    _mapper: Mapper[Producto] | Mapper[Venta],
+    connection: Connection,
+    target: Producto | Venta,
+) -> None:
     _write_audit(
         connection,
         target=target,
@@ -123,7 +135,11 @@ def _audit_after_insert(_mapper: Mapper[Producto] | Mapper[Venta], connection: C
 
 @sa.event.listens_for(Producto, "after_update")
 @sa.event.listens_for(Venta, "after_update")
-def _audit_after_update(_mapper: Mapper[Producto] | Mapper[Venta], connection: Connection, target: Producto | Venta) -> None:
+def _audit_after_update(
+    _mapper: Mapper[Producto] | Mapper[Venta],
+    connection: Connection,
+    target: Producto | Venta,
+) -> None:
     before, after = _diff_model_update(target)
     if not before and not after:
         return
@@ -137,7 +153,11 @@ def _audit_after_update(_mapper: Mapper[Producto] | Mapper[Venta], connection: C
 
 @sa.event.listens_for(Producto, "after_delete")
 @sa.event.listens_for(Venta, "after_delete")
-def _audit_after_delete(_mapper: Mapper[Producto] | Mapper[Venta], connection: Connection, target: Producto | Venta) -> None:
+def _audit_after_delete(
+    _mapper: Mapper[Producto] | Mapper[Venta],
+    connection: Connection,
+    target: Producto | Venta,
+) -> None:
     _write_audit(
         connection,
         target=target,

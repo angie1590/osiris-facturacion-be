@@ -9,23 +9,34 @@ from sqlmodel import Session
 from osiris.core.db import get_session
 from osiris.core.auth import require_roles
 from osiris.domain.schemas import PaginatedResponse
-from osiris.modules.inventario.atributo.models import AtributoCreateEnCategoria, AtributoRead, AtributoUpdate
+from osiris.modules.inventario.atributo.models import (
+    AtributoCreateEnCategoria,
+    AtributoRead,
+    AtributoUpdate,
+)
 from osiris.modules.inventario.atributo.service import AtributoService
 from osiris.modules.inventario.atributo.remap_service import AtributoRemapeoService
-from osiris.modules.inventario.producto.models_atributos import ProductoAtributoRemapeoResolve
-
+from osiris.modules.inventario.producto.models_atributos import (
+    ProductoAtributoRemapeoResolve,
+)
 
 router = APIRouter(prefix="/api/v1/atributos", tags=["Atributos"])
 service = AtributoService()
 remap_service = AtributoRemapeoService()
 
 
-@router.get("/remapeos/pendientes", dependencies=[Depends(require_roles("admin", "supervisor"))])
-def listar_remapeos_pendientes(session: Session = Depends(get_session)) -> dict[str, Any]:
+@router.get(
+    "/remapeos/pendientes", dependencies=[Depends(require_roles("admin", "supervisor"))]
+)
+def listar_remapeos_pendientes(
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
     return remap_service.listar_pendientes(session)
 
 
-@router.post("/remapeos/resolver", dependencies=[Depends(require_roles("admin", "supervisor"))])
+@router.post(
+    "/remapeos/resolver", dependencies=[Depends(require_roles("admin", "supervisor"))]
+)
 def resolver_remapeos(
     assignments: list[ProductoAtributoRemapeoResolve],
     session: Session = Depends(get_session),
@@ -40,8 +51,12 @@ def list_atributos(
     only_active: bool = Query(True),
     session: Session = Depends(get_session),
 ) -> PaginatedResponse[AtributoRead]:
-    items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset)
-    return PaginatedResponse[AtributoRead].model_validate({"items": items, "meta": meta})
+    items, meta = service.list_paginated(
+        session, only_active=only_active, limit=limit, offset=offset
+    )
+    return PaginatedResponse[AtributoRead].model_validate(
+        {"items": items, "meta": meta}
+    )
 
 
 @router.get("/{item_id}", response_model=AtributoRead)
@@ -55,51 +70,79 @@ def get_atributo(
     return AtributoRead.model_validate(obj)
 
 
-@router.post("/{item_id}/previsualizar", dependencies=[Depends(require_roles("admin", "supervisor"))])
+@router.post(
+    "/{item_id}/previsualizar",
+    dependencies=[Depends(require_roles("admin", "supervisor"))],
+)
 def preview_atributo(
     item_id: UUID = Path(...),
     payload: AtributoUpdate = Body(...),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    result = service.preview_update(session, item_id, payload.model_dump(exclude_unset=True))
+    result = service.preview_update(
+        session, item_id, payload.model_dump(exclude_unset=True)
+    )
     if result is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
     return result
 
 
-@router.get("/{item_id}/reversion", dependencies=[Depends(require_roles("admin", "supervisor"))])
-def get_atributo_lifecycle(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> dict[str, Any]:
+@router.get(
+    "/{item_id}/reversion", dependencies=[Depends(require_roles("admin", "supervisor"))]
+)
+def get_atributo_lifecycle(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> dict[str, Any]:
     result = service.lifecycle_status(session, item_id)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
     return result
 
 
-@router.post("/{item_id}/revertir", dependencies=[Depends(require_roles("admin", "supervisor"))])
-def undo_atributo(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> dict[str, Any]:
+@router.post(
+    "/{item_id}/revertir", dependencies=[Depends(require_roles("admin", "supervisor"))]
+)
+def undo_atributo(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> dict[str, Any]:
     result = service.undo(session, item_id)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
     return result
 
 
-@router.post("/{item_id}/reactivar", dependencies=[Depends(require_roles("admin", "supervisor"))])
-def reactivar_atributo(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> dict[str, Any]:
+@router.post(
+    "/{item_id}/reactivar", dependencies=[Depends(require_roles("admin", "supervisor"))]
+)
+def reactivar_atributo(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> dict[str, Any]:
     result = service.reactivate(session, item_id)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
     return result
 
 
-@router.post("", response_model=AtributoRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles("admin", "supervisor"))])
+@router.post(
+    "",
+    response_model=AtributoRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("admin", "supervisor"))],
+)
 def create_atributo(
     payload: AtributoCreateEnCategoria = Body(...),
     session: Session = Depends(get_session),
 ) -> AtributoRead:
-    return AtributoRead.model_validate(service.create_for_category(session, payload.model_dump(exclude_unset=True)))
+    return AtributoRead.model_validate(
+        service.create_for_category(session, payload.model_dump(exclude_unset=True))
+    )
 
 
-@router.put("/{item_id}", response_model=AtributoRead, dependencies=[Depends(require_roles("admin", "supervisor"))])
+@router.put(
+    "/{item_id}",
+    response_model=AtributoRead,
+    dependencies=[Depends(require_roles("admin", "supervisor"))],
+)
 def update_atributo(
     item_id: UUID = Path(...),
     payload: AtributoUpdate = Body(...),
@@ -111,8 +154,14 @@ def update_atributo(
     return AtributoRead.model_validate(updated)
 
 
-@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_roles("admin", "supervisor"))])
-def delete_atributo(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
+@router.delete(
+    "/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles("admin", "supervisor"))],
+)
+def delete_atributo(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")

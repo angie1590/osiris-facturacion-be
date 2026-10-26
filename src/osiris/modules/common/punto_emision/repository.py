@@ -8,6 +8,7 @@ from sqlmodel import col
 from osiris.domain.repository import BaseRepository
 from .entity import PuntoEmision
 
+
 class PuntoEmisionRepository(BaseRepository):
     model = PuntoEmision
 

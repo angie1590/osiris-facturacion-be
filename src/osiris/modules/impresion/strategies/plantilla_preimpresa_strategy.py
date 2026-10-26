@@ -25,7 +25,9 @@ class PlantillaPreimpresaStrategy(RenderStrategy):
         template_name = "nota_venta_preimpresa.html"
         template_path = self.templates_dir / template_name
         if not template_path.exists():
-            raise FileNotFoundError(f"No existe la plantilla preimpresa: {template_name}")
+            raise FileNotFoundError(
+                f"No existe la plantilla preimpresa: {template_name}"
+            )
 
         try:
             from jinja2 import Environment, FileSystemLoader, select_autoescape  # type: ignore
@@ -94,9 +96,7 @@ class PlantillaPreimpresaStrategy(RenderStrategy):
             "th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4){width:18%;text-align:right;}"
             ".totales{position:absolute;right:0;bottom:2.2cm;width:38%;}"
             ".totales .row{display:flex;justify-content:space-between;font-weight:bold;}"
-            "</style></head><body>"
-            + "".join(pages_html)
-            + "</body></html>"
+            "</style></head><body>" + "".join(pages_html) + "</body></html>"
         )
 
     def render_pdf(self, html_content: str) -> bytes:
@@ -106,5 +106,7 @@ class PlantillaPreimpresaStrategy(RenderStrategy):
             return checked_pdf_output(HTML(string=html_content).write_pdf())
         except ModuleNotFoundError:
             plain = " ".join(html_content.split())
-            lines = [plain[i : i + 90] for i in range(0, max(len(plain), 1), 90)] or ["NOTA VENTA PREIMPRESA"]
+            lines = [plain[i : i + 90] for i in range(0, max(len(plain), 1), 90)] or [
+                "NOTA VENTA PREIMPRESA"
+            ]
             return _build_minimal_pdf(lines)

@@ -9,7 +9,6 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "c5e91a7d2b64"
 down_revision = "d4a8c2f19e63"
 branch_labels = None
@@ -40,16 +39,30 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["atributo_id"], ["tbl_atributo.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_tbl_atributo_cambio_atributo_id", "tbl_atributo_cambio", ["atributo_id"])
-    op.create_index("ix_tbl_atributo_cambio_revertido", "tbl_atributo_cambio", ["revertido"])
+    op.create_index(
+        "ix_tbl_atributo_cambio_atributo_id", "tbl_atributo_cambio", ["atributo_id"]
+    )
+    op.create_index(
+        "ix_tbl_atributo_cambio_revertido", "tbl_atributo_cambio", ["revertido"]
+    )
 
 
 def downgrade() -> None:
-    pending = op.get_bind().execute(
-        sa.text("SELECT id FROM tbl_atributo_cambio WHERE revertido = false LIMIT 1")
-    ).first()
+    pending = (
+        op.get_bind()
+        .execute(
+            sa.text(
+                "SELECT id FROM tbl_atributo_cambio WHERE revertido = false LIMIT 1"
+            )
+        )
+        .first()
+    )
     if pending:
-        raise RuntimeError("Cannot downgrade while unreverted attribute snapshots would be lost.")
+        raise RuntimeError(
+            "Cannot downgrade while unreverted attribute snapshots would be lost."
+        )
     op.drop_index("ix_tbl_atributo_cambio_revertido", table_name="tbl_atributo_cambio")
-    op.drop_index("ix_tbl_atributo_cambio_atributo_id", table_name="tbl_atributo_cambio")
+    op.drop_index(
+        "ix_tbl_atributo_cambio_atributo_id", table_name="tbl_atributo_cambio"
+    )
     op.drop_table("tbl_atributo_cambio")

@@ -15,9 +15,18 @@ from osiris.modules.inventario.atributo.service import AtributoService
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
-from osiris.modules.inventario.producto.models_atributos import ProductoAtributoRemapeo, ProductoAtributoValor
-from osiris.modules.inventario.producto.models_atributos import ProductoAtributoRemapeoResolve
+from osiris.modules.inventario.producto.entity import (
+    Producto,
+    ProductoCategoria,
+    TipoProducto,
+)
+from osiris.modules.inventario.producto.models_atributos import (
+    ProductoAtributoRemapeo,
+    ProductoAtributoValor,
+)
+from osiris.modules.inventario.producto.models_atributos import (
+    ProductoAtributoRemapeoResolve,
+)
 
 
 def _engine():
@@ -77,8 +86,12 @@ def test_type_change_converts_valid_values_and_preserves_invalid_values_for_rema
         session.flush()
         session.add_all(
             [
-                ProductoCategoria(producto_id=valid_product.id, categoria_id=category.id),
-                ProductoCategoria(producto_id=invalid_product.id, categoria_id=category.id),
+                ProductoCategoria(
+                    producto_id=valid_product.id, categoria_id=category.id
+                ),
+                ProductoCategoria(
+                    producto_id=invalid_product.id, categoria_id=category.id
+                ),
                 CategoriaAtributo(
                     categoria_id=category.id,
                     atributo_id=attribute.id,
@@ -105,7 +118,9 @@ def test_type_change_converts_valid_values_and_preserves_invalid_values_for_rema
         session.add_all([valid_value, invalid_value])
         session.commit()
 
-        updated = AtributoService().update(session, attribute.id, {"tipo_dato": TipoDato.INTEGER})
+        updated = AtributoService().update(
+            session, attribute.id, {"tipo_dato": TipoDato.INTEGER}
+        )
 
         assert updated.tipo_dato == TipoDato.INTEGER
         session.refresh(valid_value)
@@ -114,7 +129,9 @@ def test_type_change_converts_valid_values_and_preserves_invalid_values_for_rema
         assert valid_value.valor_string is None
         assert invalid_value.valor_string == "n/a"
         remaps = session.exec(
-            select(ProductoAtributoRemapeo).where(ProductoAtributoRemapeo.atributo_id == attribute.id)
+            select(ProductoAtributoRemapeo).where(
+                ProductoAtributoRemapeo.atributo_id == attribute.id
+            )
         ).all()
         assert len(remaps) == 1
         assert remaps[0].producto_id == invalid_product.id
@@ -143,21 +160,34 @@ def test_type_change_converts_valid_values_and_preserves_invalid_values_for_rema
 def test_preview_is_read_only_and_undo_restores_attribute_and_value():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="42",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="42",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(value)
         session.commit()
 
-        preview = AtributoService().preview_update(session, attribute.id, {"tipo_dato": TipoDato.INTEGER})
+        preview = AtributoService().preview_update(
+            session, attribute.id, {"tipo_dato": TipoDato.INTEGER}
+        )
         assert preview["convertibles"] == 1
         assert preview["incompatibles"] == []
         assert session.exec(select(AtributoCambio)).all() == []
@@ -179,16 +209,27 @@ def test_preview_is_read_only_and_undo_restores_attribute_and_value():
 def test_undo_rejects_attribute_values_changed_after_snapshot():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="42",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="42",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(value)
         session.commit()
@@ -207,27 +248,48 @@ def test_undo_rejects_attribute_values_changed_after_snapshot():
 def test_deactivate_and_reactivate_restores_assignments_and_values():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
-        category = Categoria(nombre=f"Categoria-{uuid4().hex[:8]}", es_padre=False, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        category = Categoria(
+            nombre=f"Categoria-{uuid4().hex[:8]}",
+            es_padre=False,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, category, product])
         session.flush()
         assignment = CategoriaAtributo(
-            categoria_id=category.id, atributo_id=attribute.id,
-            usuario_auditoria="test", activo=True,
+            categoria_id=category.id,
+            atributo_id=attribute.id,
+            usuario_auditoria="test",
+            activo=True,
         )
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="12 meses",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="12 meses",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([assignment, value])
         session.commit()
 
         AtributoService().delete(session, attribute.id)
-        assert AtributoService().lifecycle_status(session, attribute.id)["can_reactivate"] is True
+        assert (
+            AtributoService().lifecycle_status(session, attribute.id)["can_reactivate"]
+            is True
+        )
         result = AtributoService().reactivate(session, attribute.id)
 
         assert result["operacion"] == "deactivate"
@@ -242,13 +304,22 @@ def test_deactivate_and_reactivate_restores_assignments_and_values():
 def test_undo_reverts_latest_definition_change_first():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
         session.add(attribute)
         session.commit()
         attribute_id = attribute.id
 
-        AtributoService().update(session, attribute_id, {"nombre": "Garantía extendida"})
-        AtributoService().update(session, attribute_id, {"nombre": "Garantía comercial"})
+        AtributoService().update(
+            session, attribute_id, {"nombre": "Garantía extendida"}
+        )
+        AtributoService().update(
+            session, attribute_id, {"nombre": "Garantía comercial"}
+        )
         AtributoService().undo(session, attribute_id)
         session.refresh(attribute)
         assert attribute.nombre == "Garantía extendida"
@@ -261,16 +332,27 @@ def test_undo_reverts_latest_definition_change_first():
 def test_undo_conversion_restores_values_and_removes_its_pending_remap():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="n/a",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="n/a",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(value)
         session.commit()
@@ -296,7 +378,12 @@ def test_undo_conversion_restores_values_and_removes_its_pending_remap():
 def test_legacy_inactive_attribute_cannot_be_reactivated_without_snapshot():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía legacy", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=False)
+        attribute = Atributo(
+            nombre="Garantía legacy",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=False,
+        )
         session.add(attribute)
         session.commit()
 
@@ -314,17 +401,30 @@ def test_legacy_inactive_attribute_cannot_be_reactivated_without_snapshot():
 def test_deactivate_rejects_pending_remaps_without_mutating_attribute():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.INTEGER, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.INTEGER,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
         remap = ProductoAtributoRemapeo(
-            producto_id=product.id, atributo_id=attribute.id,
-            tipo_anterior="string", tipo_nuevo="integer", valor_anterior={"value": "n/a"},
-            motivo="invalid integer", usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            tipo_anterior="string",
+            tipo_nuevo="integer",
+            valor_anterior={"value": "n/a"},
+            motivo="invalid integer",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(remap)
         session.commit()
@@ -342,16 +442,27 @@ def test_deactivate_rejects_pending_remaps_without_mutating_attribute():
 def test_update_rolls_back_values_remaps_and_snapshot_when_audit_fails(monkeypatch):
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="n/a",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="n/a",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(value)
         session.commit()
@@ -360,9 +471,14 @@ def test_update_rolls_back_values_remaps_and_snapshot_when_audit_fails(monkeypat
             if kwargs.get("action") == "UPDATE_ATTRIBUTE":
                 raise RuntimeError("audit failure")
 
-        monkeypatch.setattr("osiris.modules.inventario.atributo.service.record_domain_change", fail_update_audit)
+        monkeypatch.setattr(
+            "osiris.modules.inventario.atributo.service.record_domain_change",
+            fail_update_audit,
+        )
         with pytest.raises(RuntimeError, match="audit failure"):
-            AtributoService().update(session, attribute.id, {"tipo_dato": TipoDato.INTEGER})
+            AtributoService().update(
+                session, attribute.id, {"tipo_dato": TipoDato.INTEGER}
+            )
 
         session.refresh(attribute)
         session.refresh(value)
@@ -375,29 +491,50 @@ def test_update_rolls_back_values_remaps_and_snapshot_when_audit_fails(monkeypat
 def test_preview_numeric_bounds_and_inactive_catalog_are_validation_only():
     engine = _engine()
     with Session(engine) as session:
-        numeric = Atributo(nombre="Peso", tipo_dato=TipoDato.INTEGER, usuario_auditoria="test", activo=True)
-        product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+        numeric = Atributo(
+            nombre="Peso",
+            tipo_dato=TipoDato.INTEGER,
+            usuario_auditoria="test",
+            activo=True,
         )
-        inactive_catalog = Catalogo(nombre="Garantías", usuario_auditoria="test", activo=False)
+        product = Producto(
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
+        )
+        inactive_catalog = Catalogo(
+            nombre="Garantías", usuario_auditoria="test", activo=False
+        )
         session.add_all([numeric, product, inactive_catalog])
         session.flush()
-        session.add(ProductoAtributoValor(
-            producto_id=product.id, atributo_id=numeric.id, valor_integer=3,
-            usuario_auditoria="test", activo=True,
-        ))
+        session.add(
+            ProductoAtributoValor(
+                producto_id=product.id,
+                atributo_id=numeric.id,
+                valor_integer=3,
+                usuario_auditoria="test",
+                activo=True,
+            )
+        )
         catalog_attribute = Atributo(
-            nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True,
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(catalog_attribute)
         session.commit()
 
-        preview = AtributoService().preview_update(session, numeric.id, {"min_value": Decimal("5")})
+        preview = AtributoService().preview_update(
+            session, numeric.id, {"min_value": Decimal("5")}
+        )
         assert preview["incompatibles"][0]["motivo"] == "below configured minimum"
         with pytest.raises(HTTPException) as error:
             AtributoService().preview_update(
-                session, catalog_attribute.id,
+                session,
+                catalog_attribute.id,
                 {"tipo_dato": TipoDato.CATALOG, "catalog_id": inactive_catalog.id},
             )
 
@@ -411,15 +548,29 @@ def test_preview_numeric_bounds_and_inactive_catalog_are_validation_only():
 def test_undo_rejects_new_category_assignment_after_snapshot():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
-        category = Categoria(nombre=f"Categoria-{uuid4().hex[:8]}", es_padre=False, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        category = Categoria(
+            nombre=f"Categoria-{uuid4().hex[:8]}",
+            es_padre=False,
+            usuario_auditoria="test",
+            activo=True,
+        )
         session.add_all([attribute, category])
         session.commit()
 
-        AtributoService().update(session, attribute.id, {"nombre": "Garantía extendida"})
+        AtributoService().update(
+            session, attribute.id, {"nombre": "Garantía extendida"}
+        )
         assignment = CategoriaAtributo(
-            categoria_id=category.id, atributo_id=attribute.id,
-            usuario_auditoria="test", activo=True,
+            categoria_id=category.id,
+            atributo_id=attribute.id,
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(assignment)
         session.commit()
@@ -437,21 +588,39 @@ def test_undo_rejects_new_category_assignment_after_snapshot():
 def test_deactivation_rolls_back_attribute_assignments_values_and_snapshot(monkeypatch):
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
-        category = Categoria(nombre=f"Categoria-{uuid4().hex[:8]}", es_padre=False, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        category = Categoria(
+            nombre=f"Categoria-{uuid4().hex[:8]}",
+            es_padre=False,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, category, product])
         session.flush()
         assignment = CategoriaAtributo(
-            categoria_id=category.id, atributo_id=attribute.id,
-            usuario_auditoria="test", activo=True,
+            categoria_id=category.id,
+            atributo_id=attribute.id,
+            usuario_auditoria="test",
+            activo=True,
         )
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="12 meses",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="12 meses",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([assignment, value])
         session.commit()
@@ -460,7 +629,10 @@ def test_deactivation_rolls_back_attribute_assignments_values_and_snapshot(monke
             if kwargs.get("action") == "DELETE_ATTRIBUTE":
                 raise RuntimeError("audit failure")
 
-        monkeypatch.setattr("osiris.modules.inventario.atributo.service.record_domain_change", fail_delete_audit)
+        monkeypatch.setattr(
+            "osiris.modules.inventario.atributo.service.record_domain_change",
+            fail_delete_audit,
+        )
         with pytest.raises(RuntimeError, match="audit failure"):
             AtributoService().delete(session, attribute.id)
 
@@ -477,18 +649,27 @@ def test_preview_same_type_constraints_reports_invalid_values_without_writes():
     engine = _engine()
     with Session(engine) as session:
         attribute = Atributo(
-            nombre="Talla", tipo_dato=TipoDato.SELECT,
-            select_options=["S", "M"], usuario_auditoria="test", activo=True,
+            nombre="Talla",
+            tipo_dato=TipoDato.SELECT,
+            select_options=["S", "M"],
+            usuario_auditoria="test",
+            activo=True,
         )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
         value = ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="S",
-            usuario_auditoria="test", activo=True,
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="S",
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add(value)
         session.commit()
@@ -497,9 +678,13 @@ def test_preview_same_type_constraints_reports_invalid_values_without_writes():
             session, attribute.id, {"select_options": ["M", "L"]}
         )
 
-        assert preview["incompatibles"] == [{
-            "producto_id": str(product.id), "valor": "S", "motivo": "value is not in select options",
-        }]
+        assert preview["incompatibles"] == [
+            {
+                "producto_id": str(product.id),
+                "valor": "S",
+                "motivo": "value is not in select options",
+            }
+        ]
         assert preview["productos_afectados"] == 1
         assert preview["requiere_confirmacion"] is True
         assert session.exec(select(AtributoCambio)).all() == []
@@ -511,20 +696,35 @@ def test_preview_same_type_constraints_reports_invalid_values_without_writes():
 def test_preview_catalog_without_existing_catalog_does_not_create_one():
     engine = _engine()
     with Session(engine) as session:
-        attribute = Atributo(nombre="Garantía", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
+        attribute = Atributo(
+            nombre="Garantía",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
         product = Producto(
-            nombre=f"Product-{uuid4().hex[:8]}", tipo=TipoProducto.BIEN,
-            pvp=Decimal("10.00"), usuario_auditoria="test", activo=True,
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            usuario_auditoria="test",
+            activo=True,
         )
         session.add_all([attribute, product])
         session.flush()
-        session.add(ProductoAtributoValor(
-            producto_id=product.id, atributo_id=attribute.id, valor_string="12 meses",
-            usuario_auditoria="test", activo=True,
-        ))
+        session.add(
+            ProductoAtributoValor(
+                producto_id=product.id,
+                atributo_id=attribute.id,
+                valor_string="12 meses",
+                usuario_auditoria="test",
+                activo=True,
+            )
+        )
         session.commit()
 
-        preview = AtributoService().preview_update(session, attribute.id, {"tipo_dato": TipoDato.CATALOG})
+        preview = AtributoService().preview_update(
+            session, attribute.id, {"tipo_dato": TipoDato.CATALOG}
+        )
 
         assert preview["incompatibles"][0]["motivo"] == "catalog is missing"
         assert session.exec(select(Catalogo)).all() == []

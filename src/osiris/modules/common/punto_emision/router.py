@@ -8,7 +8,11 @@ from sqlmodel import Session
 
 from osiris.core.db import get_session
 from osiris.domain.schemas import PaginatedResponse
-from osiris.modules.common.punto_emision.entity import PuntoEmision, PuntoEmisionSecuencial, TipoDocumentoSRI
+from osiris.modules.common.punto_emision.entity import (
+    PuntoEmision,
+    PuntoEmisionSecuencial,
+    TipoDocumentoSRI,
+)
 from osiris.modules.common.punto_emision.models import (
     AjusteManualSecuencialRequest,
     PuntoEmisionCreate,
@@ -19,7 +23,6 @@ from osiris.modules.common.punto_emision.models import (
     SiguienteSecuencialResponse,
 )
 from osiris.modules.common.punto_emision.service import PuntoEmisionService
-
 
 router = APIRouter(prefix="/api/v1/puntos-emision", tags=["Puntos de Emisión"])
 service = PuntoEmisionService()
@@ -32,20 +35,28 @@ def list_puntos_emision(
     only_active: bool = Query(True),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    items, meta = service.list_paginated(session, only_active=only_active, limit=limit, offset=offset)
+    items, meta = service.list_paginated(
+        session, only_active=only_active, limit=limit, offset=offset
+    )
     return {"items": items, "meta": meta}
 
 
 @router.get("/{item_id}", response_model=PuntoEmisionRead)
-def get_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> PuntoEmision:
+def get_punto_emision(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> PuntoEmision:
     obj = service.get(session, item_id)
     if not obj:
-        raise HTTPException(status_code=404, detail=f"Punto-emision {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Punto-emision {item_id} not found"
+        )
     return obj
 
 
 @router.post("", response_model=PuntoEmisionRead, status_code=status.HTTP_201_CREATED)
-def create_punto_emision(payload: PuntoEmisionCreate = Body(...), session: Session = Depends(get_session)) -> PuntoEmision:
+def create_punto_emision(
+    payload: PuntoEmisionCreate = Body(...), session: Session = Depends(get_session)
+) -> PuntoEmision:
     return service.create(session, payload.model_dump(exclude_unset=True))
 
 
@@ -57,18 +68,27 @@ def update_punto_emision(
 ) -> PuntoEmision:
     updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
     if updated is None:
-        raise HTTPException(status_code=404, detail=f"Punto-emision {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Punto-emision {item_id} not found"
+        )
     return updated
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_punto_emision(item_id: UUID = Path(...), session: Session = Depends(get_session)) -> None:
+def delete_punto_emision(
+    item_id: UUID = Path(...), session: Session = Depends(get_session)
+) -> None:
     ok = service.delete(session, item_id)
     if ok is None:
-        raise HTTPException(status_code=404, detail=f"Punto-emision {item_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Punto-emision {item_id} not found"
+        )
 
 
-@router.post("/{punto_emision_id}/secuenciales/{tipo_documento}/siguiente", response_model=SiguienteSecuencialResponse)
+@router.post(
+    "/{punto_emision_id}/secuenciales/{tipo_documento}/siguiente",
+    response_model=SiguienteSecuencialResponse,
+)
 def obtener_siguiente_secuencial(
     punto_emision_id: UUID = Path(..., description="ID del punto de emisión"),
     tipo_documento: TipoDocumentoSRI = Path(..., description="Tipo de documento SRI"),
@@ -84,7 +104,10 @@ def obtener_siguiente_secuencial(
     return SiguienteSecuencialResponse(secuencial=secuencial)
 
 
-@router.post("/{punto_emision_id}/secuenciales/{tipo_documento}/ajuste-manual", response_model=PuntoEmisionSecuencialRead)
+@router.post(
+    "/{punto_emision_id}/secuenciales/{tipo_documento}/ajuste-manual",
+    response_model=PuntoEmisionSecuencialRead,
+)
 def ajustar_secuencial_manual(
     punto_emision_id: UUID = Path(..., description="ID del punto de emisión"),
     tipo_documento: TipoDocumentoSRI = Path(..., description="Tipo de documento SRI"),

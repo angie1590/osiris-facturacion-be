@@ -16,9 +16,15 @@ class TicketTermicoStrategy(RenderStrategy):
 
     @staticmethod
     def _template_name(ancho: str) -> str:
-        return "ticket_termico_58mm.html" if ancho == "58mm" else "ticket_termico_80mm.html"
+        return (
+            "ticket_termico_58mm.html"
+            if ancho == "58mm"
+            else "ticket_termico_80mm.html"
+        )
 
-    def render_ticket_html(self, context: dict[str, str], *, ancho: str = "80mm") -> str:
+    def render_ticket_html(
+        self, context: dict[str, str], *, ancho: str = "80mm"
+    ) -> str:
         template_name = self._template_name(ancho)
         template_path = self.templates_dir / template_name
         if not template_path.exists():
@@ -47,6 +53,7 @@ class TicketTermicoStrategy(RenderStrategy):
             return checked_pdf_output(HTML(string=html_content).write_pdf())
         except ModuleNotFoundError:
             plain = " ".join(html_content.split())
-            lines = [plain[i : i + 90] for i in range(0, max(len(plain), 1), 90)] or ["TICKET TERMICO"]
+            lines = [plain[i : i + 90] for i in range(0, max(len(plain), 1), 90)] or [
+                "TICKET TERMICO"
+            ]
             return _build_minimal_pdf(lines)
-

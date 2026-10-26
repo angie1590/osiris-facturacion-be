@@ -10,7 +10,6 @@ from osiris.core.db import get_session
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.audit_log.models import AuditLogRead
 
-
 router = APIRouter(prefix="/api/v1/audit-logs", tags=["Audit Logs"])
 
 
@@ -40,5 +39,7 @@ def list_audit_logs(
     if fecha_hasta:
         stmt = stmt.where(fecha_expr <= fecha_hasta)
 
-    logs = session.exec(stmt.order_by(fecha_expr.desc()).offset(offset).limit(limit)).all()
+    logs = session.exec(
+        stmt.order_by(fecha_expr.desc()).offset(offset).limit(limit)
+    ).all()
     return [AuditLogRead.from_entity(log) for log in logs]

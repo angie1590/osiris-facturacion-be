@@ -32,8 +32,12 @@ class AuditLog(BaseTable, table=True):
     accion: str = Field(nullable=False, max_length=64, default="UPDATE")
     estado_anterior: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     estado_nuevo: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
-    before_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
-    after_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    before_json: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    after_json: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     created_by: str | None = Field(default=None, max_length=255, index=True)
     updated_by: str | None = Field(default=None, max_length=255, index=True)
     usuario_id: str | None = Field(default=None, max_length=255, index=True)
@@ -43,7 +47,9 @@ class AuditLog(BaseTable, table=True):
 
 
 @event.listens_for(AuditLog, "before_insert")
-def _sync_auditlog_legacy_and_standard(_mapper: Mapper[AuditLog], _connection: Connection, target: AuditLog) -> None:
+def _sync_auditlog_legacy_and_standard(
+    _mapper: Mapper[AuditLog], _connection: Connection, target: AuditLog
+) -> None:
     target.tabla_afectada = target.tabla_afectada or target.entidad
     target.registro_id = target.registro_id or str(target.entidad_id)
     target.usuario_id = (
@@ -53,7 +59,11 @@ def _sync_auditlog_legacy_and_standard(_mapper: Mapper[AuditLog], _connection: C
         or target.usuario_auditoria
     )
     target.fecha = target.fecha or target.creado_en or datetime.utcnow()
-    target.before_json = target.before_json if target.before_json is not None else target.estado_anterior
-    target.after_json = target.after_json if target.after_json is not None else target.estado_nuevo
+    target.before_json = (
+        target.before_json if target.before_json is not None else target.estado_anterior
+    )
+    target.after_json = (
+        target.after_json if target.after_json is not None else target.estado_nuevo
+    )
     target.created_by = target.created_by or target.usuario_id
     target.updated_by = target.updated_by or target.usuario_id

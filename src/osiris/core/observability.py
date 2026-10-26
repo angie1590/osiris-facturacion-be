@@ -12,7 +12,9 @@ from uuid import uuid4
 
 from osiris.core.audit_context import get_current_company_id, get_current_user_id
 
-_current_request_id: ContextVar[Optional[str]] = ContextVar("current_request_id", default=None)
+_current_request_id: ContextVar[Optional[str]] = ContextVar(
+    "current_request_id", default=None
+)
 _current_db_request_stats: ContextVar[Optional["DBRequestStats"]] = ContextVar(
     "current_db_request_stats",
     default=None,
@@ -111,28 +113,38 @@ class _MetricsRegistry:
         self._lock = threading.Lock()
         self._counters: dict[str, dict[tuple[tuple[str, str], ...], float]] = {}
         self._gauges: dict[str, dict[tuple[tuple[str, str], ...], float]] = {}
-        self._histograms: dict[str, dict[tuple[tuple[str, str], ...], tuple[float, int]]] = {}
+        self._histograms: dict[
+            str, dict[tuple[tuple[str, str], ...], tuple[float, int]]
+        ] = {}
 
-    def inc_counter(self, name: str, *, value: float = 1.0, labels: dict[str, str] | None = None) -> None:
+    def inc_counter(
+        self, name: str, *, value: float = 1.0, labels: dict[str, str] | None = None
+    ) -> None:
         key = _labels_to_key(labels or {})
         with self._lock:
             series = self._counters.setdefault(name, {})
             series[key] = series.get(key, 0.0) + value
 
-    def observe_histogram(self, name: str, *, value: float, labels: dict[str, str] | None = None) -> None:
+    def observe_histogram(
+        self, name: str, *, value: float, labels: dict[str, str] | None = None
+    ) -> None:
         key = _labels_to_key(labels or {})
         with self._lock:
             series = self._histograms.setdefault(name, {})
             current_sum, current_count = series.get(key, (0.0, 0))
             series[key] = (current_sum + value, current_count + 1)
 
-    def set_gauge(self, name: str, *, value: float, labels: dict[str, str] | None = None) -> None:
+    def set_gauge(
+        self, name: str, *, value: float, labels: dict[str, str] | None = None
+    ) -> None:
         key = _labels_to_key(labels or {})
         with self._lock:
             series = self._gauges.setdefault(name, {})
             series[key] = value
 
-    def add_gauge(self, name: str, *, delta: float, labels: dict[str, str] | None = None) -> float:
+    def add_gauge(
+        self, name: str, *, delta: float, labels: dict[str, str] | None = None
+    ) -> float:
         key = _labels_to_key(labels or {})
         with self._lock:
             series = self._gauges.setdefault(name, {})
@@ -319,7 +331,9 @@ def record_readiness_check(*, status: str) -> None:
     )
 
 
-def record_http_request(*, method: str, path: str, status_code: int, latency_seconds: float) -> None:
+def record_http_request(
+    *, method: str, path: str, status_code: int, latency_seconds: float
+) -> None:
     labels = {"method": method, "path": path, "status_code": str(status_code)}
     METRICS.inc_counter("osiris_http_requests_total", labels=labels)
     METRICS.observe_histogram(
@@ -342,7 +356,9 @@ def get_http_in_flight() -> int:
 def record_fe_worker_run(*, processed: int) -> None:
     METRICS.inc_counter("osiris_fe_worker_runs_total")
     if processed > 0:
-        METRICS.inc_counter("osiris_fe_worker_processed_documents_total", value=float(processed))
+        METRICS.inc_counter(
+            "osiris_fe_worker_processed_documents_total", value=float(processed)
+        )
 
 
 def record_fe_worker_error() -> None:

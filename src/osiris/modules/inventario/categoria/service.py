@@ -39,15 +39,22 @@ class CategoriaService(BaseService[Categoria]):
         statement = select(col(Categoria.id)).where(
             col(Categoria.activo).is_(True),
             func.lower(func.trim(col(Categoria.nombre))) == nombre.strip().lower(),
-            col(Categoria.parent_id) == parent_id if parent_id is not None else col(Categoria.parent_id).is_(None),
+            (
+                col(Categoria.parent_id) == parent_id
+                if parent_id is not None
+                else col(Categoria.parent_id).is_(None)
+            ),
         )
         if exclude_id is not None:
             statement = statement.where(col(Categoria.id) != exclude_id)
         if session.exec(statement.limit(1)).first() is not None:
-            raise HTTPException(status_code=409, detail={
-                "code": "CATEGORY_DUPLICATE_NAME",
-                "message": "Ya existe una categoría activa con ese nombre dentro de la misma categoría padre.",
-            })
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "CATEGORY_DUPLICATE_NAME",
+                    "message": "Ya existe una categoría activa con ese nombre dentro de la misma categoría padre.",
+                },
+            )
 
     def validate_create(self, data: dict[str, Any], session: Session) -> None:
         """Reglas de negocio para create:
@@ -69,9 +76,7 @@ class CategoriaService(BaseService[Categoria]):
         from osiris.modules.inventario.producto.entity import ProductoCategoria
 
         parent = session.exec(
-            select(Categoria)
-            .where(col(Categoria.id) == parent_id)
-            .with_for_update()
+            select(Categoria).where(col(Categoria.id) == parent_id).with_for_update()
         ).first()
         if not parent:
             return
@@ -80,10 +85,13 @@ class CategoriaService(BaseService[Categoria]):
         session.add(parent)
         session.flush()
 
-        direct_product_ids = list(session.exec(
-            select(ProductoCategoria.producto_id)
-            .where(col(ProductoCategoria.categoria_id) == parent_id)
-        ).all())
+        direct_product_ids = list(
+            session.exec(
+                select(ProductoCategoria.producto_id).where(
+                    col(ProductoCategoria.categoria_id) == parent_id
+                )
+            ).all()
+        )
         if not direct_product_ids:
             return
 
@@ -118,17 +126,28 @@ class CategoriaService(BaseService[Categoria]):
                 entity="tbl_categoria",
                 entity_id=parent_id,
                 action="CATEGORY_B3_RECLASSIFY",
-                before={"producto_ids": [str(product_id) for product_id in direct_product_ids]},
+                before={
+                    "producto_ids": [
+                        str(product_id) for product_id in direct_product_ids
+                    ]
+                },
                 after={
                     "is_parent": True,
                     "temporary_category_id": str(sin_clasificar.id),
-                    "producto_ids": [str(product_id) for product_id in direct_product_ids],
+                    "producto_ids": [
+                        str(product_id) for product_id in direct_product_ids
+                    ],
                 },
             )
 
-    def desactivar_defaults_vacios(self, session: Session, categoria_ids: set[UUID]) -> None:
+    def desactivar_defaults_vacios(
+        self, session: Session, categoria_ids: set[UUID]
+    ) -> None:
         """Desactiva buckets temporales que ya no contienen productos activos."""
-        from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria
+        from osiris.modules.inventario.producto.entity import (
+            Producto,
+            ProductoCategoria,
+        )
 
         for categoria_id in categoria_ids:
             categoria = session.get(Categoria, categoria_id)
@@ -166,7 +185,9 @@ class CategoriaService(BaseService[Categoria]):
             data = self._ensure_dict(data)
             self.validate_create(data, session)
             self._check_fk_active_and_exists(session, data)
-            self._validate_sibling_name(session, str(data.get("nombre", "")), data.get("parent_id"))
+            self._validate_sibling_name(
+                session, str(data.get("nombre", "")), data.get("parent_id")
+            )
 
             parent_id = data.get("parent_id")
             if parent_id:
@@ -181,7 +202,10 @@ class CategoriaService(BaseService[Categoria]):
                     entity_id=obj.id,
                     action="CREATE_CATEGORY",
                     before={},
-                    after={"nombre": obj.nombre, "parent_id": str(obj.parent_id) if obj.parent_id else None},
+                    after={
+                        "nombre": obj.nombre,
+                        "parent_id": str(obj.parent_id) if obj.parent_id else None,
+                    },
                 )
             if commit:
                 session.commit()
@@ -258,7 +282,10 @@ class CategoriaService(BaseService[Categoria]):
         subtree_ids = set(session.exec(select(subtree.c.categoria_id)).all())
         moved_attributes = session.exec(
             select(col(Atributo.id), col(Atributo.nombre))
-            .join(CategoriaAtributo, col(CategoriaAtributo.atributo_id) == col(Atributo.id))
+            .join(
+                CategoriaAtributo,
+                col(CategoriaAtributo.atributo_id) == col(Atributo.id),
+            )
             .where(
                 col(CategoriaAtributo.categoria_id).in_(subtree_ids),
                 col(CategoriaAtributo.activo).is_(True),
@@ -275,22 +302,34 @@ class CategoriaService(BaseService[Categoria]):
                 break
             ancestor_ids.add(parent.id)
             current_parent_id = parent.parent_id
-        ancestor_attributes = session.exec(
-            select(col(Atributo.id), col(Atributo.nombre))
-            .join(CategoriaAtributo, col(CategoriaAtributo.atributo_id) == col(Atributo.id))
-            .where(
-                col(CategoriaAtributo.categoria_id).in_(ancestor_ids),
-                col(CategoriaAtributo.activo).is_(True),
-                col(Atributo.activo).is_(True),
-            )
-        ).all() if ancestor_ids else []
+        ancestor_attributes = (
+            session.exec(
+                select(col(Atributo.id), col(Atributo.nombre))
+                .join(
+                    CategoriaAtributo,
+                    col(CategoriaAtributo.atributo_id) == col(Atributo.id),
+                )
+                .where(
+                    col(CategoriaAtributo.categoria_id).in_(ancestor_ids),
+                    col(CategoriaAtributo.activo).is_(True),
+                    col(Atributo.activo).is_(True),
+                )
+            ).all()
+            if ancestor_ids
+            else []
+        )
 
-        moved_names = {name.strip().casefold() for _attribute_id, name in moved_attributes}
+        moved_names = {
+            name.strip().casefold() for _attribute_id, name in moved_attributes
+        }
         conflicting_ancestor_ids = {
             attribute_id
             for attribute_id, name in ancestor_attributes
             if name.strip().casefold() in moved_names
-            and all(moved_attribute_id != attribute_id for moved_attribute_id, _ in moved_attributes)
+            and all(
+                moved_attribute_id != attribute_id
+                for moved_attribute_id, _ in moved_attributes
+            )
         }
         collision_names = sorted(
             {
@@ -316,7 +355,9 @@ class CategoriaService(BaseService[Categoria]):
         """
         try:
             data = self._ensure_dict(data)
-            confirmar_limpieza_colision = bool(data.pop("confirmar_limpieza_colision", False))
+            confirmar_limpieza_colision = bool(
+                data.pop("confirmar_limpieza_colision", False)
+            )
             db_obj = self.repo.get(session, item_id)
             if not db_obj:
                 return None
@@ -330,14 +371,19 @@ class CategoriaService(BaseService[Categoria]):
 
             # Evitar que parent_id apunte a sí mismo
             if data.get("parent_id") and data.get("parent_id") == item_id:
-                raise HTTPException(status_code=400, detail="parent_id no puede referenciar al mismo registro")
+                raise HTTPException(
+                    status_code=400,
+                    detail="parent_id no puede referenciar al mismo registro",
+                )
 
             if data.get("es_padre") is False:
                 active_child = session.exec(
-                    select(Categoria.id).where(
+                    select(Categoria.id)
+                    .where(
                         col(Categoria.parent_id) == item_id,
                         col(Categoria.activo).is_(True),
-                    ).limit(1)
+                    )
+                    .limit(1)
                 ).first()
                 if active_child is not None:
                     raise HTTPException(
@@ -347,7 +393,9 @@ class CategoriaService(BaseService[Categoria]):
 
             # Detectar ciclos si se está cambiando el parent_id (cuando se proporciona uno nuevo)
             new_parent_id = data.get("parent_id")
-            parent_changed = "parent_id" in data and new_parent_id != getattr(db_obj, "parent_id", None)
+            parent_changed = "parent_id" in data and new_parent_id != getattr(
+                db_obj, "parent_id", None
+            )
             if new_parent_id and new_parent_id != getattr(db_obj, "parent_id", None):
                 if self._detect_cycle(session, item_id, new_parent_id):
                     # Obtener nombres para mejorar el detalle del error (si están disponibles)
@@ -376,11 +424,17 @@ class CategoriaService(BaseService[Categoria]):
             conflicting_attribute_ids: set[UUID] = set()
             collision_names: list[str] = []
             removed_values: list[dict[str, Any]] = []
-            if parent_changed and isinstance(session, Session) and not hasattr(session, "_mock_methods"):
-                subtree_ids, conflicting_attribute_ids, collision_names = self._detectar_colisiones_al_mover(
-                    session,
-                    item_id,
-                    new_parent_id,
+            if (
+                parent_changed
+                and isinstance(session, Session)
+                and not hasattr(session, "_mock_methods")
+            ):
+                subtree_ids, conflicting_attribute_ids, collision_names = (
+                    self._detectar_colisiones_al_mover(
+                        session,
+                        item_id,
+                        new_parent_id,
+                    )
                 )
                 if collision_names and not confirmar_limpieza_colision:
                     raise HTTPException(
@@ -396,8 +450,12 @@ class CategoriaService(BaseService[Categoria]):
                     )
 
                 if collision_names and confirmar_limpieza_colision:
-                    from osiris.modules.inventario.producto.entity import ProductoCategoria
-                    from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
+                    from osiris.modules.inventario.producto.entity import (
+                        ProductoCategoria,
+                    )
+                    from osiris.modules.inventario.producto.models_atributos import (
+                        ProductoAtributoValor,
+                    )
 
                     product_ids = set(
                         session.exec(
@@ -406,20 +464,34 @@ class CategoriaService(BaseService[Categoria]):
                             .distinct()
                         ).all()
                     )
-                    values = session.exec(
-                        select(ProductoAtributoValor).where(
-                            col(ProductoAtributoValor.producto_id).in_(product_ids),
-                            col(ProductoAtributoValor.atributo_id).in_(conflicting_attribute_ids),
-                            col(ProductoAtributoValor.activo).is_(True),
-                        )
-                    ).all() if product_ids and conflicting_attribute_ids else []
+                    values = (
+                        session.exec(
+                            select(ProductoAtributoValor).where(
+                                col(ProductoAtributoValor.producto_id).in_(product_ids),
+                                col(ProductoAtributoValor.atributo_id).in_(
+                                    conflicting_attribute_ids
+                                ),
+                                col(ProductoAtributoValor.activo).is_(True),
+                            )
+                        ).all()
+                        if product_ids and conflicting_attribute_ids
+                        else []
+                    )
                     for value in values:
                         before_value = {
                             "valor_string": value.valor_string,
                             "valor_integer": value.valor_integer,
-                            "valor_decimal": str(value.valor_decimal) if value.valor_decimal is not None else None,
+                            "valor_decimal": (
+                                str(value.valor_decimal)
+                                if value.valor_decimal is not None
+                                else None
+                            ),
                             "valor_boolean": value.valor_boolean,
-                            "valor_date": value.valor_date.isoformat() if value.valor_date is not None else None,
+                            "valor_date": (
+                                value.valor_date.isoformat()
+                                if value.valor_date is not None
+                                else None
+                            ),
                         }
                         value.activo = False
                         session.add(value)
@@ -436,7 +508,10 @@ class CategoriaService(BaseService[Categoria]):
                             entity_id=value.id,
                             action="CLEAR_ATTRIBUTE_COLLISION_VALUE",
                             before=before_value,
-                            after={"activo": False, "motivo": "category move collision"},
+                            after={
+                                "activo": False,
+                                "motivo": "category move collision",
+                            },
                         )
 
             # Regla B3 en update: antes de mover la categoría actual al nuevo padre
@@ -455,7 +530,12 @@ class CategoriaService(BaseService[Categoria]):
                     entity_id=item_id,
                     action="UPDATE_CATEGORY",
                     before=before_category,
-                    after={"nombre": updated.nombre, "parent_id": str(updated.parent_id) if updated.parent_id else None},
+                    after={
+                        "nombre": updated.nombre,
+                        "parent_id": (
+                            str(updated.parent_id) if updated.parent_id else None
+                        ),
+                    },
                 )
                 if collision_names and confirmar_limpieza_colision:
                     record_domain_change(
@@ -465,7 +545,9 @@ class CategoriaService(BaseService[Categoria]):
                         action="MOVE_CATEGORY_CLEAR_ATTRIBUTE_COLLISION",
                         before=before_category,
                         after={
-                            "parent_id": str(updated.parent_id) if updated.parent_id else None,
+                            "parent_id": (
+                                str(updated.parent_id) if updated.parent_id else None
+                            ),
                             "attribute_names": collision_names,
                             "removed_values": removed_values,
                         },
@@ -487,7 +569,10 @@ class CategoriaService(BaseService[Categoria]):
         confirmar_baja_productos: bool = False,
     ) -> bool | None:
         from osiris.modules.inventario.movimientos.models import InventarioStock
-        from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria
+        from osiris.modules.inventario.producto.entity import (
+            Producto,
+            ProductoCategoria,
+        )
 
         try:
             categoria = self.repo.get(session, item_id)
@@ -495,10 +580,12 @@ class CategoriaService(BaseService[Categoria]):
                 return None
 
             active_child = session.exec(
-                select(Categoria.id).where(
+                select(Categoria.id)
+                .where(
                     col(Categoria.parent_id) == item_id,
                     col(Categoria.activo).is_(True),
-                ).limit(1)
+                )
+                .limit(1)
             ).first()
             if active_child is not None:
                 raise HTTPException(
@@ -533,7 +620,9 @@ class CategoriaService(BaseService[Categoria]):
                     )
                     .limit(1)
                 ).first()
-                producto_agregado_positivo = any(producto.cantidad > 0 for producto in productos)
+                producto_agregado_positivo = any(
+                    producto.cantidad > 0 for producto in productos
+                )
                 if stock_positivo is not None or producto_agregado_positivo:
                     raise HTTPException(
                         status_code=409,
@@ -551,7 +640,9 @@ class CategoriaService(BaseService[Categoria]):
                                 f"La categoría tiene {len(productos)} producto(s) activos sin stock. "
                                 "Confirme la baja en cascada para continuar."
                             ),
-                            "producto_ids": [str(producto_id) for producto_id in producto_ids],
+                            "producto_ids": [
+                                str(producto_id) for producto_id in producto_ids
+                            ],
                         },
                     )
                 for producto in productos:
@@ -564,11 +655,15 @@ class CategoriaService(BaseService[Categoria]):
                     session,
                     entity="tbl_categoria",
                     entity_id=item_id,
-                    action="DELETE_CATEGORY_CASCADE" if productos else "DELETE_CATEGORY",
+                    action=(
+                        "DELETE_CATEGORY_CASCADE" if productos else "DELETE_CATEGORY"
+                    ),
                     before={
                         "nombre": categoria.nombre,
                         "activo": True,
-                        "producto_ids": [str(producto_id) for producto_id in producto_ids],
+                        "producto_ids": [
+                            str(producto_id) for producto_id in producto_ids
+                        ],
                     },
                     after={"activo": False, "confirmado": confirmar_baja_productos},
                 )
@@ -576,11 +671,13 @@ class CategoriaService(BaseService[Categoria]):
                 parent = session.get(Categoria, categoria.parent_id)
                 if parent:
                     sibling = session.exec(
-                        select(Categoria.id).where(
+                        select(Categoria.id)
+                        .where(
                             col(Categoria.parent_id) == parent.id,
                             col(Categoria.id) != item_id,
                             col(Categoria.activo).is_(True),
-                        ).limit(1)
+                        )
+                        .limit(1)
                     ).first()
                     if sibling is None:
                         parent.es_padre = False
@@ -592,7 +689,11 @@ class CategoriaService(BaseService[Categoria]):
             self._handle_transaction_error(session, exc)
 
     def contar_productos_sin_recategorizar(self, session: Session) -> int:
-        from osiris.modules.inventario.producto.entity import Producto, ProductoBodega, ProductoCategoria
+        from osiris.modules.inventario.producto.entity import (
+            Producto,
+            ProductoBodega,
+            ProductoCategoria,
+        )
 
         empresa_id = resolve_company_scope()
         if empresa_id is None:
@@ -602,12 +703,18 @@ class CategoriaService(BaseService[Categoria]):
             )
         empresa = session.get(Empresa, empresa_id)
         if not empresa or not empresa.activo:
-            raise HTTPException(status_code=403, detail="La empresa seleccionada no existe o está inactiva.")
+            raise HTTPException(
+                status_code=403,
+                detail="La empresa seleccionada no existe o está inactiva.",
+            )
 
         statement = (
             select(func.count(func.distinct(col(Producto.id))))
             .select_from(Producto)
-            .join(ProductoCategoria, col(ProductoCategoria.producto_id) == col(Producto.id))
+            .join(
+                ProductoCategoria,
+                col(ProductoCategoria.producto_id) == col(Producto.id),
+            )
             .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
             .join(ProductoBodega, col(ProductoBodega.producto_id) == col(Producto.id))
             .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
@@ -622,19 +729,34 @@ class CategoriaService(BaseService[Categoria]):
         )
         return int(session.exec(statement).one())
 
-    def listar_productos_sin_recategorizar(self, session: Session) -> list[dict[str, Any]]:
-        from osiris.modules.inventario.producto.entity import Producto, ProductoBodega, ProductoCategoria
+    def listar_productos_sin_recategorizar(
+        self, session: Session
+    ) -> list[dict[str, Any]]:
+        from osiris.modules.inventario.producto.entity import (
+            Producto,
+            ProductoBodega,
+            ProductoCategoria,
+        )
 
         empresa_id = resolve_company_scope()
         if empresa_id is None:
-            raise HTTPException(status_code=409, detail="La recategorización requiere una empresa autenticada.")
+            raise HTTPException(
+                status_code=409,
+                detail="La recategorización requiere una empresa autenticada.",
+            )
         empresa = session.get(Empresa, empresa_id)
         if not empresa or not empresa.activo:
-            raise HTTPException(status_code=403, detail="La empresa seleccionada no existe o está inactiva.")
+            raise HTTPException(
+                status_code=403,
+                detail="La empresa seleccionada no existe o está inactiva.",
+            )
 
         rows = session.exec(
             select(Producto, Categoria)
-            .join(ProductoCategoria, col(ProductoCategoria.producto_id) == col(Producto.id))
+            .join(
+                ProductoCategoria,
+                col(ProductoCategoria.producto_id) == col(Producto.id),
+            )
             .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
             .join(ProductoBodega, col(ProductoBodega.producto_id) == col(Producto.id))
             .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
@@ -650,7 +772,11 @@ class CategoriaService(BaseService[Categoria]):
         ).all()
         result = []
         for producto, categoria in rows:
-            padre = session.get(Categoria, categoria.parent_id) if categoria.parent_id else None
+            padre = (
+                session.get(Categoria, categoria.parent_id)
+                if categoria.parent_id
+                else None
+            )
             result.append(
                 {
                     "producto_id": producto.id,
@@ -665,7 +791,9 @@ class CategoriaService(BaseService[Categoria]):
         return result
 
     @staticmethod
-    def _categoria_descendiente_de(session: Session, categoria: Categoria, ancestor_id: UUID) -> bool:
+    def _categoria_descendiente_de(
+        session: Session, categoria: Categoria, ancestor_id: UUID
+    ) -> bool:
         visited: set[UUID] = set()
         parent_id = categoria.parent_id
         while parent_id is not None and parent_id not in visited:
@@ -676,22 +804,38 @@ class CategoriaService(BaseService[Categoria]):
             parent_id = parent.parent_id if parent else None
         return False
 
-    def recategorizar_productos(self, session: Session, assignments: list[Any]) -> dict[str, int]:
+    def recategorizar_productos(
+        self, session: Session, assignments: list[Any]
+    ) -> dict[str, int]:
         from sqlalchemy import delete
-        from osiris.modules.inventario.producto.entity import Producto, ProductoBodega, ProductoCategoria
+        from osiris.modules.inventario.producto.entity import (
+            Producto,
+            ProductoBodega,
+            ProductoCategoria,
+        )
 
         empresa_id = resolve_company_scope()
         if empresa_id is None:
-            raise HTTPException(status_code=409, detail="La recategorización requiere una empresa autenticada.")
+            raise HTTPException(
+                status_code=409,
+                detail="La recategorización requiere una empresa autenticada.",
+            )
         empresa = session.get(Empresa, empresa_id)
         if not empresa or not empresa.activo:
-            raise HTTPException(status_code=403, detail="La empresa seleccionada no existe o está inactiva.")
+            raise HTTPException(
+                status_code=403,
+                detail="La empresa seleccionada no existe o está inactiva.",
+            )
         if not assignments:
-            raise HTTPException(status_code=400, detail="Asigne al menos un producto a una categoría.")
+            raise HTTPException(
+                status_code=400, detail="Asigne al menos un producto a una categoría."
+            )
 
         producto_ids = [item.producto_id for item in assignments]
         if len(producto_ids) != len(set(producto_ids)):
-            raise HTTPException(status_code=400, detail="La solicitud contiene productos duplicados.")
+            raise HTTPException(
+                status_code=400, detail="La solicitud contiene productos duplicados."
+            )
 
         try:
             source_category_ids: set[UUID] = set()
@@ -699,17 +843,27 @@ class CategoriaService(BaseService[Categoria]):
                 producto = session.get(Producto, assignment.producto_id)
                 target = session.get(Categoria, assignment.categoria_id)
                 if not producto or not producto.activo:
-                    raise HTTPException(status_code=404, detail="Producto pendiente no encontrado o inactivo.")
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Producto pendiente no encontrado o inactivo.",
+                    )
                 if not target or not target.activo or target.is_default:
-                    raise HTTPException(status_code=400, detail="La categoría destino no es una categoría final activa.")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="La categoría destino no es una categoría final activa.",
+                    )
                 has_active_child = session.exec(
-                    select(Categoria.id).where(
+                    select(Categoria.id)
+                    .where(
                         col(Categoria.parent_id) == target.id,
                         col(Categoria.activo).is_(True),
-                    ).limit(1)
+                    )
+                    .limit(1)
                 ).first()
                 if has_active_child:
-                    raise HTTPException(status_code=400, detail="La categoría destino debe ser hoja.")
+                    raise HTTPException(
+                        status_code=400, detail="La categoría destino debe ser hoja."
+                    )
                 has_company_warehouse = session.exec(
                     select(ProductoBodega.id)
                     .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
@@ -718,10 +872,14 @@ class CategoriaService(BaseService[Categoria]):
                         col(ProductoBodega.activo).is_(True),
                         col(Bodega.activo).is_(True),
                         col(Bodega.empresa_id) == empresa_id,
-                    ).limit(1)
+                    )
+                    .limit(1)
                 ).first()
                 if not has_company_warehouse:
-                    raise HTTPException(status_code=403, detail="El producto no pertenece a la empresa seleccionada.")
+                    raise HTTPException(
+                        status_code=403,
+                        detail="El producto no pertenece a la empresa seleccionada.",
+                    )
 
                 temporary_categories = session.exec(
                     select(Categoria)
@@ -740,7 +898,9 @@ class CategoriaService(BaseService[Categoria]):
                         category
                         for category in temporary_categories
                         if category.parent_id is not None
-                        and self._categoria_descendiente_de(session, target, category.parent_id)
+                        and self._categoria_descendiente_de(
+                            session, target, category.parent_id
+                        )
                     ),
                     None,
                 )
@@ -765,14 +925,26 @@ class CategoriaService(BaseService[Categoria]):
                     )
                 )
                 for categoria_id in existing_ids:
-                    session.add(ProductoCategoria(producto_id=producto.id, categoria_id=categoria_id))
+                    session.add(
+                        ProductoCategoria(
+                            producto_id=producto.id, categoria_id=categoria_id
+                        )
+                    )
                 record_domain_change(
                     session,
                     entity="tbl_producto_categoria",
                     entity_id=producto.id,
                     action="RECATEGORIZE_PRODUCT",
-                    before={"categoria_ids": [str(category.id) for category in temporary_categories]},
-                    after={"categoria_ids": [str(category_id) for category_id in existing_ids]},
+                    before={
+                        "categoria_ids": [
+                            str(category.id) for category in temporary_categories
+                        ]
+                    },
+                    after={
+                        "categoria_ids": [
+                            str(category_id) for category_id in existing_ids
+                        ]
+                    },
                 )
                 source_category_ids.add(source.id)
 
@@ -839,7 +1011,10 @@ class CategoriaService(BaseService[Categoria]):
                 )
                 .label("rn"),
             )
-            .join(ancestros_cte, col(CategoriaAtributo.categoria_id) == ancestros_cte.c.categoria_id)
+            .join(
+                ancestros_cte,
+                col(CategoriaAtributo.categoria_id) == ancestros_cte.c.categoria_id,
+            )
             .join(Atributo, col(Atributo.id) == col(CategoriaAtributo.atributo_id))
             .where(col(CategoriaAtributo.activo).is_(True))
             .cte(name="atributos_ranked")
@@ -887,7 +1062,9 @@ class CategoriaService(BaseService[Categoria]):
             for row in rows
         ]
 
-    def get_atributos_heredados_por_categoria(self, session: Session, categoria_id: UUID) -> list[dict[str, Any]]:
+    def get_atributos_heredados_por_categoria(
+        self, session: Session, categoria_id: UUID
+    ) -> list[dict[str, Any]]:
         """
         Obtiene atributos aplicables de una categoría y sus ancestros mediante CTE recursivo.
         """

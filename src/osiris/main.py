@@ -62,11 +62,17 @@ from osiris.modules.common.empleado.router import router as empleado_router
 from osiris.modules.common.empresa.router import router as empresa_router
 from osiris.modules.common.modulo.router import router as modulo_router
 from osiris.modules.common.persona.router import router as persona_router
-from osiris.modules.common.proveedor_persona.router import router as proveedor_persona_router
-from osiris.modules.common.proveedor_sociedad.router import router as proveedor_sociedad_router
+from osiris.modules.common.proveedor_persona.router import (
+    router as proveedor_persona_router,
+)
+from osiris.modules.common.proveedor_sociedad.router import (
+    router as proveedor_sociedad_router,
+)
 from osiris.modules.common.punto_emision.router import router as punto_emision_router
 from osiris.modules.common.rol.router import router as rol_router
-from osiris.modules.common.rol_modulo_permiso.router import router as rol_modulo_permiso_router
+from osiris.modules.common.rol_modulo_permiso.router import (
+    router as rol_modulo_permiso_router,
+)
 from osiris.modules.common.sucursal.router import router as sucursal_router
 from osiris.modules.common.tipo_cliente.router import router as tipo_cliente_router
 from osiris.modules.common.usuario.router import router as usuario_router
@@ -74,19 +80,37 @@ from osiris.modules.compras.router import router as compras_router
 from osiris.modules.impresion.router import router as impresion_router
 from osiris.modules.inventario.atributo.router import router as atributo_router
 from osiris.modules.inventario.bodega.router import router as bodega_router
-from osiris.modules.inventario.casa_comercial.router import router as casa_comercial_router
+from osiris.modules.inventario.casa_comercial.router import (
+    router as casa_comercial_router,
+)
 from osiris.modules.inventario.categoria.router import router as categoria_router
-from osiris.modules.inventario.categoria_atributo.router import router as categoria_atributo_router
+from osiris.modules.inventario.categoria_atributo.router import (
+    router as categoria_atributo_router,
+)
 from osiris.modules.inventario.movimientos.router import router as movimientos_router
 from osiris.modules.inventario.producto.router import router as producto_router
-from osiris.modules.inventario.producto_bodega.router import router as producto_bodega_router
-from osiris.modules.inventario.producto_impuesto.router import router as producto_impuesto_router
+from osiris.modules.inventario.producto_bodega.router import (
+    router as producto_bodega_router,
+)
+from osiris.modules.inventario.producto_impuesto.router import (
+    router as producto_impuesto_router,
+)
 from osiris.modules.reportes.router import router as reportes_router
-from osiris.modules.sri.facturacion_electronica.router import router as facturacion_electronica_router
-from osiris.modules.sri.facturacion_electronica.services.orquestador_fe_service import OrquestadorFEService
-from osiris.modules.sri.impuesto_catalogo.router import router as impuesto_catalogo_router
-from osiris.modules.sri.medidas_temporales.router import router as medidas_temporales_router
-from osiris.modules.sri.tipo_contribuyente.router import router as tipo_contribuyente_router
+from osiris.modules.sri.facturacion_electronica.router import (
+    router as facturacion_electronica_router,
+)
+from osiris.modules.sri.facturacion_electronica.services.orquestador_fe_service import (
+    OrquestadorFEService,
+)
+from osiris.modules.sri.impuesto_catalogo.router import (
+    router as impuesto_catalogo_router,
+)
+from osiris.modules.sri.medidas_temporales.router import (
+    router as medidas_temporales_router,
+)
+from osiris.modules.sri.tipo_contribuyente.router import (
+    router as tipo_contribuyente_router,
+)
 from osiris.modules.ventas.router import router as ventas_router
 
 logger = logging.getLogger(__name__)
@@ -277,7 +301,9 @@ async def observability_http_middleware(
         db_stats = get_current_db_request_stats()
         if app_settings.PERFORMANCE_RESPONSE_HEADERS_ENABLED:
             response.headers["X-DB-Query-Count"] = str(db_stats.query_count)
-            response.headers["X-DB-Time-MS"] = str(round(db_stats.total_time_seconds * 1000, 3))
+            response.headers["X-DB-Time-MS"] = str(
+                round(db_stats.total_time_seconds * 1000, 3)
+            )
             response.headers["X-DB-Slow-Query-Count"] = str(db_stats.slow_query_count)
         response.headers["X-Request-ID"] = request_id
         return response
@@ -292,7 +318,10 @@ async def observability_http_middleware(
             status_code=status_code,
             latency_seconds=latency_seconds,
         )
-        if app_settings.OBSERVABILITY_METRICS_ENABLED and app_settings.OBSERVABILITY_DB_METRICS_ENABLED:
+        if (
+            app_settings.OBSERVABILITY_METRICS_ENABLED
+            and app_settings.OBSERVABILITY_DB_METRICS_ENABLED
+        ):
             record_db_request_summary(
                 method=request.method,
                 path=route_path,
@@ -357,7 +386,9 @@ async def enforce_sensitive_access_control(
         authorization=request.headers.get("Authorization"),
         x_user_id=request.headers.get("X-User-Id"),
     )
-    security_engine: Engine = getattr(request.app.state, "security_audit_engine", engine)
+    security_engine: Engine = getattr(
+        request.app.state, "security_audit_engine", engine
+    )
 
     if not user_id:
         record_unauthorized_access("missing_user")
@@ -427,7 +458,9 @@ async def health_ready() -> JSONResponse:
     except Exception as exc:  # pragma: no cover - degradacion operativa
         record_readiness_check(status="down")
         logger.exception("Health check readiness fallo en DB: %s", exc)
-        return JSONResponse(status_code=503, content={"status": "degraded", "database": "down"})
+        return JSONResponse(
+            status_code=503, content={"status": "degraded", "database": "down"}
+        )
 
     record_readiness_check(status="up")
     return JSONResponse(status_code=200, content={"status": "ok", "database": "up"})
@@ -442,6 +475,7 @@ async def metrics() -> PlainTextResponse:
         content=content,
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )
+
 
 # Incluir routers
 app.include_router(auth_router)

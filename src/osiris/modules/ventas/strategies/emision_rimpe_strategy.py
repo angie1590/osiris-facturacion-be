@@ -50,16 +50,23 @@ class EmisionRimpeStrategy:
         if empresa_id is None and payload.punto_emision_id is not None:
             punto = session.get(PuntoEmision, payload.punto_emision_id)
             if not punto or not punto.activo:
-                raise HTTPException(status_code=404, detail="Punto de emisión no encontrado o inactivo.")
+                raise HTTPException(
+                    status_code=404, detail="Punto de emisión no encontrado o inactivo."
+                )
             sucursal = session.get(Sucursal, punto.sucursal_id)
             if not sucursal or not sucursal.activo:
-                raise HTTPException(status_code=404, detail="Sucursal del punto de emisión no encontrada o inactiva.")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Sucursal del punto de emisión no encontrada o inactiva.",
+                )
             empresa_id = sucursal.empresa_id
 
         if empresa_id is not None:
             empresa = session.get(Empresa, empresa_id)
             if not empresa or not empresa.activo:
-                raise HTTPException(status_code=404, detail="Empresa no encontrada o inactiva.")
+                raise HTTPException(
+                    status_code=404, detail="Empresa no encontrada o inactiva."
+                )
             regimen_emisor = empresa.regimen
 
         tipo_emision = payload.tipo_emision
@@ -75,23 +82,35 @@ class EmisionRimpeStrategy:
         if es_nota_venta_obligatoria:
             es_artesano = bool(empresa and empresa.artesano_calificado)
             if es_artesano:
-                if tipo_emision_explicito and tipo_emision == TipoEmisionVenta.ELECTRONICA:
+                if (
+                    tipo_emision_explicito
+                    and tipo_emision == TipoEmisionVenta.ELECTRONICA
+                ):
                     raise HTTPException(
                         status_code=400,
                         detail="Los artesanos calificados deben emitir notas de venta físicas.",
                     )
                 tipo_emision = TipoEmisionVenta.NOTA_VENTA_FISICA
-                if empresa and empresa.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
-                    self.validar_iva_rimpe_negocio_popular(payload, tipo_emision=tipo_emision)
+                if (
+                    empresa
+                    and empresa.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR
+                ):
+                    self.validar_iva_rimpe_negocio_popular(
+                        payload, tipo_emision=tipo_emision
+                    )
             elif empresa and empresa.regimen == RegimenTributario.RIMPE_NEGOCIO_POPULAR:
-                tiene_actividad_excluida = any(d.es_actividad_excluida for d in payload.detalles)
+                tiene_actividad_excluida = any(
+                    d.es_actividad_excluida for d in payload.detalles
+                )
                 if not tipo_emision_explicito or tipo_emision is None:
                     tipo_emision = (
                         TipoEmisionVenta.ELECTRONICA
                         if tiene_actividad_excluida
                         else TipoEmisionVenta.NOTA_VENTA_FISICA
                     )
-                self.validar_iva_rimpe_negocio_popular(payload, tipo_emision=tipo_emision)
+                self.validar_iva_rimpe_negocio_popular(
+                    payload, tipo_emision=tipo_emision
+                )
         else:
             if tipo_emision == TipoEmisionVenta.NOTA_VENTA_FISICA:
                 raise HTTPException(

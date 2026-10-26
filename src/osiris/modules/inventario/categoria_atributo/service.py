@@ -6,7 +6,17 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 from uuid import UUID
 from fastapi import HTTPException
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, cast, func, insert as sa_insert, literal
+from sqlalchemy import (
+    Boolean,
+    Date,
+    Integer,
+    Numeric,
+    String,
+    cast,
+    func,
+    insert as sa_insert,
+    literal,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -36,9 +46,13 @@ class CategoriaAtributoService:
         categoria = session.get(Categoria, categoria_id)
         atributo = session.get(Atributo, atributo_id)
         if not categoria or not categoria.activo:
-            raise HTTPException(status_code=404, detail="Categoría no encontrada o inactiva.")
+            raise HTTPException(
+                status_code=404, detail="Categoría no encontrada o inactiva."
+            )
         if not atributo or not atributo.activo:
-            raise HTTPException(status_code=404, detail="Atributo no encontrado o inactivo.")
+            raise HTTPException(
+                status_code=404, detail="Atributo no encontrado o inactivo."
+            )
 
         normalized_name = atributo.nombre.strip().casefold()
         existing_attribute_id = session.exec(
@@ -60,7 +74,9 @@ class CategoriaAtributoService:
     def _is_empty_default(value: Optional[str]) -> bool:
         return value is None or (isinstance(value, str) and value.strip() == "")
 
-    def _build_safe_default(self, session: Session, atributo: Optional[Atributo]) -> Optional[str]:
+    def _build_safe_default(
+        self, session: Session, atributo: Optional[Atributo]
+    ) -> Optional[str]:
         if atributo is None:
             return None
         tipo_dato: TipoDato | None = getattr(atributo, "tipo_dato", None)
@@ -78,11 +94,17 @@ class CategoriaAtributoService:
             options: list[str] = getattr(atributo, "select_options", None) or []
             if options:
                 return options[0]
-            raise HTTPException(status_code=400, detail="El atributo select obligatorio requiere opciones.")
+            raise HTTPException(
+                status_code=400,
+                detail="El atributo select obligatorio requiere opciones.",
+            )
         if tipo_dato == TipoDato.CATALOG:
             catalog_id: UUID | None = getattr(atributo, "catalog_id", None)
             if catalog_id is None:
-                raise HTTPException(status_code=400, detail="El atributo catalog obligatorio requiere un catálogo.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="El atributo catalog obligatorio requiere un catálogo.",
+                )
             value: str | None = session.exec(
                 select(CatalogoValor.valor)
                 .where(
@@ -93,7 +115,10 @@ class CategoriaAtributoService:
                 .limit(1)
             ).first()
             if value is None:
-                raise HTTPException(status_code=400, detail="El catálogo del atributo obligatorio no tiene valores activos.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="El catálogo del atributo obligatorio no tiene valores activos.",
+                )
             return str(value)
         return None
 
@@ -121,10 +146,17 @@ class CategoriaAtributoService:
     ) -> tuple[str | int | Decimal | bool | date, str]:
         tipo_normalizado = self._normalize_tipo_dato(tipo_dato)
         if tipo_normalizado is None:
-            raise HTTPException(status_code=400, detail="No se pudo determinar el tipo de dato del atributo")
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar el tipo de dato del atributo",
+            )
 
         try:
-            if tipo_normalizado in {TipoDato.STRING.value, TipoDato.SELECT.value, TipoDato.CATALOG.value}:
+            if tipo_normalizado in {
+                TipoDato.STRING.value,
+                TipoDato.SELECT.value,
+                TipoDato.CATALOG.value,
+            }:
                 return str(valor_default), tipo_normalizado
             if tipo_normalizado == TipoDato.INTEGER.value:
                 return int(str(valor_default).strip()), tipo_normalizado
@@ -140,7 +172,9 @@ class CategoriaAtributoService:
                 detail="El valor_default no coincide con el tipo de dato del atributo",
             ) from None
 
-        raise HTTPException(status_code=400, detail="Tipo de dato del atributo no soportado")
+        raise HTTPException(
+            status_code=400, detail="Tipo de dato del atributo no soportado"
+        )
 
     def _ejecutar_backfill_atributo(
         self,
@@ -162,7 +196,9 @@ class CategoriaAtributoService:
         if valor_default is None or self._is_empty_default(valor_default):
             return
 
-        valor_tipado, tipo_normalizado = self._cast_default_by_tipo(valor_default, tipo_dato)
+        valor_tipado, tipo_normalizado = self._cast_default_by_tipo(
+            valor_default, tipo_dato
+        )
 
         categorias_cte = (
             select(col(Categoria.id).label("categoria_id"))
@@ -170,13 +206,17 @@ class CategoriaAtributoService:
             .cte(name="categoria_descendientes", recursive=True)
         )
         categorias_cte = categorias_cte.union_all(
-            select(col(Categoria.id).label("categoria_id"))
-            .where(col(Categoria.parent_id) == categorias_cte.c.categoria_id)
+            select(col(Categoria.id).label("categoria_id")).where(
+                col(Categoria.parent_id) == categorias_cte.c.categoria_id
+            )
         )
 
         productos_afectados = (
             select(col(ProductoCategoria.producto_id).label("producto_id"))
-            .join(categorias_cte, col(ProductoCategoria.categoria_id) == categorias_cte.c.categoria_id)
+            .join(
+                categorias_cte,
+                col(ProductoCategoria.categoria_id) == categorias_cte.c.categoria_id,
+            )
             .distinct()
             .subquery()
         )
@@ -187,7 +227,11 @@ class CategoriaAtributoService:
         valor_boolean_expr = literal(None, type_=Boolean())
         valor_date_expr = literal(None, type_=Date())
 
-        if tipo_normalizado in {TipoDato.STRING.value, TipoDato.SELECT.value, TipoDato.CATALOG.value}:
+        if tipo_normalizado in {
+            TipoDato.STRING.value,
+            TipoDato.SELECT.value,
+            TipoDato.CATALOG.value,
+        }:
             valor_string_expr = literal(valor_tipado, type_=String())
         elif tipo_normalizado == TipoDato.INTEGER.value:
             valor_integer_expr = literal(valor_tipado, type_=Integer())
@@ -200,7 +244,9 @@ class CategoriaAtributoService:
 
         bind = session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else ""
-        product_attribute_table = SQLModel.metadata.tables["tbl_producto_atributo_valor"]
+        product_attribute_table = SQLModel.metadata.tables[
+            "tbl_producto_atributo_valor"
+        ]
 
         insert_stmt: Any
         id_expr: ColumnElement[Any]
@@ -216,7 +262,9 @@ class CategoriaAtributoService:
                 PGUUID(as_uuid=True),
             )
         elif dialect_name == "sqlite":
-            insert_stmt = sqlite_insert(product_attribute_table).prefix_with("OR IGNORE")
+            insert_stmt = sqlite_insert(product_attribute_table).prefix_with(
+                "OR IGNORE"
+            )
             id_expr = func.lower(func.hex(func.randomblob(16)))
         else:
             insert_stmt = sa_insert(product_attribute_table)
@@ -255,12 +303,20 @@ class CategoriaAtributoService:
         )
 
         if dialect_name == "postgresql" and hasattr(stmt, "on_conflict_do_nothing"):
-            stmt = stmt.on_conflict_do_nothing(index_elements=["producto_id", "atributo_id"])
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=["producto_id", "atributo_id"]
+            )
 
         session.exec(stmt)
         session.flush()
 
-    def list_paginated(self, session: Session, skip: int = 0, limit: int = 50, categoria_id: Optional[UUID] = None) -> list[CategoriaAtributo]:
+    def list_paginated(
+        self,
+        session: Session,
+        skip: int = 0,
+        limit: int = 50,
+        categoria_id: Optional[UUID] = None,
+    ) -> list[CategoriaAtributo]:
         query = select(CategoriaAtributo).where(col(CategoriaAtributo.activo).is_(True))
         if categoria_id:
             query = query.where(CategoriaAtributo.categoria_id == categoria_id)
@@ -297,7 +353,9 @@ class CategoriaAtributoService:
             activo=True,
         )
         session.add(entity)
-        if entity.obligatorio is True and not self._is_empty_default(entity.valor_default):
+        if entity.obligatorio is True and not self._is_empty_default(
+            entity.valor_default
+        ):
             self._ejecutar_backfill_atributo(
                 session,
                 entity,
@@ -322,7 +380,13 @@ class CategoriaAtributoService:
             session.refresh(entity)
         return entity
 
-    def update(self, session: Session, id: UUID, dto: CategoriaAtributoUpdate, usuario_auditoria: Optional[str] = None) -> Optional[CategoriaAtributo]:
+    def update(
+        self,
+        session: Session,
+        id: UUID,
+        dto: CategoriaAtributoUpdate,
+        usuario_auditoria: Optional[str] = None,
+    ) -> Optional[CategoriaAtributo]:
         entity = session.get(CategoriaAtributo, id)
         if not entity:
             return None
@@ -363,7 +427,10 @@ class CategoriaAtributoService:
         if (
             entity.obligatorio is True
             and not self._is_empty_default(entity.valor_default)
-            and (backfill_on_required_transition or dto.aplicar_default_a_existentes is True)
+            and (
+                backfill_on_required_transition
+                or dto.aplicar_default_a_existentes is True
+            )
         ):
             if atributo_master is None:
                 atributo_master = session.get(Atributo, entity.atributo_id)
@@ -391,7 +458,9 @@ class CategoriaAtributoService:
         session.refresh(entity)
         return entity
 
-    def delete(self, session: Session, id: UUID, usuario_auditoria: Optional[str] = None) -> bool:
+    def delete(
+        self, session: Session, id: UUID, usuario_auditoria: Optional[str] = None
+    ) -> bool:
         entity = session.get(CategoriaAtributo, id)
         if not entity:
             return False

@@ -83,12 +83,18 @@ class Empresa(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     telefono: Optional[str] = Field(default=None, max_length=15)
     logo: Optional[str] = Field(default=None, max_length=500)
 
-    tipo_contribuyente_juridico: Optional[TipoContribuyenteJuridico] = Field(default=None, nullable=True)
+    tipo_contribuyente_juridico: Optional[TipoContribuyenteJuridico] = Field(
+        default=None, nullable=True
+    )
     obligado_contabilidad: bool = Field(default=False)
-    regimen: RegimenTributario = Field(default=RegimenTributario.GENERAL, nullable=False)
+    regimen: RegimenTributario = Field(
+        default=RegimenTributario.GENERAL, nullable=False
+    )
 
     contribuyente_especial: bool = Field(default=False, nullable=False)
-    contribuyente_especial_resolucion: Optional[str] = Field(default=None, max_length=64)
+    contribuyente_especial_resolucion: Optional[str] = Field(
+        default=None, max_length=64
+    )
     gran_contribuyente: bool = Field(default=False, nullable=False)
     gran_contribuyente_resolucion: Optional[str] = Field(default=None, max_length=64)
     agente_retencion: bool = Field(default=False, nullable=False)
@@ -117,7 +123,9 @@ class Empresa(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
         )
 
     # Legacy: se mantiene por compatibilidad mientras FE técnica se consolida.
-    modo_emision: ModoEmisionEmpresa = Field(default=ModoEmisionEmpresa.ELECTRONICO, nullable=False)
+    modo_emision: ModoEmisionEmpresa = Field(
+        default=ModoEmisionEmpresa.ELECTRONICO, nullable=False
+    )
 
     # FK al catálogo (PK = 'codigo')
     tipo_contribuyente_id: str = Field(
@@ -136,7 +144,9 @@ def _serialize_for_audit(value: Any) -> Any:
 
 
 @event.listens_for(Empresa, "after_update")
-def _registrar_auditoria_regimen_modo_after_update(_mapper: Mapper[Empresa], connection: Connection, target: Empresa) -> None:
+def _registrar_auditoria_regimen_modo_after_update(
+    _mapper: Mapper[Empresa], connection: Connection, target: Empresa
+) -> None:
     state: InstanceState[Empresa] = sa_inspect(target, raiseerr=True)
 
     before_json: dict[str, Any] = {}
@@ -172,7 +182,9 @@ def _registrar_auditoria_regimen_modo_after_update(_mapper: Mapper[Empresa], con
         if field_name not in state.attrs:
             continue
         history = state.attrs[field_name].history
-        old_value = history.deleted[0] if history.deleted else getattr(target, field_name)
+        old_value = (
+            history.deleted[0] if history.deleted else getattr(target, field_name)
+        )
         new_value = history.added[0] if history.added else getattr(target, field_name)
 
         before_json[field_name] = _serialize_for_audit(old_value)

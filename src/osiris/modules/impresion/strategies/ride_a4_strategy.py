@@ -3,7 +3,10 @@ from __future__ import annotations
 import re
 from html import unescape
 
-from osiris.modules.impresion.strategies.render_strategy import RenderStrategy, checked_pdf_output
+from osiris.modules.impresion.strategies.render_strategy import (
+    RenderStrategy,
+    checked_pdf_output,
+)
 
 
 def _pdf_escape(text: str) -> str:
@@ -31,7 +34,9 @@ def _build_minimal_pdf(lines: list[str]) -> bytes:
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
             b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"
         ),
-        f"<< /Length {len(content_stream)} >>\nstream\n".encode() + content_stream + b"\nendstream",
+        f"<< /Length {len(content_stream)} >>\nstream\n".encode()
+        + content_stream
+        + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
 
@@ -67,6 +72,7 @@ class RideA4Strategy(RenderStrategy):
             # Fallback local para entornos sin dependencia gráfica.
             plain = unescape(re.sub(r"<[^>]+>", " ", html_content))
             plain = re.sub(r"\s+", " ", plain).strip()
-            chunks = [plain[i : i + 110] for i in range(0, max(len(plain), 1), 110)] or ["RIDE A4"]
+            chunks = [
+                plain[i : i + 110] for i in range(0, max(len(plain), 1), 110)
+            ] or ["RIDE A4"]
             return _build_minimal_pdf(chunks)
-

@@ -25,7 +25,11 @@ from osiris.modules.reportes.schemas import (
     ReportePre104BloqueRead,
     ReporteImpuestosMensualRead,
 )
-from osiris.modules.ventas.models import RetencionRecibida, RetencionRecibidaDetalle, Venta
+from osiris.modules.ventas.models import (
+    RetencionRecibida,
+    RetencionRecibidaDetalle,
+    Venta,
+)
 from osiris.modules.sri.core_sri.schemas import q2
 
 
@@ -41,7 +45,9 @@ class ReporteTributarioService:
         return Decimal(str(value))
 
     @staticmethod
-    def _period_filters(session: Session, field: SQLColumnExpression[date], mes: int, anio: int) -> list[ColumnElement[bool]]:
+    def _period_filters(
+        session: Session, field: SQLColumnExpression[date], mes: int, anio: int
+    ) -> list[ColumnElement[bool]]:
         bind = session.get_bind()
         dialect = bind.dialect.name if bind is not None else ""
         if dialect == "postgresql":
@@ -82,7 +88,9 @@ class ReporteTributarioService:
             func.count(col(Venta.id)),
         ).select_from(Venta)
         if sucursal_id is not None:
-            ventas_stmt = ventas_stmt.join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
+            ventas_stmt = ventas_stmt.join(
+                PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id)
+            )
         ventas_stmt = ventas_stmt.where(*ventas_filtros)
         (
             ventas_subtotal_0,
@@ -117,7 +125,9 @@ class ReporteTributarioService:
             func.count(col(Compra.id)),
         )
         if empresa_scope is not None:
-            compras_stmt = compras_stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+            compras_stmt = compras_stmt.join(
+                Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+            ).where(
                 col(Sucursal.activo).is_(True),
                 col(Sucursal.empresa_id) == empresa_scope,
             )
@@ -147,7 +157,9 @@ class ReporteTributarioService:
         pasivo_stmt = (
             select(
                 codigo_pasivo_expr.label("codigo_sri"),
-                func.coalesce(func.sum(col(RetencionDetalle.valor_retenido)), 0).label("total"),
+                func.coalesce(func.sum(col(RetencionDetalle.valor_retenido)), 0).label(
+                    "total"
+                ),
             )
             .select_from(RetencionDetalle)
             .join(Retencion, col(Retencion.id) == col(RetencionDetalle.retencion_id))
@@ -164,32 +176,44 @@ class ReporteTributarioService:
             .order_by(codigo_pasivo_expr.asc())
         )
         if empresa_scope is not None:
-            pasivo_stmt = pasivo_stmt.join(Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)).where(
+            pasivo_stmt = pasivo_stmt.join(
+                Sucursal, col(Sucursal.id) == col(Compra.sucursal_id)
+            ).where(
                 col(Sucursal.activo).is_(True),
                 col(Sucursal.empresa_id) == empresa_scope,
             )
         if sucursal_id is not None:
             pasivo_stmt = pasivo_stmt.where(col(Compra.sucursal_id) == sucursal_id)
         pasivo_rows = session.exec(pasivo_stmt).all()
-        pasivo = {str(codigo_sri): q2(self._d(total_retenido)) for codigo_sri, total_retenido in pasivo_rows}
+        pasivo = {
+            str(codigo_sri): q2(self._d(total_retenido))
+            for codigo_sri, total_retenido in pasivo_rows
+        }
 
-        codigo_credito_expr: Label[str] = col(RetencionRecibidaDetalle.codigo_impuesto_sri).label("codigo_sri")
+        codigo_credito_expr: Label[str] = col(
+            RetencionRecibidaDetalle.codigo_impuesto_sri
+        ).label("codigo_sri")
         credito_stmt: Select[tuple[str, Decimal]] = (
             sa_select(
-            codigo_credito_expr,
-                func.coalesce(func.sum(col(RetencionRecibidaDetalle.valor_retenido)), 0).label("total"),
+                codigo_credito_expr,
+                func.coalesce(
+                    func.sum(col(RetencionRecibidaDetalle.valor_retenido)), 0
+                ).label("total"),
             )
             .select_from(RetencionRecibidaDetalle)
             .join(
                 RetencionRecibida,
-                col(RetencionRecibida.id) == col(RetencionRecibidaDetalle.retencion_recibida_id),
+                col(RetencionRecibida.id)
+                == col(RetencionRecibidaDetalle.retencion_recibida_id),
             )
             .join(Venta, col(Venta.id) == col(RetencionRecibida.venta_id))
             .where(
                 col(RetencionRecibidaDetalle.activo).is_(True),
                 col(RetencionRecibida.activo).is_(True),
                 col(RetencionRecibida.estado) == EstadoRetencionRecibida.APLICADA,
-                *self._period_filters(session, col(RetencionRecibida.fecha_emision), mes, anio),
+                *self._period_filters(
+                    session, col(RetencionRecibida.fecha_emision), mes, anio
+                ),
             )
             .group_by(col(RetencionRecibidaDetalle.codigo_impuesto_sri))
             .order_by(col(RetencionRecibidaDetalle.codigo_impuesto_sri).asc())
@@ -197,13 +221,14 @@ class ReporteTributarioService:
         if empresa_scope is not None:
             credito_stmt = credito_stmt.where(col(Venta.empresa_id) == empresa_scope)
         if sucursal_id is not None:
-            credito_stmt = (
-                credito_stmt
-                .join(PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id))
-                .where(col(PuntoEmision.sucursal_id) == sucursal_id)
-            )
+            credito_stmt = credito_stmt.join(
+                PuntoEmision, col(PuntoEmision.id) == col(Venta.punto_emision_id)
+            ).where(col(PuntoEmision.sucursal_id) == sucursal_id)
         credito_rows = session.execute(credito_stmt).all()
-        credito = {str(codigo_sri): q2(self._d(total_retenido)) for codigo_sri, total_retenido in credito_rows}
+        credito = {
+            str(codigo_sri): q2(self._d(total_retenido))
+            for codigo_sri, total_retenido in credito_rows
+        }
 
         return ReporteImpuestosMensualRead(
             mes=mes,

@@ -7,7 +7,10 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
-from osiris.core.company_scope import ensure_entity_belongs_to_selected_company, resolve_company_scope
+from osiris.core.company_scope import (
+    ensure_entity_belongs_to_selected_company,
+    resolve_company_scope,
+)
 from osiris.modules.sri.core_sri.models import (
     CuentaPorCobrar,
     EstadoCuentaPorCobrar,
@@ -24,20 +27,30 @@ from osiris.modules.sri.core_sri.all_schemas import (
     RetencionRecibidaListItemRead,
     RetencionRecibidaRead,
 )
-from osiris.modules.ventas.strategies.validacion_impuestos_sri_strategy import ValidacionImpuestosSRIStrategy
+from osiris.modules.ventas.strategies.validacion_impuestos_sri_strategy import (
+    ValidacionImpuestosSRIStrategy,
+)
 from osiris.utils.pagination import PaginationMeta, build_pagination_meta
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 
 
 class RetencionRecibidaService:
-    def __init__(self, validacion_impuestos_strategy: ValidacionImpuestosSRIStrategy | None = None) -> None:
+    def __init__(
+        self,
+        validacion_impuestos_strategy: ValidacionImpuestosSRIStrategy | None = None,
+    ) -> None:
         self.cxc_service = CuentaPorCobrarService()
-        self.validacion_impuestos_strategy = validacion_impuestos_strategy or ValidacionImpuestosSRIStrategy()
+        self.validacion_impuestos_strategy = (
+            validacion_impuestos_strategy or ValidacionImpuestosSRIStrategy()
+        )
 
     def _validar_venta(self, session: Session, venta_id: UUID) -> Venta:
         venta = session.get(Venta, venta_id)
         if not venta or not venta.activo:
-            raise HTTPException(status_code=404, detail="Venta no encontrada para registrar retencion recibida.")
+            raise HTTPException(
+                status_code=404,
+                detail="Venta no encontrada para registrar retencion recibida.",
+            )
         ensure_entity_belongs_to_selected_company(venta.empresa_id)
         return venta
 
@@ -45,7 +58,9 @@ class RetencionRecibidaService:
     def _empresa_scope() -> UUID | None:
         return resolve_company_scope()
 
-    def _validar_unicidad(self, session: Session, cliente_id: UUID, numero_retencion: str) -> None:
+    def _validar_unicidad(
+        self, session: Session, cliente_id: UUID, numero_retencion: str
+    ) -> None:
         existente = session.exec(
             select(RetencionRecibida).where(
                 col(RetencionRecibida.cliente_id) == cliente_id,
@@ -67,7 +82,9 @@ class RetencionRecibidaService:
         venta = self._validar_venta(session, payload.venta_id)
         self._validar_unicidad(session, payload.cliente_id, payload.numero_retencion)
         try:
-            payload = self.validacion_impuestos_strategy.validar_retencion_recibida(payload, venta)
+            payload = self.validacion_impuestos_strategy.validar_retencion_recibida(
+                payload, venta
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -101,7 +118,9 @@ class RetencionRecibidaService:
         session.commit()
         return self.obtener_retencion_recibida_read(session, retencion.id)
 
-    def aplicar_retencion_recibida(self, session: Session, retencion_id: UUID) -> RetencionRecibidaRead:
+    def aplicar_retencion_recibida(
+        self, session: Session, retencion_id: UUID
+    ) -> RetencionRecibidaRead:
         try:
             retencion = session.exec(
                 select(RetencionRecibida)
@@ -112,7 +131,9 @@ class RetencionRecibidaService:
                 .with_for_update()
             ).one_or_none()
             if not retencion:
-                raise HTTPException(status_code=404, detail="Retencion recibida no encontrada")
+                raise HTTPException(
+                    status_code=404, detail="Retencion recibida no encontrada"
+                )
             self._validar_venta(session, retencion.venta_id)
             if retencion.estado != EstadoRetencionRecibida.BORRADOR:
                 raise HTTPException(
@@ -129,9 +150,15 @@ class RetencionRecibidaService:
                 .with_for_update()
             ).one_or_none()
             if not cxc:
-                raise HTTPException(status_code=404, detail="Cuenta por cobrar no encontrada para la venta")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cuenta por cobrar no encontrada para la venta",
+                )
             if cxc.estado == EstadoCuentaPorCobrar.ANULADA:
-                raise HTTPException(status_code=400, detail="No se puede aplicar retencion sobre una CxC ANULADA.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede aplicar retencion sobre una CxC ANULADA.",
+                )
 
             self.cxc_service.aplicar_retencion_en_cxc(cxc, retencion.total_retenido)
             session.add(cxc)
@@ -156,7 +183,9 @@ class RetencionRecibidaService:
         try:
             motivo_limpio = (motivo or "").strip()
             if not motivo_limpio:
-                raise HTTPException(status_code=400, detail="El motivo de anulación es obligatorio.")
+                raise HTTPException(
+                    status_code=400, detail="El motivo de anulación es obligatorio."
+                )
 
             retencion = session.exec(
                 select(RetencionRecibida)
@@ -167,7 +196,9 @@ class RetencionRecibidaService:
                 .with_for_update()
             ).one_or_none()
             if not retencion:
-                raise HTTPException(status_code=404, detail="Retencion recibida no encontrada")
+                raise HTTPException(
+                    status_code=404, detail="Retencion recibida no encontrada"
+                )
             self._validar_venta(session, retencion.venta_id)
             if retencion.estado != EstadoRetencionRecibida.APLICADA:
                 raise HTTPException(
@@ -184,9 +215,14 @@ class RetencionRecibidaService:
                 .with_for_update()
             ).one_or_none()
             if not cxc:
-                raise HTTPException(status_code=404, detail="Cuenta por cobrar no encontrada para la venta")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cuenta por cobrar no encontrada para la venta",
+                )
             if cxc.estado == EstadoCuentaPorCobrar.ANULADA:
-                raise HTTPException(status_code=400, detail="No se puede anular en una CxC ANULADA.")
+                raise HTTPException(
+                    status_code=400, detail="No se puede anular en una CxC ANULADA."
+                )
 
             self.cxc_service.revertir_retencion_en_cxc(cxc, retencion.total_retenido)
             session.add(cxc)
@@ -218,7 +254,9 @@ class RetencionRecibidaService:
     ) -> RetencionRecibidaRead:
         retencion = session.get(RetencionRecibida, retencion_recibida_id)
         if not retencion or not retencion.activo:
-            raise HTTPException(status_code=404, detail="Retencion recibida no encontrada")
+            raise HTTPException(
+                status_code=404, detail="Retencion recibida no encontrada"
+            )
         self._validar_venta(session, retencion.venta_id)
 
         detalles = list(
@@ -240,7 +278,9 @@ class RetencionRecibidaService:
             estado=retencion.estado,
             total_retenido=retencion.total_retenido,
             detalles=[
-                RetencionRecibidaDetalleRead.model_validate(detalle, from_attributes=True)
+                RetencionRecibidaDetalleRead.model_validate(
+                    detalle, from_attributes=True
+                )
                 for detalle in detalles
             ],
         )
@@ -259,7 +299,9 @@ class RetencionRecibidaService:
         stmt = select(RetencionRecibida)
         empresa_scope = self._empresa_scope()
         if empresa_scope is not None:
-            stmt = stmt.join(Venta, col(Venta.id) == col(RetencionRecibida.venta_id)).where(
+            stmt = stmt.join(
+                Venta, col(Venta.id) == col(RetencionRecibida.venta_id)
+            ).where(
                 col(Venta.activo).is_(True),
                 col(Venta.empresa_id) == empresa_scope,
             )
@@ -277,7 +319,10 @@ class RetencionRecibidaService:
         total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
         retenciones = list(
             session.exec(
-                stmt.order_by(col(RetencionRecibida.fecha_emision).desc(), col(RetencionRecibida.creado_en).desc())
+                stmt.order_by(
+                    col(RetencionRecibida.fecha_emision).desc(),
+                    col(RetencionRecibida.creado_en).desc(),
+                )
                 .offset(offset)
                 .limit(limit)
             ).all()

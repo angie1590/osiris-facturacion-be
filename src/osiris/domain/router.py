@@ -28,7 +28,9 @@ def register_crud_routes(
     # -------- LIST (paginado: items + meta)
     @router.get(base_path, response_model=paginated_model, tags=route_tags)
     def list_items(
-        limit: int = Query(50, ge=1, le=1000, description="Máximo de registros a devolver"),
+        limit: int = Query(
+            50, ge=1, le=1000, description="Máximo de registros a devolver"
+        ),
         offset: int = Query(0, ge=0, description="Número de registros a saltar"),
         only_active: bool = Query(True, description="Filtrar por activo=True/False"),
         session: Session = Depends(get_session),
@@ -49,8 +51,14 @@ def register_crud_routes(
     ) -> Any:
         obj = service.get(session, item_id)
         if not obj:
-            singular = prefix[:-1].capitalize() if prefix.endswith("s") else prefix.capitalize()
-            raise HTTPException(status_code=404, detail=f"{singular} {item_id} not found")
+            singular = (
+                prefix[:-1].capitalize()
+                if prefix.endswith("s")
+                else prefix.capitalize()
+            )
+            raise HTTPException(
+                status_code=404, detail=f"{singular} {item_id} not found"
+            )
         return obj
 
     # -------- CREATE (201)  ← anotado con model_create para que OpenAPI muestre el esquema correcto
@@ -61,8 +69,14 @@ def register_crud_routes(
         return service.create(session, payload.model_dump(exclude_unset=True))
 
     create_item.__annotations__["payload"] = model_create
-    router.add_api_route(base_path, create_item, response_model=model_read,
-                         status_code=status.HTTP_201_CREATED, tags=route_tags, methods=["POST"])
+    router.add_api_route(
+        base_path,
+        create_item,
+        response_model=model_read,
+        status_code=status.HTTP_201_CREATED,
+        tags=route_tags,
+        methods=["POST"],
+    )
 
     # -------- UPDATE (PUT = full replace, mismo schema que create)
     def update_item(
@@ -73,22 +87,43 @@ def register_crud_routes(
         data = payload.model_dump(exclude_unset=True)
         updated = service.update(session, item_id, data)
         if updated is None:
-            singular = prefix[:-1].capitalize() if prefix.endswith("s") else prefix.capitalize()
-            raise HTTPException(status_code=404, detail=f"{singular} {item_id} not found")
+            singular = (
+                prefix[:-1].capitalize()
+                if prefix.endswith("s")
+                else prefix.capitalize()
+            )
+            raise HTTPException(
+                status_code=404, detail=f"{singular} {item_id} not found"
+            )
         return updated
 
     update_item.__annotations__["payload"] = model_update
-    router.add_api_route(f"{base_path}/{{item_id}}", update_item, response_model=model_read,
-                         tags=route_tags, methods=["PUT"])
+    router.add_api_route(
+        f"{base_path}/{{item_id}}",
+        update_item,
+        response_model=model_read,
+        tags=route_tags,
+        methods=["PUT"],
+    )
 
     # -------- DELETE (204 / 404)
-    @router.delete(f"{base_path}/{{item_id}}", status_code=status.HTTP_204_NO_CONTENT, tags=route_tags)
+    @router.delete(
+        f"{base_path}/{{item_id}}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=route_tags,
+    )
     def delete_item(
         item_id: UUID = Path(...),
         session: Session = Depends(get_session),
     ) -> None:
         ok = service.delete(session, item_id)
         if ok is None:
-            singular = prefix[:-1].capitalize() if prefix.endswith("s") else prefix.capitalize()
-            raise HTTPException(status_code=404, detail=f"{singular} {item_id} not found")
+            singular = (
+                prefix[:-1].capitalize()
+                if prefix.endswith("s")
+                else prefix.capitalize()
+            )
+            raise HTTPException(
+                status_code=404, detail=f"{singular} {item_id} not found"
+            )
         # 204 sin body
