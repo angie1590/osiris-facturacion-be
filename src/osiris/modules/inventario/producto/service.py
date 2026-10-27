@@ -493,6 +493,190 @@ class ProductoService(BaseService[Producto]):
         finally:
             reset_current_user_id(actor_token)
 
+    def update_integral(
+        self,
+        session: Session,
+        producto_id: UUID,
+        payload: Any,
+        *,
+        actor_id: UUID,
+        commit: bool = True,
+    ) -> Producto | None:
+        actor_token = set_current_user_id(str(actor_id))
+        try:
+            CategoriaService.acquire_hierarchy_mutation_lock(session)
+            product = session.exec(
+                select(Producto)
+                .where(col(Producto.id) == producto_id)
+                .with_for_update()
+            ).first()
+            if product is None:
+                raise HTTPException(status_code=404, detail="Producto no encontrado.")
+            self._asegurar_producto_en_scope(session, producto_id)
+
+            bridge_category_ids = list(
+                session.exec(
+                    select(ProductoCategoria.categoria_id).where(
+                        col(ProductoCategoria.producto_id) == producto_id
+                    )
+                ).all()
+            )
+            if len(bridge_category_ids) > 1 or (
+                product.categoria_principal_id is not None
+                and bridge_category_ids != [product.categoria_principal_id]
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "PRODUCT_PRIMARY_CATEGORY_CONFLICT",
+                        "message": "La categoría principal y la proyección legacy no coinciden.",
+                    },
+                )
+            previous_category_id = product.categoria_principal_id or (
+                bridge_category_ids[0] if bridge_category_ids else None
+            )
+            if previous_category_id != payload.categoria_principal_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "PRODUCT_CATEGORY_CHANGE_REQUIRES_PREVIEW",
+                        "message": "El cambio de categoría requiere preview vigente.",
+                    },
+                )
+
+            self._validate_leaf_categories(session, [payload.categoria_principal_id])
+            effective_attributes = CategoriaService().get_atributos_heredados_por_categoria(
+                session, payload.categoria_principal_id
+            )
+            effective_by_id = {
+                attribute["atributo_id"]: attribute
+                for attribute in effective_attributes
+            }
+            attribute_values = payload.atributos
+            provided_values = (
+                {item.atributo_id: item.valor for item in attribute_values}
+                if attribute_values is not None
+                else {}
+            )
+            unknown_ids = set(provided_values) - set(effective_by_id)
+            if unknown_ids:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_ATTRIBUTE_NOT_APPLICABLE",
+                        "message": "Uno o más atributos no aplican a la categoría principal.",
+                        "fields": {
+                            f"atributos.{attribute_id}": "El atributo no aplica a la categoría principal."
+                            for attribute_id in sorted(unknown_ids, key=str)
+                        },
+                    },
+                )
+
+            null_optional_ids: list[UUID] = []
+            for attribute_id, value in provided_values.items():
+                if value is not None:
+                    continue
+                effective_attribute = effective_by_id[attribute_id]
+                if effective_attribute["obligatorio"] is True:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "PRODUCT_REQUIRED_ATTRIBUTES_MISSING",
+                            "message": "Un atributo obligatorio no puede limpiarse.",
+                            "fields": {f"atributos.{attribute_id}": "Este valor es obligatorio."},
+                            "conteos": {"faltantes": 1},
+                        },
+                    )
+                null_optional_ids.append(attribute_id)
+
+            data = payload.model_dump(
+                exclude_unset=True,
+                exclude={"atributos", "precondicion_preview"},
+            )
+            updated = self.update(session, producto_id, data, commit=False)
+            if updated is None:
+                raise HTTPException(status_code=404, detail="Producto no encontrado.")
+
+            if updated.categoria_principal_id != payload.categoria_principal_id:
+                updated.categoria_principal_id = payload.categoria_principal_id
+                session.add(updated)
+                session.flush()
+
+            for attribute_id in null_optional_ids:
+                value_entity = session.exec(
+                    select(ProductoAtributoValor).where(
+                        col(ProductoAtributoValor.producto_id) == producto_id,
+                        col(ProductoAtributoValor.atributo_id) == attribute_id,
+                        col(ProductoAtributoValor.activo).is_(True),
+                    )
+                ).first()
+                if value_entity is None:
+                    continue
+                before_value = {
+                    "valor_string": value_entity.valor_string,
+                    "valor_integer": value_entity.valor_integer,
+                    "valor_decimal": str(value_entity.valor_decimal)
+                    if value_entity.valor_decimal is not None
+                    else None,
+                    "valor_boolean": value_entity.valor_boolean,
+                    "valor_date": value_entity.valor_date.isoformat()
+                    if value_entity.valor_date is not None
+                    else None,
+                    "activo": True,
+                }
+                value_entity.activo = False
+                session.add(value_entity)
+                record_domain_change(
+                    session,
+                    entity="tbl_producto_atributo_valor",
+                    entity_id=value_entity.id,
+                    action="DEACTIVATE_NON_APPLICABLE_PRODUCT_ATTRIBUTE",
+                    before=before_value,
+                    after={"producto_id": str(producto_id), "atributo_id": str(attribute_id), "activo": False},
+                )
+
+            from osiris.modules.inventario.producto.service_atributos import (
+                ProductoAtributoValorService,
+            )
+
+            values_to_upsert = [
+                ProductoAtributoValorUpsert(
+                    atributo_id=item.atributo_id,
+                    valor=item.valor,
+                )
+                for item in (attribute_values or [])
+                if item.valor is not None
+            ]
+            try:
+                ProductoAtributoValorService().upsert_valores_producto_validando_aplicabilidad(
+                    session,
+                    producto_id,
+                    values_to_upsert,
+                    commit=False,
+                )
+            except HTTPException as exc:
+                if exc.status_code != 400:
+                    raise
+                is_required = "obligatorio" in str(exc.detail).casefold()
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_REQUIRED_ATTRIBUTES_MISSING"
+                        if is_required
+                        else "PRODUCT_ATTRIBUTE_VALUE_INVALID",
+                        "message": str(exc.detail),
+                    },
+                ) from exc
+
+            if commit:
+                session.commit()
+                session.refresh(updated)
+            return updated
+        except Exception as exc:
+            self._handle_transaction_error(session, exc)
+        finally:
+            reset_current_user_id(actor_token)
+
     def update(
         self,
         session: Session,

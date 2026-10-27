@@ -15,6 +15,7 @@ from osiris.modules.inventario.producto.models import (
     ProductoCompletoRead,
     ProductoCreate,
     ProductoIntegralCreate,
+    ProductoIntegralUpdate,
     ProductoListadoRead,
     ProductoUpdate,
 )
@@ -83,10 +84,19 @@ def create_producto(
 @router.put("/{producto_id}", response_model=ProductoCompletoRead, dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
 def update_producto(
     producto_id: UUID,
-    payload: ProductoUpdate,
+    payload: ProductoIntegralUpdate | ProductoUpdate,
     session: Session = Depends(get_session),
+    usuario: Usuario = Depends(get_current_usuario),
 ) -> ProductoCompletoRead:
-    producto = service.update(session, producto_id, payload.model_dump(exclude_unset=True))
+    if isinstance(payload, ProductoIntegralUpdate):
+        producto = service.update_integral(
+            session,
+            producto_id,
+            payload,
+            actor_id=usuario.id,
+        )
+    else:
+        producto = service.update(session, producto_id, payload.model_dump(exclude_unset=True))
     if not producto:
         raise HTTPException(status_code=404, detail=f"Producto {producto_id} no encontrado")
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto_id))

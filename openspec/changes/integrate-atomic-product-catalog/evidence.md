@@ -58,3 +58,10 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - `tests/test_producto_integral_service.py`: alta guarda FK/bridge/IVA/default EAV/auditoría; faltante obligatorio, atributo no aplicable e impuesto inválido responden errores canónicos y revierten todas las filas del producto.
 - Suite BE completa: 1298 passed, 80 skipped; tests legacy/DTOs/servicio y Ruff/mypy focales limpios; OpenSpec estricto válido.
 - La DB local conserva 0 productos tras la limpieza autorizada de 7.2.3; estas pruebas usan SQLite aislado y no sembraron datos compartidos.
+
+## Gate 7.3.3 — Edición integral
+
+- `ProductoService.update_integral` bloquea la fila Producto, verifica consistencia FK/bridge y solo permite mantener la categoría actual hasta implementar preview 7.4. General fields, taxes, EAV y auditoría comparten una sesión/commit.
+- Colección de atributos omitida conserva valores existentes; `null` desactiva lógicamente solo atributos opcionales y retiene la fila/valor histórico. Un obligatorio `null`, un atributo no aplicable o un valor inválido abortan la transacción.
+- Cambio de categoría sin preview devuelve `409 PRODUCT_CATEGORY_CHANGE_REQUIRES_PREVIEW` sin mutar el producto.
+- `tests/test_producto_integral_service.py`: 8 passed, incluyendo rollback completo de update cuando un EAV falla después de modificar un dato general. Suite BE completa: 1302 passed, 80 skipped; Ruff/mypy focales limpios.
