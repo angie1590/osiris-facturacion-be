@@ -41,3 +41,11 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - El borrado se ejecutó en una transacción con aserciones exactas para los 19 productos, cada relación dependiente y las 400 unidades; cualquier variación habría abortado el commit. No había filas de stock materializado, detalles de movimientos, compras ni ventas asociadas y la cantidad agregada en `tbl_producto` era cero.
 - Postflight: 0 productos y 0 relaciones bridge/EAV/bodega/impuestos/proveedores del conjunto; 39 categorías, 21 atributos y 19 mappings sin cambios. `audit_catalog_integrity.py --product-cutover --summary` informa `apto_para_migrar=true`, 0 conflictos y 0 candidatos backfill. La columna nueva se conserva nullable; no se activó CHECK/NOT NULL.
 - Resultado de suites posterior a la corrección del preflight: backend 1289 passed, 80 skipped; migraciones PostgreSQL/SQLite 99 passed, 13 skipped; Ruff, mypy y OpenSpec estricto limpios.
+
+## Gate 7.3.1 — DTO integral
+
+- Se añadieron `ProductoIntegralCreate`, `ProductoIntegralUpdate` y `ProductoAtributoIntegralInput` con `categoria_principal_id`, perfil tributario, atributos por UUID y valor escalar tipado.
+- Los DTOs nuevos prohíben campos extras: `categoria_ids` y `usuario_auditoria` no entran en el contrato canónico. Los DTOs legacy existentes no cambiaron y las rutas todavía no usan los nuevos modelos.
+- Alta exige perfil tributario no vacío y categoría; update conserva `atributos` omitido como `None` y acepta `precondicion_preview`; ambas rechazan atributos duplicados y normalizan PVP a dos decimales.
+- `tests/test_producto_integral_models.py`: 5 passed. Ruff, mypy focal y OpenSpec strict: limpios.
+- La validación de pertenencia al resolver efectivo, obligatoriedad y perfil tributario real permanece en el servicio transaccional 3.2; estos DTOs solo validan estructura/tipos.

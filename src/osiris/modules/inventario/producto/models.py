@@ -6,7 +6,7 @@ from datetime import date
 from typing import Optional, List
 from uuid import UUID
 from decimal import Decimal
-from pydantic import field_validator
+from pydantic import StrictBool, StrictInt, StrictStr, field_validator
 
 from osiris.domain.base_models import BaseOSModel
 from osiris.modules.inventario.producto.entity import TipoProducto as TipoProductoEnum
@@ -119,6 +119,99 @@ class ProductoUpdate(BaseOSModel):
             raise ValueError("El PVP debe ser mayor que cero")
         # Redondear a 2 decimales si se proporciona
         return v.quantize(Decimal("0.01")) if v is not None else None
+
+
+ProductoAtributoIntegralValue = StrictStr | StrictInt | Decimal | StrictBool | date | None
+
+
+class ProductoAtributoIntegralInput(BaseOSModel):
+    model_config = {"extra": "forbid"}
+
+    atributo_id: UUID
+    valor: ProductoAtributoIntegralValue
+
+
+class ProductoIntegralCreate(BaseOSModel):
+    model_config = {"extra": "forbid"}
+
+    nombre: str
+    descripcion: Optional[str] = None
+    codigo_barras: Optional[str] = None
+    tipo: TipoProductoEnum = TipoProductoEnum.BIEN
+    pvp: Decimal
+    permite_fracciones: bool = False
+    casa_comercial_id: Optional[UUID] = None
+    categoria_principal_id: UUID
+    impuesto_catalogo_ids: List[UUID]
+    atributos: List[ProductoAtributoIntegralInput] = []
+
+    @field_validator("impuesto_catalogo_ids")
+    @classmethod
+    def require_integral_product_tax(cls, values: List[UUID]) -> List[UUID]:
+        if not values:
+            raise ValueError("Debe seleccionar al menos un impuesto para el producto.")
+        return values
+
+    @field_validator("pvp")
+    @classmethod
+    def validate_integral_pvp(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("El PVP debe ser mayor que cero")
+        return value.quantize(Decimal("0.01"))
+
+    @field_validator("atributos")
+    @classmethod
+    def require_unique_integral_attributes(
+        cls, values: List[ProductoAtributoIntegralInput]
+    ) -> List[ProductoAtributoIntegralInput]:
+        attribute_ids = [item.atributo_id for item in values]
+        if len(attribute_ids) != len(set(attribute_ids)):
+            raise ValueError("No se puede repetir un atributo en el payload integral.")
+        return values
+
+
+class ProductoIntegralUpdate(BaseOSModel):
+    model_config = {"extra": "forbid"}
+
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    codigo_barras: Optional[str] = None
+    tipo: Optional[TipoProductoEnum] = None
+    pvp: Optional[Decimal] = None
+    permite_fracciones: Optional[bool] = None
+    casa_comercial_id: Optional[UUID] = None
+    categoria_principal_id: UUID
+    impuesto_catalogo_ids: Optional[List[UUID]] = None
+    atributos: Optional[List[ProductoAtributoIntegralInput]] = None
+    precondicion_preview: Optional[str] = None
+
+    @field_validator("impuesto_catalogo_ids")
+    @classmethod
+    def require_nonempty_integral_product_tax_update(
+        cls, values: Optional[List[UUID]]
+    ) -> Optional[List[UUID]]:
+        if values is not None and not values:
+            raise ValueError("El perfil fiscal no puede quedar vacío; seleccione un impuesto.")
+        return values
+
+    @field_validator("pvp")
+    @classmethod
+    def validate_integral_update_pvp(cls, value: Optional[Decimal]) -> Optional[Decimal]:
+        if value is not None and value <= 0:
+            raise ValueError("El PVP debe ser mayor que cero")
+        return value.quantize(Decimal("0.01")) if value is not None else None
+
+    @field_validator("atributos")
+    @classmethod
+    def require_unique_integral_update_attributes(
+        cls, values: Optional[List[ProductoAtributoIntegralInput]]
+    ) -> Optional[List[ProductoAtributoIntegralInput]]:
+        if values is None:
+            return None
+        attribute_ids = [item.atributo_id for item in values]
+        if len(attribute_ids) != len(set(attribute_ids)):
+            raise ValueError("No se puede repetir un atributo en el payload integral.")
+        return values
 
 
 class ProductoRead(BaseOSModel):

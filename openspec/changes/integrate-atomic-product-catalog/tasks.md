@@ -14,7 +14,7 @@
 
 ## 3. Gate 7.3 — Escritura integral
 
-- [ ] 3.1 Definir DTOs canónicos de alta/edición con `categoria_principal_id`, impuestos y EAV tipado; rechazar payloads inválidos/atributos no aplicables.
+- [x] 3.1 Definir DTOs canónicos de alta/edición con `categoria_principal_id`, impuestos y EAV tipado; rechazar campos legacy/desconocidos, perfil fiscal vacío y atributos duplicados. La aplicabilidad de dominio se valida en 3.2.
 - [ ] 3.2 Implementar alta atómica con actor autenticado, validación de categoría/atributos/impuestos y una única transacción exterior.
 - [ ] 3.3 Implementar edición atómica, semántica de omitido/null, sincronía del bridge y conservación del historial EAV.
 - [ ] 3.4 Sustituir guards por roles en operaciones canónicas con permisos efectivos `PRODUCTOS`; hacer que servicios hijos no confirmen la transacción.
