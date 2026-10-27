@@ -10,7 +10,7 @@
 - [x] 2.1 Extender `audit_catalog_integrity.py --product-cutover` para clasificación, EAV, backfill candidatos y divergencias FK/bridge; coordinar su salida con la auditoría fiscal de scope existente.
 - [x] 2.2 Agregar `categoria_principal_id` nullable, FK e índice mediante migración Alembic sin alterar/eliminar el bridge ni activar restricción final.
 - [ ] 2.3 Backfillear solo relación legacy única y válida; reportar y bloquear toda ambigüedad sin escoger categoría.
-- [ ] 2.4 Probar upgrade/downgrade/upgrade y fixtures de conflicto en schema PostgreSQL aislado; registrar conteos y diagnóstico.
+- [x] 2.4 Probar upgrade/downgrade/upgrade y fixtures de conflicto en schema PostgreSQL aislado; registrar conteos y diagnóstico.
 
 ## 3. Gate 7.3 — Escritura integral
 

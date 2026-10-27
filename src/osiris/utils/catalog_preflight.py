@@ -471,7 +471,7 @@ def audit_catalog(
 
         effective_attribute_ids = set(effective)
         for (value_product_id, attribute_id), active_values in values_by_key.items():
-            if value_product_id != product["id"]:
+            if not product_cutover or value_product_id != product["id"]:
                 continue
             attribute_record = attribute_by_id.get(attribute_id)
             value_ids = sorted(value["id"] for value in active_values)

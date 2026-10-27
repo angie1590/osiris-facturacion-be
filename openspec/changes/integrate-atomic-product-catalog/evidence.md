@@ -20,7 +20,8 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 ## Checks
 
 - `tests/test_catalog_preflight.py` y `tests/test_product_tax_company_audit.py`: 23 passed.
-- `tests/test_catalog_integrity_migrations.py`: 97 passed, 13 skipped, incluyendo pruebas upgrade/downgrade/upgrade en SQLite y PostgreSQL aislados.
+- `tests/test_catalog_integrity_migrations.py`: 99 passed, 13 skipped, incluyendo pruebas upgrade/downgrade/upgrade y conflicto FK/bridge sin mutación en SQLite y PostgreSQL aislados.
+- Suite BE completa después del cambio: 1289 passed, 80 skipped, 0 failed.
 - Ruff en los archivos Python del preflight: limpio.
 - Mypy focal del preflight y entidad Producto: limpio.
 - `openspec validate integrate-atomic-product-catalog --strict --no-interactive`: válido en backend y frontend.

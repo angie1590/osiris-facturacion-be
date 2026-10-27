@@ -20,6 +20,8 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from osiris.utils.catalog_preflight import audit_catalog
+
 pytestmark = pytest.mark.filterwarnings(
     "ignore:Skipped unsupported reflection of expression-based index:sqlalchemy.exc.SAWarning"
 )
@@ -670,6 +672,80 @@ def test_primary_product_category_downgrade_blocks_populated_fk(database: Engine
     assert "categoria_principal_id" in {
         column["name"] for column in sa.inspect(database).get_columns("tbl_producto")
     }
+
+
+def test_primary_category_preflight_reports_fk_bridge_conflict_without_mutation(
+    database: Engine,
+) -> None:
+    migration = _load(PRIMARY_CATEGORY_REVISION)
+    bridge_category_id = uuid4()
+    primary_category_id = uuid4()
+    product_id = uuid4()
+    bridge_id = uuid4()
+    with database.begin() as connection:
+        _insert(
+            connection,
+            "tbl_categoria",
+            id=bridge_category_id,
+            nombre="Mouse",
+            parent_id=None,
+            activo=True,
+            es_padre=False,
+            is_default=False,
+        )
+        _insert(
+            connection,
+            "tbl_categoria",
+            id=primary_category_id,
+            nombre="Teclado",
+            parent_id=None,
+            activo=True,
+            es_padre=False,
+            is_default=False,
+        )
+        _insert(connection, "tbl_producto", id=product_id, nombre="Producto", activo=True)
+        _insert(
+            connection,
+            "tbl_producto_categoria",
+            id=bridge_id,
+            producto_id=product_id,
+            categoria_id=bridge_category_id,
+        )
+    _run(database, migration.upgrade)
+
+    with database.begin() as connection:
+        product = _table(connection, "tbl_producto")
+        primary_value = (
+            primary_category_id.hex if database.dialect.name == "sqlite" else primary_category_id
+        )
+        connection.execute(
+            product.update()
+            .where(product.c.id == product_id)
+            .values(categoria_principal_id=primary_value)
+        )
+        product_before = connection.execute(
+            sa.select(product).where(product.c.id == product_id)
+        ).mappings().one()
+        bridge = _table(connection, "tbl_producto_categoria")
+        bridge_before = connection.execute(
+            sa.select(bridge).where(bridge.c.id == bridge_id)
+        ).mappings().one()
+
+        report = audit_catalog(connection, product_cutover=True)
+
+        conflict = next(
+            item
+            for item in report["conflictos"]
+            if item["code"] == "PRODUCT_PRIMARY_CATEGORY_CONFLICT"
+        )
+        assert conflict["ids"] == [str(product_id)]
+        assert conflict["categoria_principal_id"] == str(primary_category_id)
+        assert connection.execute(
+            sa.select(product).where(product.c.id == product_id)
+        ).mappings().one() == product_before
+        assert connection.execute(
+            sa.select(bridge).where(bridge.c.id == bridge_id)
+        ).mappings().one() == bridge_before
 
 
 @pytest.mark.parametrize("identity", ["root", "child", "mapping", "attribute_code",

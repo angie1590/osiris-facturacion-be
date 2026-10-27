@@ -529,7 +529,7 @@ def test_preflight_reports_active_eav_values_that_are_duplicate_invalid_or_not_a
             ],
         )
         before = snapshot(connection, metadata)
-        report = audit_catalog(connection)
+        report = audit_catalog(connection, product_cutover=True)
         codes = {item["code"] for item in report["conflictos"]}
 
         assert {
