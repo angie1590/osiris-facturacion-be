@@ -22,6 +22,7 @@ from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.categoria.entity import Categoria
+from osiris.modules.inventario.categoria.router import assign_category_attribute_permission
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import (
@@ -31,7 +32,10 @@ from osiris.modules.inventario.producto.entity import (
     ProductoProveedorSociedad,
     TipoProducto,
 )
-from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
+from osiris.modules.inventario.producto.models_atributos import (
+    ProductoAtributoRemapeo,
+    ProductoAtributoValor,
+)
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.producto.entity import ProductoBodega, ProductoImpuesto
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
@@ -81,6 +85,7 @@ def _build_test_engine():
             ImpuestoCatalogo.__table__,
             ProductoProveedorPersona.__table__,
             ProductoProveedorSociedad.__table__,
+            ProductoAtributoRemapeo.__table__,
             ProductoAtributoValor.__table__,
         ],
     )
@@ -407,13 +412,18 @@ def test_list_productos_retorna_metadata_basica_sin_detalle_de_atributos():
         app.dependency_overrides.pop(get_current_usuario, None)
 
 
-def test_soft_delete_categoria_atributo_oculta_en_producto_y_conserva_valor_eav():
+def test_contextual_remove_category_attribute_hides_product_and_deactivates_eav():
     engine = _build_test_engine()
     with Session(engine) as session:
         producto_id, peso_id, vinculo_id = _seed_data_soft_delete_categoria_atributo(session)
+        mapping = session.get(CategoriaAtributo, vinculo_id)
+        assert mapping is not None
+        categoria_id = mapping.categoria_id
         company_id, role_id = _seed_company_scope(session, [producto_id])
 
     _install_test_dependencies(engine, role_id)
+    actor = SimpleNamespace(id=uuid4(), rol_id=role_id)
+    app.dependency_overrides[assign_category_attribute_permission] = lambda: actor
     try:
         with TestClient(app) as client:
             headers = {"X-Empresa-Id": str(company_id)}
@@ -424,8 +434,26 @@ def test_soft_delete_categoria_atributo_oculta_en_producto_y_conserva_valor_eav(
             assert str(peso_id) in by_id_before
             assert by_id_before[str(peso_id)]["valor"] == "2kg"
 
-            delete_resp = client.delete(f"/api/v1/categorias-atributos/{vinculo_id}", headers=headers)
-            assert delete_resp.status_code == 204
+            preview = client.post(
+                f"/api/v1/categorias/{categoria_id}/atributos/{vinculo_id}/previsualizar-remocion",
+                headers=headers,
+            )
+            assert preview.status_code == 200, preview.text
+            assert preview.json()["conteos"]["valores_desactivados"] == 1
+            delete_resp = client.request(
+                "DELETE",
+                f"/api/v1/categorias/{categoria_id}/atributos/{vinculo_id}",
+                headers=headers,
+                json={
+                    "confirmar": True,
+                    "precondicion_preview": preview.json()["precondicion_preview"],
+                },
+            )
+            assert delete_resp.status_code == 200, delete_resp.text
+            assert delete_resp.json() == {
+                "mapping_id": str(vinculo_id),
+                "valores_desactivados": 1,
+            }
 
             after = client.get(f"/api/v1/productos/{producto_id}", headers=headers)
             assert after.status_code == 200
@@ -446,12 +474,15 @@ def test_soft_delete_categoria_atributo_oculta_en_producto_y_conserva_valor_eav(
                 select(ProductoAtributoValor)
                 .where(ProductoAtributoValor.producto_id == producto_id)
                 .where(ProductoAtributoValor.atributo_id == peso_id)
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
             ).first()
             assert eav_db is not None
             assert eav_db.valor_string == "2kg"
+            assert eav_db.activo is False
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        app.dependency_overrides.pop(assign_category_attribute_permission, None)
 
 
 def test_cambio_categoria_oculta_atributo_huerfano_pero_conserva_historico_eav():

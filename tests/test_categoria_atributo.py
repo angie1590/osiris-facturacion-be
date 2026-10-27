@@ -9,7 +9,8 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -24,9 +25,12 @@ from osiris.modules.inventario.categoria_atributo.models import (
     CategoriaAtributoCreate,
     CategoriaAtributoUpdate,
 )
+from osiris.modules.inventario.categoria_atributo.router import router as categoria_atributo_router
+from osiris.core.openapi_docs import build_gold_standard_openapi
 from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
+from osiris.modules.inventario.categoria.router import router as categoria_router
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoCategoria,
@@ -411,6 +415,52 @@ def test_categoria_atributo_service_list_paginated():
 
     assert len(result) == 1
     session.exec.assert_called_once()
+
+
+def test_legacy_category_attribute_write_routes_return_gone_and_get_is_deprecated():
+    app = FastAPI()
+    app.include_router(categoria_atributo_router)
+    mapping_id = uuid4()
+
+    with TestClient(app) as client:
+        responses = [
+            client.post("/api/v1/categorias-atributos", json={"legacy": True}),
+            client.put(
+                f"/api/v1/categorias-atributos/{mapping_id}",
+                json={"orden": 1},
+            ),
+            client.delete(f"/api/v1/categorias-atributos/{mapping_id}"),
+        ]
+
+    for response in responses:
+        assert response.status_code == 410
+        assert response.json() == {
+            "code": "LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED",
+            "message": "Utilice las operaciones contextuales de la categoría.",
+        }
+
+    openapi = build_gold_standard_openapi(app)["paths"]
+    for path in ("/api/v1/categorias-atributos", "/api/v1/categorias-atributos/{id}"):
+        assert openapi[path]["get"]["deprecated"] is True
+    assert openapi["/api/v1/categorias-atributos"]["post"]["responses"]["410"]
+    assert openapi["/api/v1/categorias-atributos/{id}"]["put"]["responses"]["410"]
+    assert openapi["/api/v1/categorias-atributos/{id}"]["delete"]["responses"]["410"]
+    assert set(openapi["/api/v1/categorias-atributos"]["post"]["responses"]) == {"410"}
+    for method in ("put", "delete"):
+        responses = openapi["/api/v1/categorias-atributos/{id}"][method]["responses"]
+        assert "410" in responses
+        assert set(responses) <= {"410", "422"}
+
+
+def test_contextual_category_attribute_write_rejects_anonymous_actor():
+    app = FastAPI()
+    app.include_router(categoria_router)
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/categorias/{uuid4()}/atributos",
+            json={"atributo_id": str(uuid4())},
+        )
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(

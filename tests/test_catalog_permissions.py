@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, select
 
 from osiris.core.audit import record_domain_change
+from osiris.core.auth import get_current_usuario
 from osiris.core.audit_context import (
     get_current_user_id,
     reset_current_user_id,
@@ -36,6 +37,23 @@ from osiris.modules.common.rol.entity import Rol
 from osiris.modules.common.rol_modulo_permiso.entity import RolModuloPermiso
 from osiris.modules.common.rol_modulo_permiso.service import RolModuloPermisoService
 from osiris.modules.common.usuario.entity import Usuario
+from osiris.modules.inventario.categoria_atributo.router import (
+    read_category_attributes_permission,
+    router as categoria_atributo_router,
+)
+from osiris.modules.inventario.categoria_atributo.service import CategoriaAtributoService
+from osiris.modules.inventario.atributo.router import (
+    read_attribute_remaps_permission,
+    resolve_attribute_remaps_permission,
+    router as atributo_router,
+)
+from osiris.modules.inventario.atributo.router import remap_service
+from osiris.modules.inventario.categoria.router import (
+    read_categories_permission,
+    router as categoria_router,
+    update_category_permission,
+)
+from osiris.modules.inventario.categoria.service import CategoriaService
 
 
 EXPECTED: dict[CatalogOperation, tuple[CatalogPermission, ...]] = {
@@ -332,6 +350,141 @@ def test_non_admin_with_permission_is_allowed(catalog: CatalogFixture) -> None:
         require_catalog_permission(catalog.session, catalog.user.id, "update_attribute").id
         == catalog.user.id
     )
+
+
+def test_legacy_category_attribute_get_requires_effective_attribute_read(
+    catalog: CatalogFixture,
+) -> None:
+    app = FastAPI()
+    app.include_router(categoria_atributo_router)
+    app.dependency_overrides[get_session] = lambda: catalog.session
+    app.dependency_overrides[get_current_usuario] = lambda: catalog.user
+
+    with patch.object(CategoriaAtributoService, "list_paginated", return_value=[]):
+        with TestClient(app) as client:
+            denied = client.get("/api/v1/categorias-atributos")
+            assert denied.status_code == 403
+
+            catalog.grant(EXPECTED["read_attributes"])
+            allowed = client.get("/api/v1/categorias-atributos")
+            assert allowed.status_code == 200
+            assert allowed.json() == []
+
+    route = next(
+        route
+        for route in categoria_atributo_router.routes
+        if getattr(route, "path", None) == "/api/v1/categorias-atributos"
+        and "GET" in getattr(route, "methods", set())
+    )
+    assert route.dependant.dependencies[0].call is read_category_attributes_permission
+
+
+def test_remap_and_b3_routes_use_effective_catalog_permissions() -> None:
+    expected_dependencies = (
+        (atributo_router, "/api/v1/atributos/remapeos/pendientes", "GET", read_attribute_remaps_permission),
+        (atributo_router, "/api/v1/atributos/remapeos/resolver", "POST", resolve_attribute_remaps_permission),
+        (categoria_router, "/api/v1/categorias/sin-clasificar/conteo", "GET", read_categories_permission),
+        (categoria_router, "/api/v1/categorias/sin-clasificar/productos", "GET", read_categories_permission),
+        (categoria_router, "/api/v1/categorias/recategorizar", "POST", update_category_permission),
+    )
+    for router, path, method, permission in expected_dependencies:
+        route = next(
+            route
+            for route in router.routes
+            if getattr(route, "path", None) == path
+            and method in getattr(route, "methods", set())
+        )
+        assert any(
+            dependency.call is permission
+            for dependency in route.dependant.dependencies
+        )
+
+
+def test_b3_reads_and_recategorize_enforce_effective_permissions(
+    catalog: CatalogFixture,
+) -> None:
+    app = FastAPI()
+    app.include_router(categoria_router)
+    app.dependency_overrides[get_session] = lambda: catalog.session
+    app.dependency_overrides[get_current_usuario] = lambda: catalog.user
+    assignments = [{"producto_id": str(uuid4()), "categoria_id": str(uuid4())}]
+
+    with (
+        patch.object(CategoriaService, "contar_productos_sin_recategorizar", return_value=0),
+        patch.object(CategoriaService, "listar_productos_sin_recategorizar", return_value=[]),
+        patch.object(CategoriaService, "recategorizar_productos", return_value={"recategorized": 1}),
+        TestClient(app) as client,
+    ):
+        assert client.get("/api/v1/categorias/sin-clasificar/conteo").status_code == 403
+        assert client.get("/api/v1/categorias/sin-clasificar/productos").status_code == 403
+        assert client.post(
+            "/api/v1/categorias/recategorizar", json={"assignments": assignments}
+        ).status_code == 403
+
+        catalog.grant(EXPECTED["read_categories"])
+        assert client.get("/api/v1/categorias/sin-clasificar/conteo").status_code == 200
+        assert client.get("/api/v1/categorias/sin-clasificar/productos").status_code == 200
+        assert client.post(
+            "/api/v1/categorias/recategorizar", json={"assignments": assignments}
+        ).status_code == 403
+
+        category_grant = catalog.session.exec(
+            select(RolModuloPermiso).where(
+                RolModuloPermiso.rol_id == catalog.role.id
+            )
+        ).one()
+        category_grant.puede_actualizar = True
+        catalog.session.add(category_grant)
+        catalog.session.commit()
+        response = client.post(
+            "/api/v1/categorias/recategorizar", json={"assignments": assignments}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"recategorized": 1}
+
+
+def test_remap_routes_enforce_effective_attribute_permissions(
+    catalog: CatalogFixture,
+) -> None:
+    app = FastAPI()
+    app.include_router(atributo_router)
+    app.dependency_overrides[get_session] = lambda: catalog.session
+    app.dependency_overrides[get_current_usuario] = lambda: catalog.user
+    payload = [{"id": str(uuid4()), "valor": "fixed"}]
+
+    with (
+        patch.object(remap_service, "listar_pendientes", return_value={"total": 0, "groups": []}),
+        patch.object(remap_service, "resolver", return_value={"resolved": 1}),
+        TestClient(app) as client,
+    ):
+        assert client.get("/api/v1/atributos/remapeos/pendientes").status_code == 403
+        assert client.post(
+            "/api/v1/atributos/remapeos/resolver", json=payload
+        ).status_code == 403
+
+        catalog.grant(EXPECTED["read_attributes"])
+        read_response = client.get("/api/v1/atributos/remapeos/pendientes")
+        assert read_response.status_code == 200
+        assert read_response.json() == {"total": 0, "groups": []}
+        assert client.post(
+            "/api/v1/atributos/remapeos/resolver", json=payload
+        ).status_code == 403
+
+        attribute_grant = catalog.session.exec(
+            select(RolModuloPermiso).where(
+                RolModuloPermiso.rol_id == catalog.role.id,
+                RolModuloPermiso.modulo_id
+                == select(Modulo.id).where(Modulo.codigo == "ATRIBUTOS").scalar_subquery(),
+            )
+        ).one()
+        attribute_grant.puede_actualizar = True
+        catalog.session.add(attribute_grant)
+        catalog.session.commit()
+        resolve_response = client.post(
+            "/api/v1/atributos/remapeos/resolver", json=payload
+        )
+        assert resolve_response.status_code == 200
+        assert resolve_response.json() == {"resolved": 1}
 
 
 @pytest.mark.parametrize("allowed", [False, True])

@@ -7,7 +7,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlmodel import Session, col, select
 
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION, get_session
-from osiris.core.auth import require_roles
 from osiris.core.catalog_permissions import catalog_permission
 from osiris.domain.catalog_contracts import (
     AssignmentInput,
@@ -622,17 +621,26 @@ def reactivar_categoria(
     return CategoriaRead.model_validate(category)
 
 
-@router.get("/sin-clasificar/conteo")
+@router.get(
+    "/sin-clasificar/conteo",
+    dependencies=[Depends(read_categories_permission)],
+)
 def contar_sin_recategorizar(session: Session = Depends(get_session)) -> dict[str, int]:
     return {"count": service.contar_productos_sin_recategorizar(session)}
 
 
-@router.get("/sin-clasificar/productos")
+@router.get(
+    "/sin-clasificar/productos",
+    dependencies=[Depends(read_categories_permission)],
+)
 def listar_sin_recategorizar(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     return service.listar_productos_sin_recategorizar(session)
 
 
-@router.post("/recategorizar", dependencies=[Depends(require_roles("admin", "supervisor"))])
+@router.post(
+    "/recategorizar",
+    dependencies=[Depends(update_category_permission)],
+)
 def recategorizar_productos(
     payload: RecategorizarProductosRequest,
     session: Session = Depends(get_session),

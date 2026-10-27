@@ -7,7 +7,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlmodel import Session, col, select
 
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION, get_session
-from osiris.core.auth import require_roles
 from osiris.core.catalog_permissions import catalog_permission
 from osiris.domain.catalog_contracts import (
     Confirmation,
@@ -52,6 +51,8 @@ preview_attribute_deactivation_permission = catalog_permission(
 undo_attribute_change_permission = catalog_permission("undo_attribute_change")
 reactivate_attribute_permission = catalog_permission("reactivate_attribute")
 update_attribute_permission = catalog_permission("update_attribute")
+read_attribute_remaps_permission = catalog_permission("read_attributes")
+resolve_attribute_remaps_permission = catalog_permission("update_attribute")
 category_attribute_service = CategoriaAtributoService()
 
 
@@ -168,7 +169,8 @@ def _include_annotation_unit_state(
 
 
 @router.get(
-    "/remapeos/pendientes", dependencies=[Depends(require_roles("admin", "supervisor"))]
+    "/remapeos/pendientes",
+    dependencies=[Depends(read_attribute_remaps_permission)],
 )
 def listar_remapeos_pendientes(
     session: Session = Depends(get_session),
@@ -177,7 +179,8 @@ def listar_remapeos_pendientes(
 
 
 @router.post(
-    "/remapeos/resolver", dependencies=[Depends(require_roles("admin", "supervisor"))]
+    "/remapeos/resolver",
+    dependencies=[Depends(resolve_attribute_remaps_permission)],
 )
 def resolver_remapeos(
     assignments: list[ProductoAtributoRemapeoResolve],

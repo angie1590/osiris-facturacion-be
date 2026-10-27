@@ -42,7 +42,7 @@ sidebar_position: 4
 
 - `POST /api/v1/categorias` ([doc API](../api/inventario/bloques-construccion))
 - `POST /api/v1/atributos` ([doc API](../api/inventario/bloques-construccion))
-- `POST /api/v1/categorias-atributos` ([doc API](../api/inventario/bloques-construccion))
+- `POST /api/v1/categorias/{id}/atributos` con preview contextual cuando sea obligatorio/backfill ([doc API](../api/inventario/bloques-construccion)); el POST legacy `/api/v1/categorias-atributos` responde 410.
 - `POST /api/v1/productos` ([doc API](../api/inventario/producto-crud-base))
 - `PUT /api/v1/productos/{producto_id}/atributos` ([doc API](../api/inventario/producto-atributos-impuestos-bodegas))
 - `POST /api/v1/productos/{producto_id}/impuestos` ([doc API](../api/inventario/producto-atributos-impuestos-bodegas))

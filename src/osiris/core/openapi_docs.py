@@ -321,21 +321,25 @@ def _ensure_operation_docs(path: str, method: str, operation: dict[str, Any]) ->
         operation["responses"] = responses
 
     success_code, success_description = _build_success_description(method_lc, singular, plural, parts)
-    responses.setdefault(success_code, {})
-    if isinstance(responses[success_code], dict):
-        responses[success_code]["description"] = success_description
+    terminal_deprecated = operation.get("deprecated") is True and "410" in responses
+    if terminal_deprecated:
+        responses["410"]["description"] = "La operación legacy está deshabilitada; use la ruta contextual."
     else:
-        responses[success_code] = {"description": success_description}
+        responses.setdefault(success_code, {})
+        if isinstance(responses[success_code], dict):
+            responses[success_code]["description"] = success_description
+        else:
+            responses[success_code] = {"description": success_description}
 
-    responses.setdefault("400", {})
-    responses.setdefault("401", {})
-    responses.setdefault("404", {})
-    if isinstance(responses["400"], dict):
-        responses["400"]["description"] = _build_400_description(method_lc, singular, parts, suffix)
-    if isinstance(responses["401"], dict):
-        responses["401"]["description"] = "Unauthorized. No se ha indicado o es incorrecto el Token JWT."
-    if isinstance(responses["404"], dict):
-        responses["404"]["description"] = _build_404_description(singular)
+        responses.setdefault("400", {})
+        responses.setdefault("401", {})
+        responses.setdefault("404", {})
+        if isinstance(responses["400"], dict):
+            responses["400"]["description"] = _build_400_description(method_lc, singular, parts, suffix)
+        if isinstance(responses["401"], dict):
+            responses["401"]["description"] = "Unauthorized. No se ha indicado o es incorrecto el Token JWT."
+        if isinstance(responses["404"], dict):
+            responses["404"]["description"] = _build_404_description(singular)
 
     parameters = operation.get("parameters", [])
     if isinstance(parameters, list):

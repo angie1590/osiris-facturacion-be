@@ -21,7 +21,7 @@ Este documento consolida la auditoría funcional de la sección de inventario pa
 |---|---|---|
 | Categorías | Completo | `GET/POST/PUT/DELETE /api/v1/categorias` |
 | Atributos | Completo | `GET/POST/PUT/DELETE /api/v1/atributos` |
-| Categoría-Atributo | Completo | `GET/POST/PUT/DELETE /api/v1/categorias-atributos` |
+| Categoría-Atributo legacy | Compatibilidad temporal | `GET /api/v1/categorias-atributos` deprecado y protegido por `ATRIBUTOS.leer`; POST/PUT/DELETE devuelven 410. Escrituras contextuales bajo `/api/v1/categorias/{id}/atributos`. |
 | Catálogo administrativo de atributos | Completo | árbol, seleccionables, atributos efectivos/propios, asignación contextual, preview, override, backfill, baja y restauración |
 | Unidades de atributo | Completo | `GET/POST /api/v1/unidades`, edición/reactivación/baja protegidas por uso y anotación confirmada en atributos numéricos |
 | Casas Comerciales | Completo | `GET/POST/PUT/DELETE /api/v1/casas-comerciales` |

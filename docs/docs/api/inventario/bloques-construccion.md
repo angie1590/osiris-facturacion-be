@@ -599,6 +599,8 @@ Tabla de asignación que vincula atributos a categorías, permitiendo caracteriz
 - **obligatorio**: Si el atributo debe tener un valor en todos los productos de la categoría
 - **valor_default**: Valor por defecto que se asigna automáticamente si no se proporciona otro
 
+**Compatibilidad legacy de asignaciones:** `GET /api/v1/categorias-atributos` y `GET /api/v1/categorias-atributos/{id}` se conservan temporalmente para consumidores de lectura y requieren `ATRIBUTOS.leer`. `POST`, `PUT` y `DELETE` sobre estas rutas responden `410 Gone` con `LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED`; no realizan escrituras. Administre las relaciones con los endpoints efectivos/propios y las operaciones contextuales de `/api/v1/categorias/{id}/atributos`, que validan permiso, preview y precondición.
+
 ### Cómo Funciona
 
 **Flujo de Asignación:**
@@ -619,9 +621,9 @@ Tabla de asignación que vincula atributos a categorías, permitiendo caracteriz
 <Tabs>
   <TabItem value="get-list" label="Listar Asignaciones" default>
 
-**GET** `/api/v1/categorias-atributos`
+**GET (deprecated)** `/api/v1/categorias-atributos`
 
-Obtiene una lista de asignaciones categoría-atributo con soporte para filtrar por categoría.
+Obtiene asignaciones directas para compatibilidad temporal; exige `ATRIBUTOS.leer`. Para el panel use los endpoints efectivos/propios indicados arriba.
 
 **Parámetros de Query:**
 
@@ -652,9 +654,9 @@ Obtiene una lista de asignaciones categoría-atributo con soporte para filtrar p
 
   <TabItem value="get-detail" label="Obtener Asignación">
 
-**GET** `/api/v1/categorias-atributos/{id}`
+**GET (deprecated)** `/api/v1/categorias-atributos/{id}`
 
-Obtiene los detalles de una asignación categoría-atributo específica.
+Obtiene una asignación directa para compatibilidad temporal; exige `ATRIBUTOS.leer`.
 
 **Response 200:**
 
@@ -675,104 +677,41 @@ Obtiene los detalles de una asignación categoría-atributo específica.
 
   </TabItem>
 
-  <TabItem value="post" label="Asignar Atributo a Categoría">
+  <TabItem value="post" label="POST legacy (410)">
 
-**POST** `/api/v1/categorias-atributos`
+**POST deshabilitado** `/api/v1/categorias-atributos`
 
-Crea una asignación entre un atributo y una categoría.
-
-**Request Body:**
+Devuelve HTTP `410 Gone` con el código estable `LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED`. No crea asignaciones. Use `POST /api/v1/categorias/{id}/atributos` y su preview cuando se requiera confirmación.
 
 ```json
 {
-  "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
-  "atributo_id": "770e8400-e29b-41d4-a716-446655440000",
-  "orden": 1,
-  "obligatorio": true,
-  "valor_default": "Negro",
-  "usuario_auditoria": "admin"
-}
-```
-
-**Response 201:**
-
-```json
-{
-  "id": "990e8400-e29b-41d4-a716-446655440000",
-  "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
-  "atributo_id": "770e8400-e29b-41d4-a716-446655440000",
-  "orden": 1,
-  "obligatorio": true,
-  "valor_default": "Negro",
-  "usuario_auditoria": "admin",
-  "activo": true,
-  "creado_en": "2024-01-15T11:00:00Z",
-  "actualizado_en": "2024-01-15T11:00:00Z"
-}
-```
-
-**Response 400 (valor_default no cumple tipo_dato):**
-
-```json
-{
-  "detail": [
-    {
-      "type": "value_error",
-      "msg": "El valor_default 'abc' no es válido para tipo_dato 'integer'",
-      "input": "abc"
-    }
-  ]
+  "code": "LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED",
+  "message": "Utilice las operaciones contextuales de la categoría."
 }
 ```
 
   </TabItem>
 
-  <TabItem value="put" label="Actualizar Asignación">
+  <TabItem value="put" label="PUT legacy (410)">
 
-**PUT** `/api/v1/categorias-atributos/{id}`
+**PUT deshabilitado** `/api/v1/categorias-atributos/{id}`
 
-Actualiza los parámetros de una asignación (orden, obligatorio, valor_default).
-
-**Request Body:**
+Devuelve HTTP `410 Gone` con `LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED`. Configure la relación con `PUT /api/v1/categorias/{id}/atributos/{mapping_id}` y su preview contextual.
 
 ```json
 {
-  "orden": 2,
-  "obligatorio": false,
-  "valor_default": "Gris",
-  "aplicar_default_a_existentes": false,
-  "usuario_auditoria": "admin"
-}
-```
-
-Una asignación puede ser obligatoria sin default. `aplicar_default_a_existentes` es `false` por defecto en crear, asignar y actualizar; cuando se envía `true`, requiere un default explícito válido. Valores existentes no se sobrescriben y el flag no se infiere de `obligatorio`. Un default inválido devuelve `422 DEFAULT_VALUE_INVALID`.
-
-**Response 200:**
-
-```json
-{
-  "id": "990e8400-e29b-41d4-a716-446655440000",
-  "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
-  "atributo_id": "770e8400-e29b-41d4-a716-446655440000",
-  "orden": 2,
-  "obligatorio": false,
-  "valor_default": "Gris",
-  "usuario_auditoria": "admin",
-  "activo": true,
-  "creado_en": "2024-01-15T11:00:00Z",
-  "actualizado_en": "2024-01-16T15:00:00Z"
+  "code": "LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED",
+  "message": "Utilice las operaciones contextuales de la categoría."
 }
 ```
 
   </TabItem>
 
-  <TabItem value="delete" label="Desasignar Atributo">
+  <TabItem value="delete" label="DELETE legacy (410)">
 
-**DELETE** `/api/v1/categorias-atributos/{id}`
+**DELETE deshabilitado** `/api/v1/categorias-atributos/{id}`
 
-Realiza un borrado lógico de la asignación categoría-atributo.
-
-**Response 204:** No content
+Devuelve HTTP `410 Gone` con `LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED`. Para quitar una asignación use `DELETE /api/v1/categorias/{id}/atributos/{mapping_id}` con preview y precondición firmada.
 
   </TabItem>
 </Tabs>
@@ -837,39 +776,9 @@ POST /api/v1/categorias
 
 **Paso 3: Asignar Atributos a Categoría**
 
-```json
-POST /api/v1/categorias-atributos
-{
-  "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
-  "atributo_id": "770e8400-e29b-41d4-a716-446655440000",
-  "orden": 1,
-  "obligatorio": true,
-  "valor_default": "Negro",
-  "usuario_auditoria": "admin"
-}
+Use `POST /api/v1/atributos` para crear y asignar una definición, o `POST /api/v1/categorias/{id}/atributos` para reutilizar una existente. Cuando sea obligatorio o se solicite backfill, genere el preview contextual y confirme el token vigente. Las antiguas llamadas `POST /api/v1/categorias-atributos` responden `410 LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED`.
 
-POST /api/v1/categorias-atributos
-{
-  "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
-  "atributo_id": "880e8400-e29b-41d4-a716-446655440000",
-  "orden": 2,
-  "obligatorio": true,
-  "valor_default": "M",
-  "usuario_auditoria": "admin"
-}
-
-POST /api/v1/categorias-atributos
-{
-  "categoria_id": "660e8400-e29b-41d4-a716-446655440000",
-  "atributo_id": "990e8400-e29b-41d4-a716-446655440000",
-  "orden": 3,
-  "obligatorio": false,
-  "valor_default": "Algodón 100%",
-  "usuario_auditoria": "admin"
-}
-```
-
-**Resultado:** La categoría "Camisetas" ahora tiene 3 atributos con valores por defecto. Los productos en esta categoría pueden usar estos valores automáticamente.
+**Resultado:** La categoría recibe los atributos efectivos con defaults explícitos y productos activos validados por el backend.
 
 ### Caso 2: Categoría Jerárquica "Electrónica > Computadoras"
 
