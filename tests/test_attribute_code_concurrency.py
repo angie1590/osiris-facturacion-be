@@ -14,11 +14,13 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.domain.service import BaseService
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.catalogo.entity import Catalogo
 from osiris.modules.common.unidad.entity import Unidad
-from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
+from osiris.modules.common.unidad.service import UnidadService
+from osiris.modules.inventario.atributo.entity import Atributo, AtributoCambio, TipoDato
 from osiris.modules.inventario.atributo.repository import AtributoRepository
 from osiris.modules.inventario.atributo.service import AtributoService
 
@@ -29,7 +31,7 @@ CODE_INDEX = "uq_tbl_atributo_codigo_normalizado"
 
 def _create_tables(engine: Engine, schema: str | None = None) -> None:
     metadata = sa.MetaData()
-    for model in (Unidad, Catalogo, Atributo, AuditLog):
+    for model in (Unidad, Catalogo, Atributo, AtributoCambio, AuditLog):
         source = sa.inspect(model).local_table
         assert isinstance(source, sa.Table)
         table = source.to_metadata(metadata)
@@ -278,3 +280,87 @@ def test_postgresql_concurrent_service_create_returns_duplicate_code(
     with Session(postgresql_engine) as session:
         assert len(session.exec(select(Atributo)).all()) == 1
         assert len(session.exec(select(AuditLog)).all()) == 1
+
+
+def test_postgresql_unit_deactivation_serializes_against_attribute_annotation(
+    postgresql_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unit = Unidad(
+        codigo="ANNOTATION_UNIT",
+        nombre="Annotation unit",
+        simbolo="au",
+        magnitud_codigo="COUNT",
+    )
+    attribute = Atributo(nombre="Measured value", tipo_dato=TipoDato.DECIMAL)
+    with Session(postgresql_engine) as session:
+        session.add_all([unit, attribute])
+        session.commit()
+        unit_id = unit.id
+        attribute_id = attribute.id
+
+    def capture_empty_state(
+        _service: AtributoService,
+        _session: Session,
+        current: Atributo,
+        *,
+        lock: bool = False,
+    ) -> dict[str, Any]:
+        del lock
+        return {
+            "definicion": AtributoService._serialize_definition(current),
+            "valores": [],
+            "asignaciones": [],
+            "remapeos": [],
+        }
+
+    monkeypatch.setattr(AtributoService, "_capture_state", capture_empty_state)
+    barrier = Barrier(2)
+
+    def annotate() -> str:
+        with Session(postgresql_engine) as session:
+            barrier.wait(timeout=10)
+            try:
+                result = AtributoService().update(
+                    session,
+                    attribute_id,
+                    {"unidad_id": unit_id},
+                    allow_unit_annotation=True,
+                )
+                assert result is not None
+                return "annotated"
+            except HTTPException as error:
+                return str(error.detail.get("code"))
+
+    def deactivate() -> str:
+        with Session(postgresql_engine) as session:
+            barrier.wait(timeout=10)
+            try:
+                result = UnidadService().deactivate(session, unit_id)
+                assert result is not None
+                return "deactivated"
+            except HTTPException as error:
+                return str(error.detail.get("code"))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        annotation_future = executor.submit(annotate)
+        deactivation_future = executor.submit(deactivate)
+        results = {
+            annotation_future.result(timeout=20),
+            deactivation_future.result(timeout=20),
+        }
+
+    with Session(postgresql_engine) as session:
+        final_unit = session.exec(
+            select(Unidad)
+            .where(Unidad.id == unit_id)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        ).one()
+        final_attribute = session.get(Atributo, attribute_id)
+        assert final_attribute is not None
+        if final_unit.activo:
+            assert final_attribute.unidad_id == unit_id
+            assert results == {"annotated", "UNIT_IN_USE"}
+        else:
+            assert final_attribute.unidad_id is None
+            assert results == {"deactivated", "UNIT_INACTIVE"}
