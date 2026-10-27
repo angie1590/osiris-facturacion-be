@@ -18,10 +18,12 @@ from osiris.modules.inventario.atributo.entity import Atributo, AtributoCambio, 
 from osiris.modules.inventario.atributo.models import AtributoCreate
 from osiris.modules.inventario.atributo.router import router as atributo_router
 from osiris.modules.inventario.atributo.router import list_atributos
+from osiris.modules.inventario.atributo.router import read_attributes_permission
 from osiris.modules.inventario.atributo.router import create_and_assign_attribute_permission
 from osiris.modules.inventario.atributo.router import deactivate_attribute_permission
 from osiris.modules.inventario.atributo.router import preview_attribute_deactivation_permission
 from osiris.modules.inventario.atributo.router import preview_attribute_update_permission
+from osiris.modules.inventario.atributo.router import undo_attribute_change_permission
 from osiris.modules.inventario.atributo.router import update_attribute_permission
 from osiris.modules.inventario.atributo.service import AtributoService
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
@@ -725,3 +727,128 @@ def test_unit_annotation_preview_is_signed_and_preserves_values_and_defaults(mon
                 audit.accion == "ANNOTATE_ATTRIBUTE_UNIT"
                 for audit in session.exec(select(AuditLog)).all()
             )
+
+
+
+
+def test_attribute_unit_api_create_annotate_and_undo_preserves_numeric_state(monkeypatch):
+    engine = _engine()
+    app = FastAPI()
+    app.include_router(atributo_router)
+    actor = SimpleNamespace(id=uuid4())
+    monkeypatch.setattr(
+        CategoriaService,
+        "acquire_hierarchy_mutation_lock",
+        staticmethod(lambda _session: None),
+    )
+
+    def override_session():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[create_and_assign_attribute_permission] = lambda: actor
+    app.dependency_overrides[preview_attribute_update_permission] = lambda: actor
+    app.dependency_overrides[update_attribute_permission] = lambda: actor
+    app.dependency_overrides[read_attributes_permission] = lambda: actor
+    app.dependency_overrides[undo_attribute_change_permission] = lambda: actor
+    with Session(engine) as session:
+        category = Categoria(nombre="Computadores", activo=True)
+        unit = Unidad(
+            codigo="GIGABYTE",
+            nombre="Gigabyte",
+            simbolo="GB",
+            magnitud_codigo="DATA_STORAGE",
+        )
+        product = Producto(
+            nombre="Equipo E2E",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("20.00"),
+            activo=True,
+        )
+        session.add_all([category, unit, product])
+        session.flush()
+        session.add(ProductoCategoria(producto_id=product.id, categoria_id=category.id))
+        session.commit()
+        category_id = category.id
+        unit_id = unit.id
+        product_id = product.id
+
+    with TestClient(app) as client:
+        no_unit = client.post(
+            "/api/v1/atributos",
+            json={
+                "categoria_id": str(category_id),
+                "nombre": "Capacidad sin unidad",
+                "tipo_dato": "decimal",
+                "valor_default": "1.5",
+                "aplicar_default_a_existentes": False,
+            },
+        )
+        assert no_unit.status_code == 201, no_unit.text
+        assert no_unit.json()["unidad_id"] is None
+        no_unit_id = UUID(no_unit.json()["id"])
+
+        with_unit = client.post(
+            "/api/v1/atributos",
+            json={
+                "categoria_id": str(category_id),
+                "nombre": "Ancho con unidad",
+                "tipo_dato": "decimal",
+                "unidad_id": str(unit_id),
+                "aplicar_default_a_existentes": False,
+            },
+        )
+        assert with_unit.status_code == 201, with_unit.text
+        assert with_unit.json()["unidad_id"] == str(unit_id)
+        assert with_unit.json()["unidad"]["simbolo"] == "GB"
+
+        with Session(engine) as session:
+            value = ProductoAtributoValor(
+                producto_id=product_id,
+                atributo_id=no_unit_id,
+                valor_decimal=Decimal("17.250"),
+                activo=True,
+            )
+            session.add(value)
+            session.commit()
+
+        preview = client.post(
+            f"/api/v1/atributos/{no_unit_id}/previsualizar",
+            json={"unidad_id": str(unit_id)},
+        )
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["unidad_anotacion"]["conteos"]["valores_activos"] == 1
+        confirmed = client.put(
+            f"/api/v1/atributos/{no_unit_id}",
+            json={
+                "unidad_id": str(unit_id),
+                "confirmar_anotacion_unidad": True,
+                "precondicion_preview": preview.json()["precondicion_preview"],
+            },
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["unidad"]["simbolo"] == "GB"
+
+        lifecycle = client.get(f"/api/v1/atributos/{no_unit_id}/reversion")
+        assert lifecycle.status_code == 200
+        assert lifecycle.json()["operacion"] == "annotate_unit"
+        assert lifecycle.json()["can_undo"] is True
+        undone = client.post(f"/api/v1/atributos/{no_unit_id}/revertir")
+        assert undone.status_code == 200, undone.text
+
+    with Session(engine) as session:
+        annotated = session.get(Atributo, no_unit_id)
+        value = session.exec(
+            select(ProductoAtributoValor).where(
+                ProductoAtributoValor.atributo_id == no_unit_id
+            )
+        ).one()
+        mapping = session.exec(
+            select(CategoriaAtributo).where(
+                CategoriaAtributo.atributo_id == no_unit_id
+            )
+        ).one()
+        assert annotated.unidad_id is None
+        assert value.valor_decimal == Decimal("17.250")
+        assert mapping.valor_default == "1.5"
