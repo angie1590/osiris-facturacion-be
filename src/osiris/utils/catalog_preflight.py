@@ -66,6 +66,7 @@ def audit_catalog(
     connection: Connection,
     *,
     unit_candidates: Mapping[str, str] | None = None,
+    product_cutover: bool = False,
 ) -> dict[str, Any]:
     inspector = sa.inspect(connection)
     available = set(inspector.get_table_names())
@@ -83,14 +84,22 @@ def audit_catalog(
         tables[name] = table
 
     conflicts: list[dict[str, Any]] = []
+    has_primary_category_column = (
+        "tbl_producto" in tables and "categoria_principal_id" in tables["tbl_producto"].c
+    )
     report: dict[str, Any] = {
         "version": 1,
-        "alcance": "catalogo_global",
-        "fuente_categoria_principal": "tbl_producto_categoria_legacy",
+        "alcance": "producto_cutover" if product_cutover else "catalogo_global",
+        "fuente_categoria_principal": (
+            "tbl_producto.categoria_principal_id"
+            if has_primary_category_column
+            else "tbl_producto_categoria_legacy"
+        ),
         "apto_para_migrar": False,
         "total_conflictos": 0,
         "conteos": {},
         "conflictos": conflicts,
+        "candidatos_backfill_categoria": [],
         "candidatos_anotacion_unidad": [],
         "advertencias": [],
     }
@@ -346,30 +355,45 @@ def audit_catalog(
         return True
 
     for product in products.values():
-        if not product["activo"]:
-            continue
         candidates = classifications[product["id"]]
-        if len(candidates) != 1:
-            issue(
-                "PRODUCT_CATEGORY_REQUIRED" if not candidates else "PRODUCT_CATEGORY_AMBIGUOUS",
-                "El producto activo necesita una clasificacion principal inequivoca.",
-                [product],
-                categorias_candidatas=[
-                    {
-                        "id": candidate["categoria_id"],
-                        "ruta": category_path(candidate["categoria_id"]),
-                    }
-                    for candidate in candidates
-                ],
-            )
-            continue
-        product_category = categories.get(candidates[0]["categoria_id"])
+        primary_category_id = product.get("categoria_principal_id")
+        bridge_category_ids = [candidate["categoria_id"] for candidate in candidates]
+        if primary_category_id is not None:
+            if len(bridge_category_ids) != 1 or bridge_category_ids[0] != primary_category_id:
+                issue(
+                    "PRODUCT_PRIMARY_CATEGORY_CONFLICT",
+                    "La categoria principal directa no coincide con la proyeccion legacy.",
+                    [product],
+                    categoria_principal_id=primary_category_id,
+                    categorias_bridge=[
+                        {"id": category_id, "ruta": category_path(category_id)}
+                        for category_id in bridge_category_ids
+                    ],
+                )
+            category_id = primary_category_id
+        else:
+            if len(candidates) != 1:
+                issue(
+                    "PRODUCT_CATEGORY_REQUIRED" if not candidates else "PRODUCT_CATEGORY_AMBIGUOUS",
+                    "El producto activo necesita una clasificacion principal inequivoca.",
+                    [product],
+                    categorias_candidatas=[
+                        {
+                            "id": candidate["categoria_id"],
+                            "ruta": category_path(candidate["categoria_id"]),
+                        }
+                        for candidate in candidates
+                    ],
+                )
+                continue
+            category_id = candidates[0]["categoria_id"]
+        product_category = categories.get(category_id)
         if product_category is None or not product_category["activo"]:
             issue(
                 "PRODUCT_CATEGORY_INVALID",
                 "La categoria del producto no existe o esta inactiva.",
                 [product],
-                categoria_id=candidates[0]["categoria_id"],
+                categoria_id=category_id,
             )
             continue
         if active_children[product_category["id"]]:
@@ -391,25 +415,38 @@ def audit_catalog(
                     categoria_id=product_category["id"],
                 )
                 continue
+            if product_cutover and product["activo"]:
+                issue(
+                    "PRODUCT_CATEGORY_TEMPORARY",
+                    "El producto sigue en una categoria temporal B3 y requiere recategorizacion antes del cutover.",
+                    [product],
+                    categoria_id=product_category["id"],
+                    ruta=category_path(product_category["id"]),
+                )
 
         effective: dict[str, dict[str, Any]] = {}
         visited: set[str] = set()
-        current: dict[str, Any] | None = product_category
+        current_category_id: str | None = product_category["id"]
         valid_ancestry = True
-        while current is not None:
-            if current["id"] in visited or not current["activo"]:
+        while current_category_id is not None:
+            current_category = categories.get(current_category_id)
+            if (
+                current_category is None
+                or current_category_id in visited
+                or not current_category["activo"]
+            ):
                 valid_ancestry = False
                 break
-            visited.add(current["id"])
-            for mapping in mappings_by_category[current["id"]]:
+            visited.add(current_category_id)
+            for mapping in mappings_by_category[current_category_id]:
                 mapped_attribute = attribute_by_id.get(mapping["atributo_id"])
                 if mapped_attribute is not None and mapped_attribute["activo"]:
                     effective.setdefault(mapping["atributo_id"], mapping)
-            parent_id = current["parent_id"]
-            current = categories.get(parent_id)
-            if parent_id is not None and current is None:
+            parent_id = current_category["parent_id"]
+            if parent_id is not None and parent_id not in categories:
                 valid_ancestry = False
                 break
+            current_category_id = parent_id
         if not valid_ancestry:
             issue(
                 "PRODUCT_CATEGORY_ANCESTRY_INVALID",
@@ -418,6 +455,70 @@ def audit_catalog(
                 categoria_id=product_category["id"],
             )
             continue
+
+        if primary_category_id is None and not product_category["is_default"]:
+            report["candidatos_backfill_categoria"].append(
+                {
+                    "producto_id": product["id"],
+                    "producto_nombre": product["nombre"],
+                    "categoria_id": product_category["id"],
+                    "ruta": category_path(product_category["id"]),
+                }
+            )
+
+        if not product["activo"]:
+            continue
+
+        effective_attribute_ids = set(effective)
+        for (value_product_id, attribute_id), active_values in values_by_key.items():
+            if value_product_id != product["id"]:
+                continue
+            attribute_record = attribute_by_id.get(attribute_id)
+            value_ids = sorted(value["id"] for value in active_values)
+            if (
+                attribute_record is None
+                or not attribute_record["activo"]
+                or attribute_id not in effective_attribute_ids
+            ):
+                issue(
+                    "PRODUCT_ATTRIBUTE_NOT_APPLICABLE",
+                    "El producto tiene un valor activo para un atributo fuera de su esquema efectivo.",
+                    [product],
+                    categoria_id=product_category["id"],
+                    ruta=category_path(product_category["id"]),
+                    atributo_id=attribute_id,
+                    valor_ids=value_ids,
+                )
+                continue
+            if (product["id"], attribute_id) in pending_remaps:
+                issue(
+                    "PRODUCT_ATTRIBUTE_REMAP_PENDING",
+                    "El producto tiene un remapeo pendiente para un atributo efectivo.",
+                    [product],
+                    categoria_id=product_category["id"],
+                    atributo_id=attribute_id,
+                    valor_ids=value_ids,
+                )
+            if len(active_values) > 1:
+                issue(
+                    "PRODUCT_ATTRIBUTE_VALUE_DUPLICATE",
+                    "El producto tiene mas de un valor activo para el mismo atributo.",
+                    [product],
+                    categoria_id=product_category["id"],
+                    atributo_id=attribute_id,
+                    valor_ids=value_ids,
+                )
+            for active_value in active_values:
+                if not valid_value(attribute_record, active_value):
+                    issue(
+                        "PRODUCT_ATTRIBUTE_VALUE_INVALID",
+                        "El valor EAV activo no cumple el tipo o las restricciones del atributo.",
+                        [product],
+                        categoria_id=product_category["id"],
+                        atributo_id=attribute_id,
+                        valor_ids=[active_value["id"]],
+                    )
+
         for attribute_id, mapping in effective.items():
             if not mapping["obligatorio"]:
                 continue

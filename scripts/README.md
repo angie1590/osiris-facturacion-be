@@ -13,6 +13,8 @@ o atributos obligatorios de productos. No fusiona, renombra ni actualiza filas.
 
 ```bash
 ENVIRONMENT=development PYTHONPATH=src poetry run python scripts/audit_catalog_integrity.py --host 127.0.0.1 --port 5435 --summary
+ENVIRONMENT=development PYTHONPATH=src poetry run python scripts/audit_catalog_integrity.py --host 127.0.0.1 --port 5435 --product-cutover --summary
+ENVIRONMENT=development PYTHONPATH=src poetry run python scripts/audit_product_tax_company_scope.py
 ```
 
 Sin `--summary` incluye nombres, IDs y rutas accionables; restringir ese reporte
@@ -25,7 +27,17 @@ con una transaccion REPEATABLE READ y READ ONLY. No ejecuta migraciones ni seeds
 futura; no infiere ni asigna unidades y no valida el destino aun no desplegado.
 Los defaults no cuentan como valores ya cargados y los remapeos pendientes no
 satisfacen un obligatorio. El diagnostico reconoce buckets B3 por estructura;
-no certifica por si solo la procedencia de auditoria de un bucket legacy.
+no certifica por si solo la procedencia de auditoria de un bucket legacy. Para
+preflight del cutover de Producto, agregar `--product-cutover`: trata productos
+en buckets B3 validos como bloqueantes y lista las categorias legacy univocas
+como `candidatos_backfill_categoria`, sin aplicar el backfill. Este modo compara
+`categoria_principal_id` con el bridge cuando la columna ya exista y reporta
+divergencias; `--summary` conserva solo el conteo de candidatos.
+
+El perfil tributario legacy se audita por separado con
+`scripts/audit_product_tax_company_scope.py`; revisar sus estados junto con este
+reporte antes de habilitar una migracion/cutover. Ambos son diagnosticos de solo
+lectura; ninguno concilia, migra ni escoge datos.
 
 Si existen conflictos, detener las migraciones dependientes y conciliar con
 aprobacion administrativa. Un resultado limpio no sustituye las pruebas de

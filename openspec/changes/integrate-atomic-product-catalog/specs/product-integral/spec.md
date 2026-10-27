@@ -16,7 +16,7 @@ El sistema MUST usar `Producto.categoria_principal_id` como única autoridad de 
 - **THEN** el servidor rechaza la solicitud y no persiste el producto ni sus relaciones
 
 ### Requirement: El preflight de Producto será de solo lectura y accionable
-El sistema MUST ofrecer un preflight que reporte conflictos de clasificación, EAV y perfil tributario y, antes del cutover, divergencias FK/bridge; debe incluir IDs de producto, categorías candidatas y rutas legibles. Debe identificar obligatorios sin valor válido, valores activos no aplicables o duplicados, remapeos pendientes, resolver ambiguo, productos activos sin IVA, impuestos duplicados/inactivos/no permitidos y perfiles incompatibles. El preflight MUST NOT modificar registros ni seleccionar una categoría para resolver un conflicto.
+El sistema MUST ofrecer un conjunto coordinado de preflights de solo lectura: `audit_catalog_integrity.py --product-cutover` para clasificación, FK/bridge, EAV y candidatos de backfill; y `audit_product_tax_company_scope.py` para alcance/compatibilidad tributaria. Los reportes deben incluir IDs de producto, categorías candidatas y rutas legibles cuando corresponda. La auditoría de catálogo MUST identificar obligatorios sin valor válido, EAV activo no aplicable/inválido/duplicado, remapeos pendientes, resolver ambiguo y productos en buckets B3; la tributaria MUST identificar productos con scope ausente/ambiguo e impuestos inactivos, vencidos, no configurados o incompatibles. Ninguno MUST modificar registros ni seleccionar una categoría para resolver un conflicto.
 
 #### Scenario: Preflight encuentra conflictos
 - **WHEN** existen productos sin categoría, con varias categorías, categoría inválida o FK/bridge divergentes
@@ -29,6 +29,10 @@ El sistema MUST ofrecer un preflight que reporte conflictos de clasificación, E
 #### Scenario: Preflight encuentra conflictos de EAV o impuestos
 - **WHEN** un producto activo tiene un obligatorio faltante, EAV no aplicable/duplicado o perfil tributario inválido
 - **THEN** el resultado informa el producto, código de conflicto y atributo/impuesto afectado, sin modificar datos
+
+#### Scenario: Auditorías fiscales complementarias
+- **WHEN** el perfil fiscal activo no se puede asociar a un único scope empresarial válido o usa un impuesto no configurado/vigente/compatible
+- **THEN** la auditoría tributaria identifica el estado y producto/relación afectados, y el conjunto de preflights marca el cutover como bloqueado sin cambiar datos
 
 ### Requirement: Alta de Producto será integral y atómica
 `POST /api/v1/productos` MUST validar en una transacción exterior una categoría principal seleccionable, atributos efectivos, valores/defaults explícitos, perfil tributario permitido y relaciones requeridas; MUST persistir Producto, FK/proyección bridge temporal, impuestos, EAV y auditoría con un único commit. Cualquier fallo MUST revertir todas las escrituras. La identidad del actor MUST provenir del contexto autenticado.

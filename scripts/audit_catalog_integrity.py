@@ -16,6 +16,11 @@ def main() -> int:
         "--summary", action="store_true", help="Omitir nombres, claves e IDs del reporte."
     )
     parser.add_argument(
+        "--product-cutover",
+        action="store_true",
+        help="Tratar productos en buckets B3 validos como conflicto de cutover.",
+    )
+    parser.add_argument(
         "--host", help="Host de conexion para esta ejecucion, sin cambiar settings."
     )
     parser.add_argument("--port", type=int, help="Puerto publicado para esta ejecucion.")
@@ -56,7 +61,11 @@ def main() -> int:
             with connection.begin():
                 if connection.dialect.name == "postgresql":
                     connection.execute(sa.text("SET TRANSACTION READ ONLY"))
-                report = audit_catalog(connection, unit_candidates=unit_candidates)
+                report = audit_catalog(
+                    connection,
+                    unit_candidates=unit_candidates,
+                    product_cutover=args.product_cutover,
+                )
     finally:
         if audit_engine is not engine:
             audit_engine.dispose()
@@ -72,6 +81,7 @@ def main() -> int:
             "total_conflictos": report["total_conflictos"],
             "conteos": report["conteos"],
             "conflictos_por_codigo": dict(sorted(issue_counts.items())),
+            "total_candidatos_backfill_categoria": len(report["candidatos_backfill_categoria"]),
             "total_candidatos_anotacion": len(report["candidatos_anotacion_unidad"]),
             "advertencias": report["advertencias"],
         }

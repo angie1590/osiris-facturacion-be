@@ -366,6 +366,188 @@ def test_products_report_missing_multiple_invalid_and_required_without_inferred_
         assert snapshot(connection, metadata) == before
 
 
+def test_preflight_compares_primary_category_with_legacy_projection_and_lists_backfill_candidates():
+    engine, metadata = catalog_engine()
+    with engine.begin() as connection:
+        connection.execute(
+            metadata.tables["tbl_categoria"].insert(),
+            [
+                {"id": "root", "nombre": "Tecnologia", "parent_id": None, "activo": True, "es_padre": True, "is_default": False},
+                {"id": "mouse", "nombre": "Mouse", "parent_id": "root", "activo": True, "es_padre": False, "is_default": False},
+                {"id": "teclado", "nombre": "Teclado", "parent_id": "root", "activo": True, "es_padre": False, "is_default": False},
+            ],
+        )
+        connection.execute(
+            metadata.tables["tbl_producto"].insert(),
+            [
+                {"id": "conflict", "nombre": "Conflicto", "activo": True},
+                {"id": "candidate", "nombre": "Candidato", "activo": True},
+            ],
+        )
+        connection.execute(
+            metadata.tables["tbl_producto_categoria"].insert(),
+            [
+                {"id": "bridge-conflict", "producto_id": "conflict", "categoria_id": "mouse"},
+                {"id": "bridge-candidate", "producto_id": "candidate", "categoria_id": "mouse"},
+            ],
+        )
+        connection.exec_driver_sql(
+            "ALTER TABLE tbl_producto ADD COLUMN categoria_principal_id VARCHAR"
+        )
+        connection.exec_driver_sql(
+            "UPDATE tbl_producto SET categoria_principal_id = 'teclado' WHERE id = 'conflict'"
+        )
+        before = snapshot(connection, metadata)
+        report = audit_catalog(connection)
+
+        assert report["fuente_categoria_principal"] == "tbl_producto.categoria_principal_id"
+        assert report["candidatos_backfill_categoria"] == [
+            {
+                "producto_id": "candidate",
+                "producto_nombre": "Candidato",
+                "categoria_id": "mouse",
+                "ruta": "Tecnologia > Mouse",
+            }
+        ]
+        conflict = next(
+            item for item in report["conflictos"] if item["code"] == "PRODUCT_PRIMARY_CATEGORY_CONFLICT"
+        )
+        assert conflict["ids"] == ["conflict"]
+        assert conflict["categoria_principal_id"] == "teclado"
+        assert conflict["categorias_bridge"] == [{"id": "mouse", "ruta": "Tecnologia > Mouse"}]
+        assert snapshot(connection, metadata) == before
+
+
+def test_preflight_lists_unambiguous_backfill_candidates_before_fk_exists():
+    engine, metadata = catalog_engine()
+    with engine.begin() as connection:
+        connection.execute(
+            metadata.tables["tbl_categoria"].insert(),
+            [
+                {"id": "root", "nombre": "Tecnologia", "parent_id": None, "activo": True, "es_padre": True, "is_default": False},
+                {"id": "leaf", "nombre": "Mouse", "parent_id": "root", "activo": True, "es_padre": False, "is_default": False},
+            ],
+        )
+        connection.execute(
+            metadata.tables["tbl_producto"].insert().values(id="product", nombre="Mouse", activo=True)
+        )
+        connection.execute(
+            metadata.tables["tbl_producto_categoria"].insert().values(
+                id="classification", producto_id="product", categoria_id="leaf"
+            )
+        )
+
+        report = audit_catalog(connection)
+
+        assert report["fuente_categoria_principal"] == "tbl_producto_categoria_legacy"
+        assert report["candidatos_backfill_categoria"] == [
+            {
+                "producto_id": "product",
+                "producto_nombre": "Mouse",
+                "categoria_id": "leaf",
+                "ruta": "Tecnologia > Mouse",
+            }
+        ]
+
+
+def test_preflight_lists_inactive_unambiguous_products_as_backfill_candidates():
+    engine, metadata = catalog_engine()
+    with engine.begin() as connection:
+        connection.execute(
+            metadata.tables["tbl_categoria"].insert().values(
+                id="leaf",
+                nombre="Mouse",
+                parent_id=None,
+                activo=True,
+                es_padre=False,
+                is_default=False,
+            )
+        )
+        connection.execute(
+            metadata.tables["tbl_producto"].insert().values(
+                id="inactive", nombre="Legacy inactivo", activo=False
+            )
+        )
+        connection.execute(
+            metadata.tables["tbl_producto_categoria"].insert().values(
+                id="classification", producto_id="inactive", categoria_id="leaf"
+            )
+        )
+
+        report = audit_catalog(connection)
+
+        assert report["apto_para_migrar"] is True
+        assert report["candidatos_backfill_categoria"] == [
+            {
+                "producto_id": "inactive",
+                "producto_nombre": "Legacy inactivo",
+                "categoria_id": "leaf",
+                "ruta": "Mouse",
+            }
+        ]
+
+
+def test_preflight_reports_active_eav_values_that_are_duplicate_invalid_or_not_applicable():
+    engine, metadata = catalog_engine()
+    with engine.begin() as connection:
+        connection.execute(
+            metadata.tables["tbl_categoria"].insert(),
+            [
+                {"id": "root", "nombre": "Tecnologia", "parent_id": None, "activo": True, "es_padre": True, "is_default": False},
+                {"id": "mouse", "nombre": "Mouse", "parent_id": "root", "activo": True, "es_padre": False, "is_default": False},
+                {"id": "office", "nombre": "Oficina", "parent_id": None, "activo": True, "es_padre": False, "is_default": False},
+            ],
+        )
+        connection.execute(
+            metadata.tables["tbl_atributo"].insert(),
+            [
+                {"id": "dpi", "nombre": "DPI", "codigo": "dpi", "tipo_dato": "integer", "activo": True},
+                {"id": "material", "nombre": "Material", "codigo": "material", "tipo_dato": "string", "activo": True},
+            ],
+        )
+        connection.execute(
+            metadata.tables["tbl_categoria_atributo"].insert(),
+            [
+                {"id": "dpi-mapping", "categoria_id": "mouse", "atributo_id": "dpi", "obligatorio": False, "activo": True},
+                {"id": "material-mapping", "categoria_id": "office", "atributo_id": "material", "obligatorio": False, "activo": True},
+            ],
+        )
+        connection.execute(
+            metadata.tables["tbl_producto"].insert().values(id="product", nombre="Mouse", activo=True)
+        )
+        connection.execute(
+            metadata.tables["tbl_producto_categoria"].insert().values(
+                id="classification", producto_id="product", categoria_id="mouse"
+            )
+        )
+        connection.execute(
+            metadata.tables["tbl_producto_atributo_valor"].insert(),
+            [
+                {"id": "dpi-one", "producto_id": "product", "atributo_id": "dpi", "valor_string": "no-numero", "valor_integer": None, "activo": True},
+                {"id": "dpi-two", "producto_id": "product", "atributo_id": "dpi", "valor_string": None, "valor_integer": 1600, "activo": True},
+                {"id": "material-value", "producto_id": "product", "atributo_id": "material", "valor_string": "plastico", "valor_integer": None, "activo": True},
+            ],
+        )
+        before = snapshot(connection, metadata)
+        report = audit_catalog(connection)
+        codes = {item["code"] for item in report["conflictos"]}
+
+        assert {
+            "PRODUCT_ATTRIBUTE_NOT_APPLICABLE",
+            "PRODUCT_ATTRIBUTE_VALUE_DUPLICATE",
+        } <= codes
+        invalid = next(
+            item for item in report["conflictos"] if item["code"] == "PRODUCT_ATTRIBUTE_VALUE_INVALID"
+        )
+        assert invalid["atributo_id"] == "dpi"
+        assert invalid["valor_ids"] == ["dpi-one"]
+        not_applicable = next(
+            item for item in report["conflictos"] if item["code"] == "PRODUCT_ATTRIBUTE_NOT_APPLICABLE"
+        )
+        assert not_applicable["atributo_id"] == "material"
+        assert snapshot(connection, metadata) == before
+
+
 def test_optional_child_override_prevents_false_missing_required_report():
     engine, metadata = catalog_engine()
     with engine.begin() as connection:
@@ -568,6 +750,10 @@ def test_b3_bucket_is_structurally_allowed_but_inactive_value_does_not_satisfy_r
         assert report["apto_para_migrar"] is value_active
         if not value_active:
             assert report["conflictos"][0]["code"] == "PRODUCT_REQUIRED_ATTRIBUTES_MISSING"
+        if value_active:
+            cutover_report = audit_catalog(connection, product_cutover=True)
+            assert cutover_report["alcance"] == "producto_cutover"
+            assert cutover_report["conflictos"][0]["code"] == "PRODUCT_CATEGORY_TEMPORARY"
 
 
 def test_unit_candidate_counts_inactive_values_and_reverted_history_without_assigning_unit():
