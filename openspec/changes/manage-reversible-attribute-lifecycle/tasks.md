@@ -20,17 +20,17 @@
 - [x] 3.1 Antes de baja, consultar remapeos pendientes y bloquear con 409 detallado si existen.
 - [x] 3.2 Snapshot y desactivar Atributo, asignaciones de categoría y valores EAV activos en una transacción, conservando todas las filas e IDs.
 - [x] 3.3 Implementar reactivación explícita usando snapshot de baja; validar que el post-estado sigue intacto y restaurar estados previos de atributo/asignaciones/valores.
-- [ ] 3.4 Rechazar reactivación parcial de atributos legacy inactivos sin snapshot y verificar que baja/restauración no modifica snapshots de compras/ventas ni stock.
+- [x] 3.4 Rechazar reactivación parcial de atributos legacy inactivos sin snapshot y verificar que baja/restauración no modifica snapshots de compras/ventas ni stock.
 - [x] 3.5 Agregar endpoints POST preview, GET reversion, POST revertir y POST reactivar protegidos por rol admin/supervisor; preservar GET/POST/PUT/DELETE existentes.
 - [x] 3.6 Permitir optar por backfill al cambiar asignación opcional a obligatoria; completar solo valores EAV faltantes y conservar los existentes.
 
 ## 4. Pruebas backend
 
-- [ ] 4.1 Probar PUT de nombre/campos por cada tipo y duplicados; misma identidad y asociaciones.
+- [x] 4.1 Probar PUT de nombre/campos por cada tipo y duplicados; misma identidad y asociaciones.
 - [x] 4.2 Probar preview sin escrituras, conversiones y remapeos, SELECT options, catálogo inactivo y límites numéricos.
 - [x] 4.3 Probar undo exacto exitoso, post-estado alterado, nueva fila EAV/asignación, remapeo resuelto, operación no reciente y rollback.
 - [x] 4.4 Probar baja con/sin remapeos, restauración de hijos, ID histórico, legacy sin snapshot, y rollback ante fallo intermedio.
-- [ ] 4.5 Probar migración SQLite Core y PostgreSQL en schema aleatorio: upgrade, downgrade permitido/bloqueado y conservación de filas/FKs.
+- [x] 4.5 Probar migración SQLite Core y PostgreSQL en schema aleatorio: upgrade, downgrade permitido/bloqueado y conservación de filas/FKs.
 - [x] 4.6 Ejecutar tests atributo/configuración/remapeo/producto EAV; Ruff y mypy focalizado de la superficie.
 
 ## 5. API y documentación backend

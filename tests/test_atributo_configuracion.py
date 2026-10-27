@@ -535,6 +535,117 @@ def test_create_catalog_attribute_with_category_creates_catalog_and_assignment()
         assert catalog.nombre == "Marcas"
 
 
+@pytest.mark.parametrize(
+    ("tipo", "create_fields", "update_fields"),
+    [
+        (TipoDato.STRING, {}, {"nombre": "Texto revisado"}),
+        (TipoDato.INTEGER, {}, {"allow_negative": True, "min_value": -2, "max_value": 12}),
+        (TipoDato.DECIMAL, {}, {"allow_negative": True, "min_value": "-1.5", "max_value": "12.5"}),
+        (TipoDato.BOOLEAN, {}, {"nombre": "Indicador revisado"}),
+        (TipoDato.DATE, {}, {"nombre": "Fecha revisada"}),
+        (TipoDato.SELECT, {"select_options": ["S", "M"]}, {"select_options": ["S", "M", "L"]}),
+        (TipoDato.CATALOG, {}, {"catalog_id": "replacement_catalog"}),
+    ],
+)
+def test_attribute_put_updates_type_specific_fields_without_replacing_identity(
+    tipo: TipoDato,
+    create_fields: dict[str, object],
+    update_fields: dict[str, object],
+) -> None:
+    engine = _engine()
+    app = FastAPI()
+    app.include_router(atributo_router)
+
+    def override_session():
+        with Session(engine) as session:
+            yield session
+
+    actor = SimpleNamespace(id="actor-test")
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[update_attribute_permission] = lambda: actor
+
+    with Session(engine) as session:
+        category = Categoria(nombre="PUT lifecycle", activo=True)
+        session.add(category)
+        if tipo == TipoDato.CATALOG:
+            replacement_catalog = Catalogo(nombre="Replacement catalog", activo=True)
+            session.add(replacement_catalog)
+            session.commit()
+            update_fields = {"catalog_id": str(replacement_catalog.id)}
+        attribute = AtributoService().create(
+            session,
+            {"nombre": f"PUT {tipo.value}", "tipo_dato": tipo, **create_fields},
+        )
+        mapping = CategoriaAtributo(
+            categoria_id=category.id,
+            atributo_id=attribute.id,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add(mapping)
+        session.commit()
+        attribute_id = attribute.id
+        mapping_id = mapping.id
+
+    with TestClient(app) as client:
+        response = client.put(
+            f"/api/v1/atributos/{attribute_id}", json=update_fields
+        )
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == str(attribute_id)
+    with Session(engine) as session:
+        persisted = session.get(Atributo, attribute_id)
+        assert persisted is not None
+        assert session.get(CategoriaAtributo, mapping_id).activo is True
+        for field, value in update_fields.items():
+            if field == "min_value" or field == "max_value":
+                assert Decimal(str(getattr(persisted, field))) == Decimal(str(value))
+            elif field == "catalog_id":
+                assert getattr(persisted, field) == UUID(str(value))
+            else:
+                assert getattr(persisted, field) == value
+
+
+def test_attribute_put_rejects_duplicate_name_without_changing_identity_or_mapping() -> None:
+    engine = _engine()
+    app = FastAPI()
+    app.include_router(atributo_router)
+
+    def override_session():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[update_attribute_permission] = lambda: SimpleNamespace(
+        id="actor-test"
+    )
+    with Session(engine) as session:
+        category = Categoria(nombre="PUT duplicate", activo=True)
+        first = Atributo(nombre="First", tipo_dato=TipoDato.STRING)
+        second = Atributo(nombre="Second", tipo_dato=TipoDato.STRING)
+        session.add_all([category, first, second])
+        session.commit()
+        mapping = CategoriaAtributo(
+            categoria_id=category.id,
+            atributo_id=first.id,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add(mapping)
+        session.commit()
+        first_id, second_id, mapping_id = first.id, second.id, mapping.id
+
+    with TestClient(app) as client:
+        response = client.put(
+            f"/api/v1/atributos/{first_id}", json={"nombre": "Second"}
+        )
+    assert response.status_code == 409
+    with Session(engine) as session:
+        assert session.get(Atributo, first_id).nombre == "First"
+        assert session.get(Atributo, second_id).nombre == "Second"
+        assert session.get(CategoriaAtributo, mapping_id).atributo_id == first_id
+
+
 def test_unit_annotation_preview_is_signed_and_preserves_values_and_defaults(monkeypatch):
     engine = _engine()
     app = FastAPI()
