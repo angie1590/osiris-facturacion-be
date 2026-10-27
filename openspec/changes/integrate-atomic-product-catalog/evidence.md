@@ -15,7 +15,7 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - Conteos: 39 categorías, 21 atributos, 19 mappings, 19 productos (todos inactivos), 19 relaciones bridge, 106 valores EAV, 0 remapeos y 22 unidades.
 - `--product-cutover --summary`: 19 conflictos `PRODUCT_CATEGORY_INVALID`, 0 candidatos seguros de backfill y `apto_para_migrar=false`.
 - Verificación agregada READ ONLY: las 19 relaciones de esos productos apuntan a categorías inactivas; 0 apuntan a categorías activas, inexistentes o buckets `is_default`.
-- Interpretación: no se escoge ni reactiva categoría automáticamente. El preflight de cutover permanece bloqueado hasta reconciliación administrativa explícita, aunque la primera migración aditiva nullable no se descarta por este resultado.
+- Interpretación de ese preflight inicial: no se escogió ni reactivó categoría automáticamente; 2.3 quedó pendiente hasta una decisión administrativa. La resolución autorizada documentada abajo retiró explícitamente esos productos y sus dependencias, sin backfill inferido.
 
 ## Checks
 
@@ -33,3 +33,11 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - Revisión aplicada en desarrollo: `f51c8a2d7e90`; añade `categoria_principal_id UUID NULL`, FK a `tbl_categoria` e índice `ix_tbl_producto_categoria_principal_id`. No agrega `NOT NULL`, `CHECK`, backfill ni elimina el bridge.
 - Postflight: 19 productos, 19 `categoria_principal_id IS NULL`, 0 valores poblados y 19 relaciones bridge intactas; FK e índice presentes; Alembic `current` coincide con `head`.
 - El preflight sigue bloqueando el cutover con 19 `PRODUCT_CATEGORY_INVALID` y 0 candidatos seguros porque las 19 categorías legacy están inactivas. No se escogió ni reactivó ninguna categoría; Gate 7.2.3 queda pendiente de reconciliación administrativa.
+
+## Gate 7.2.3 — Resolución autorizada del legacy local
+
+- El mantenedor autorizó explícitamente eliminar los 19 productos inactivos y sus dependencias, incluyendo 51 relaciones de bodega con 400 unidades, 106 valores EAV, 19 relaciones de categoría, 24 impuestos y 21 relaciones de proveedores. La autorización se confirmó después de mostrar los conteos; se preservaron 38 filas de `audit_log`.
+- Antes del DELETE se creó y verificó `/tmp/osiris_facturacion_pre_delete_products_20261027.dump` con `pg_restore --list`; SHA-256 `231370204544c4da163a81d3a257f4095b4604f1edec3e5f8598abe51ae67a0e`.
+- El borrado se ejecutó en una transacción con aserciones exactas para los 19 productos, cada relación dependiente y las 400 unidades; cualquier variación habría abortado el commit. No había filas de stock materializado, detalles de movimientos, compras ni ventas asociadas y la cantidad agregada en `tbl_producto` era cero.
+- Postflight: 0 productos y 0 relaciones bridge/EAV/bodega/impuestos/proveedores del conjunto; 39 categorías, 21 atributos y 19 mappings sin cambios. `audit_catalog_integrity.py --product-cutover --summary` informa `apto_para_migrar=true`, 0 conflictos y 0 candidatos backfill. La columna nueva se conserva nullable; no se activó CHECK/NOT NULL.
+- Resultado de suites posterior a la corrección del preflight: backend 1289 passed, 80 skipped; migraciones PostgreSQL/SQLite 99 passed, 13 skipped; Ruff, mypy y OpenSpec estricto limpios.
