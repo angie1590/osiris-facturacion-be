@@ -6,7 +6,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlmodel import Session, col, select
 
-from osiris.core.db import get_session
+from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION, get_session
 from osiris.core.auth import require_roles
 from osiris.core.catalog_permissions import catalog_permission
 from osiris.domain.catalog_contracts import (
@@ -124,6 +124,49 @@ def _serialize_attributes_with_units(
     ]
 
 
+def _attribute_update_preview_payload(payload: AtributoUpdate) -> dict[str, Any]:
+    return payload.model_dump(
+        mode="json",
+        exclude_unset=True,
+        exclude={
+            "precondicion_preview",
+            "confirmar_anotacion_unidad",
+            "usuario_auditoria",
+        },
+    )
+
+
+def _include_annotation_unit_state(
+    session: Session,
+    state: dict[str, Any],
+    unit_id: UUID | None,
+    *,
+    lock: bool = False,
+) -> dict[str, Any]:
+    unit = None
+    if unit_id is not None:
+        statement = (
+            select(Unidad)
+            .where(col(Unidad.id) == unit_id)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        )
+        if lock:
+            statement = statement.with_for_update()
+        unit = session.exec(statement).first()
+    state["unidad_anotacion"] = (
+        {
+            "id": str(unit.id),
+            "codigo": unit.codigo,
+            "simbolo": unit.simbolo,
+            "magnitud_codigo": unit.magnitud_codigo,
+            "activo": unit.activo,
+        }
+        if unit is not None
+        else None
+    )
+    return state
+
+
 @router.get(
     "/remapeos/pendientes", dependencies=[Depends(require_roles("admin", "supervisor"))]
 )
@@ -179,18 +222,41 @@ def get_atributo(
 
 @router.post(
     "/{item_id}/previsualizar",
-    dependencies=[Depends(preview_attribute_update_permission)],
 )
 def preview_atributo(
     item_id: UUID = Path(...),
     payload: AtributoUpdate = Body(...),
     session: Session = Depends(get_session),
+    usuario: Usuario = Depends(preview_attribute_update_permission),
 ) -> dict[str, Any]:
     result = service.preview_update(
-        session, item_id, payload.model_dump(exclude_unset=True)
+        session,
+        item_id,
+        payload.model_dump(
+            exclude_unset=True,
+            exclude={"precondicion_preview", "confirmar_anotacion_unidad"},
+        ),
     )
     if result is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
+    annotation = result.get("unidad_anotacion")
+    if annotation is not None:
+        attribute = service.repo.get(session, item_id)
+        if attribute is None:
+            raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
+        state, _ = service._capture_unit_annotation_state(session, attribute)
+        state = _include_annotation_unit_state(
+            session, state, payload.unidad_id
+        )
+        token = b3_preview_signer().issue(
+            operation="ANNOTATE_ATTRIBUTE_UNIT",
+            target=f"/api/v1/atributos/{item_id}",
+            actor=str(usuario.id),
+            payload=_attribute_update_preview_payload(payload),
+            state=state,
+        )
+        annotation["precondicion_preview"] = token
+        result["precondicion_preview"] = token
     return result
 
 
@@ -421,22 +487,65 @@ def create_atributo(
             payload=normalized_payload,
             state=state,
         )
-    return AtributoRead.model_validate(service.create_for_category(session, data))
+    created = service.create_for_category(session, data)
+    return _serialize_attributes_with_units([created], session)[0]
 
 
 @router.put(
     "/{item_id}",
     response_model=AtributoRead,
-    dependencies=[Depends(update_attribute_permission)],
 )
 def update_atributo(
     item_id: UUID = Path(...),
     payload: AtributoUpdate = Body(...),
     session: Session = Depends(get_session),
+    usuario: Usuario = Depends(update_attribute_permission),
 ) -> AtributoRead:
-    updated = service.update(session, item_id, payload.model_dump(exclude_unset=True))
+    values = payload.model_dump(
+        exclude_unset=True,
+        exclude={"precondicion_preview", "confirmar_anotacion_unidad"},
+    )
+    allow_unit_annotation = False
+    if payload.confirmar_anotacion_unidad:
+        if not payload.precondicion_preview:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION",
+                    "message": "Previsualiza la anotación y confirma su interpretación antes de guardar.",
+                    "conteos": {},
+                    "acciones_permitidas": ["previsualizar", "cancelar"],
+                },
+            )
+        CategoriaService.acquire_hierarchy_mutation_lock(session)
+        attribute = session.exec(
+            select(Atributo).where(col(Atributo.id) == item_id).with_for_update()
+        ).first()
+        if attribute is None:
+            raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
+        state, _ = service._capture_unit_annotation_state(
+            session, attribute, lock=True
+        )
+        state = _include_annotation_unit_state(
+            session, state, payload.unidad_id, lock=True
+        )
+        b3_preview_signer().verify(
+            payload.precondicion_preview,
+            operation="ANNOTATE_ATTRIBUTE_UNIT",
+            target=f"/api/v1/atributos/{item_id}",
+            actor=str(usuario.id),
+            payload=_attribute_update_preview_payload(payload),
+            state=state,
+        )
+        allow_unit_annotation = True
+    updated = service.update(
+        session,
+        item_id,
+        values,
+        allow_unit_annotation=allow_unit_annotation,
+    )
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Atributo {item_id} not found")
-    return AtributoRead.model_validate(updated)
+    return _serialize_attributes_with_units([updated], session)[0]
 
 

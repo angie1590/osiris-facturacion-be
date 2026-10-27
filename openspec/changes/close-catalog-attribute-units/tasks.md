@@ -60,7 +60,7 @@ Ejecutar por entregas 1-6 coordinadas con el cambio frontend homonimo. Cada entr
 - [x] 6.1 Implementar CRUD/filtros/reactivacion Unidad con permisos efectivos; proteger seed y unicidad case-sensitive de simbolo/case-insensitive de codigo.
 - [x] 6.2 Implementar calculo de uso actual/historico incluido JSON de snapshots; bloquear baja/codigo/simbolo/magnitud en uso, permitir solo correccion descriptiva auditada de no sistema.
 - [x] 6.3 Incluir unidad en create/read/update/efectivos/preview de atributo y defaults separados; rechazar unidad inactiva/no numerica sin convertir numeros.
-- [ ] 6.4 Implementar anotacion inicial confirmada con precondicion_preview y confirmar_anotacion_unidad; contar datos activos/historicos y demostrar invariancia numerica/defaults.
+- [x] 6.4 Implementar anotacion inicial confirmada con precondicion_preview y confirmar_anotacion_unidad; contar datos activos/historicos y demostrar invariancia numerica/defaults.
 - [ ] 6.5 Bloquear cambio A-B y retiro ordinario A-null con valores/historia; probar solo referencia historica y carrera baja unidad vs anotacion.
 - [ ] 6.6 Extender snapshots/restore con codigo y unidad_id, politica legacy sin reescribir historia y undo de anotacion como excepcion condicional; bloquear ante post-estado cambiado.
 - [ ] 6.7 Cerrar gate 6 con FE: administrar unidades, crear atributo con/sin unidad, default con sufijo, anotacion/409/undo en API real; sin unidad comercial ni formulario Producto.

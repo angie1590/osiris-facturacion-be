@@ -359,6 +359,13 @@ def test_unit_changes_with_values_remain_gated(session, units, active, operation
     session.add(value)
     session.commit()
     for method in (service.preview_update, service.update):
+        if operation == "add" and method.__name__ == "preview_update":
+            preview = method(session, attribute.id, {"unidad_id": target_unit})
+            assert preview is not None
+            assert preview["requiere_confirmacion"] is True
+            assert preview["unidad_anotacion"]["conteos"]["valores_activos"] == int(active)
+            assert preview["unidad_anotacion"]["conteos"]["valores_inactivos"] == int(not active)
+            continue
         with pytest.raises(HTTPException) as error:
             method(session, attribute.id, {"unidad_id": target_unit})
         assert error.value.status_code == 409

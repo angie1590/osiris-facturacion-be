@@ -59,6 +59,8 @@ class AtributoUpdate(BaseOSModel):
     min_value: Optional[Decimal] = None
     max_value: Optional[Decimal] = None
     usuario_auditoria: Optional[str] = None
+    confirmar_anotacion_unidad: bool = False
+    precondicion_preview: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_unit_type(self) -> AtributoUpdate:

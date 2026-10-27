@@ -95,15 +95,44 @@ class AtributoService(BaseService[Atributo]):
 
     @staticmethod
     def _guard_unit_change(
-        session: Session, attribute: Atributo, target: dict[str, Any], state: dict[str, Any]
+        session: Session,
+        attribute: Atributo,
+        target: dict[str, Any],
+        state: dict[str, Any],
+        *,
+        allow_annotation: bool = False,
     ) -> None:
         if attribute.unidad_id == target.get("unidad_id"):
             return
         snapshots = session.exec(
             select(AtributoCambio).where(col(AtributoCambio.atributo_id) == attribute.id)
         ).all()
-        has_history = bool(state["valores"] or state["remapeos"]) or any(
-            assignment["valor_default"] is not None for assignment in state["asignaciones"]
+        has_history = AtributoService._has_unit_history(state, snapshots)
+        if not has_history:
+            return
+        if attribute.unidad_id is None:
+            if target.get("unidad_id") is not None and allow_annotation:
+                return
+            code = "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION"
+        elif target.get("unidad_id") is None:
+            code = "ATTRIBUTE_UNIT_REMOVAL_REQUIRES_MIGRATION"
+        else:
+            code = "ATTRIBUTE_UNIT_CHANGE_REQUIRES_CONVERSION"
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": code,
+                "message": "El cambio de unidad con historia esta bloqueado hasta la entrega 6.",
+            },
+        )
+
+    @staticmethod
+    def _has_unit_history(
+        state: dict[str, Any], snapshots: Sequence[AtributoCambio]
+    ) -> bool:
+        return bool(state["valores"] or state["remapeos"]) or any(
+            assignment["valor_default"] is not None
+            for assignment in state["asignaciones"]
         ) or any(
             snapshot.valores_anteriores
             or snapshot.valores_posteriores
@@ -119,21 +148,81 @@ class AtributoService(BaseService[Atributo]):
             )
             for snapshot in snapshots
         )
-        if not has_history:
-            return
-        if attribute.unidad_id is None:
-            code = "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION"
-        elif target.get("unidad_id") is None:
-            code = "ATTRIBUTE_UNIT_REMOVAL_REQUIRES_MIGRATION"
-        else:
-            code = "ATTRIBUTE_UNIT_CHANGE_REQUIRES_CONVERSION"
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": code,
-                "message": "El cambio de unidad con historia esta bloqueado hasta la entrega 6.",
-            },
+
+    def _capture_unit_annotation_state(
+        self, session: Session, attribute: Atributo, *, lock: bool = False
+    ) -> tuple[dict[str, Any], list[AtributoCambio]]:
+        state = self._capture_state(session, attribute, lock=lock)
+        statement = select(AtributoCambio).where(
+            col(AtributoCambio.atributo_id) == attribute.id
         )
+        if lock:
+            statement = statement.with_for_update()
+        snapshots = list(session.exec(statement).all())
+        snapshots.sort(key=lambda snapshot: str(snapshot.id))
+        state["unit_snapshots"] = [
+            snapshot.model_dump(mode="json") for snapshot in snapshots
+        ]
+        return state, snapshots
+
+    def _unit_annotation_details(
+        self,
+        session: Session,
+        attribute: Atributo,
+        target: dict[str, Any],
+        state: dict[str, Any],
+        snapshots: list[AtributoCambio],
+    ) -> dict[str, Any] | None:
+        if attribute.unidad_id is not None or target.get("unidad_id") is None:
+            return None
+        if not self._has_unit_history(state, snapshots):
+            return None
+
+        snapshot_values: dict[str, dict[str, Any]] = {}
+        snapshot_products: set[str] = set()
+        historical_defaults = 0
+        for snapshot in snapshots:
+            for value in snapshot.valores_anteriores + snapshot.valores_posteriores:
+                value_id = str(value.get("id", ""))
+                if value_id:
+                    snapshot_values[value_id] = value
+                if value.get("producto_id"):
+                    snapshot_products.add(str(value["producto_id"]))
+            historical_defaults += sum(
+                1
+                for assignment in (
+                    snapshot.asignaciones_anteriores
+                    + snapshot.asignaciones_posteriores
+                )
+                if assignment.get("valor_default") is not None
+            )
+        current_values = state["valores"]
+        current_products = {
+            str(value["producto_id"])
+            for value in current_values
+            if value.get("producto_id")
+        }
+        unit = session.get(Unidad, target["unidad_id"])
+        return {
+            "unidad": {
+                "id": str(target["unidad_id"]),
+                "nombre": unit.nombre if unit is not None else "Unidad",
+                "simbolo": unit.simbolo if unit is not None else "",
+            },
+            "conteos": {
+                "valores_activos": sum(1 for value in current_values if value["activo"]),
+                "valores_inactivos": sum(1 for value in current_values if not value["activo"]),
+                "valores_historicos": len(snapshot_values),
+                "defaults_actuales": sum(
+                    1
+                    for assignment in state["asignaciones"]
+                    if assignment["valor_default"] is not None
+                ),
+                "defaults_historicos": historical_defaults,
+                "productos_afectados": len(current_products | snapshot_products),
+            },
+            "requiere_confirmacion": True,
+        }
 
     @staticmethod
     def _validate_unique_name(
@@ -649,8 +738,11 @@ class AtributoService(BaseService[Atributo]):
         data: Any,
         *,
         commit: bool = True,
+        allow_unit_annotation: bool = False,
     ) -> Atributo | None:
         values = self._ensure_dict(data).copy()
+        values.pop("confirmar_anotacion_unidad", None)
+        values.pop("precondicion_preview", None)
         try:
             if isinstance(session, Session):
                 from osiris.modules.inventario.categoria.service import CategoriaService
@@ -685,7 +777,16 @@ class AtributoService(BaseService[Atributo]):
             if not definition_changed:
                 return current
             before_state = self._capture_state(session, current, lock=True)
-            self._guard_unit_change(session, current, normalized, before_state)
+            self._guard_unit_change(
+                session,
+                current,
+                normalized,
+                before_state,
+                allow_annotation=allow_unit_annotation,
+            )
+            is_unit_annotation = (
+                current.unidad_id is None and normalized.get("unidad_id") is not None
+            )
             conversion_fields = {
                 "tipo_dato",
                 "select_options",
@@ -724,13 +825,21 @@ class AtributoService(BaseService[Atributo]):
             if isinstance(session, Session):
                 after_state = self._capture_state(session, attribute, lock=True)
                 snapshot = self._create_snapshot(
-                    session, attribute, "update", before_state, after_state
+                    session,
+                    attribute,
+                    "annotate_unit" if is_unit_annotation else "update",
+                    before_state,
+                    after_state,
                 )
                 record_domain_change(
                     session,
                     entity="tbl_atributo",
                     entity_id=item_id,
-                    action="UPDATE_ATTRIBUTE",
+                    action=(
+                        "ANNOTATE_ATTRIBUTE_UNIT"
+                        if is_unit_annotation
+                        else "UPDATE_ATTRIBUTE"
+                    ),
                     before=before,
                     after={
                         **after_state["definicion"],
@@ -953,8 +1062,34 @@ class AtributoService(BaseService[Atributo]):
         target["min_value"] = minimum
         target["max_value"] = maximum
 
-        before_state = self._capture_state(session, attribute)
-        self._guard_unit_change(session, attribute, target, before_state)
+        before_state, unit_snapshots = self._capture_unit_annotation_state(
+            session, attribute
+        )
+        unit_annotation = self._unit_annotation_details(
+            session, attribute, target, before_state, unit_snapshots
+        )
+        changed_fields = {
+            field
+            for field in self._DEFINITION_FIELDS[:-1]
+            if getattr(attribute, field) != target[field]
+        }
+        if unit_annotation is not None and changed_fields - {"unidad_id"}:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION",
+                    "message": "Confirma la anotación de unidad por separado de otros cambios de definición.",
+                    "conteos": unit_annotation["conteos"],
+                    "acciones_permitidas": ["anotar_unidad", "cancelar"],
+                },
+            )
+        self._guard_unit_change(
+            session,
+            attribute,
+            target,
+            before_state,
+            allow_annotation=True,
+        )
         changed = any(
             getattr(attribute, field) != target[field]
             for field in (
@@ -1047,7 +1182,16 @@ class AtributoService(BaseService[Atributo]):
             "remapeos_pendientes": sum(
                 1 for remap in before_state["remapeos"] if remap["activo"]
             ),
-            "requiere_confirmacion": changed and bool(rows),
+            "requiere_confirmacion": bool(unit_annotation)
+            or changed and bool(rows),
+            "unidad_anotacion": unit_annotation,
+            "resumen_anotacion_unidad": (
+                f"Los valores y defaults existentes pasarán a interpretarse en "
+                f"{unit_annotation['unidad']['nombre']} ({unit_annotation['unidad']['simbolo']}) "
+                "sin modificar sus números."
+                if unit_annotation is not None
+                else None
+            ),
         }
 
     @staticmethod

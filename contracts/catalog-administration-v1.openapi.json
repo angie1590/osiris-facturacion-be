@@ -396,6 +396,19 @@
             "title": "Nombre",
             "type": "string"
           },
+          "precondicion_preview": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precondicion Preview"
+          },
           "select_options": {
             "anyOf": [
               {

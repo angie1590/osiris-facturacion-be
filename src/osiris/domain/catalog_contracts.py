@@ -191,6 +191,7 @@ class AttributeUpdate(ContractModel):
     min_value: str | int | float | None = None
     max_value: str | int | float | None = None
     confirmar_anotacion_unidad: bool = False
+    precondicion_preview: Text | None = None
 
     @model_validator(mode="after")
     def validate_known_unit_type(self) -> AttributeUpdate:
