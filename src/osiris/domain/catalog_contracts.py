@@ -76,12 +76,21 @@ class UnitSummary(UnitInput):
     id: UUIDWire
 
 
+class UnitUsage(ContractModel):
+    atributos_activos: Count = 0
+    atributos_inactivos: Count = 0
+    snapshots_historicos: Count = 0
+
+
 class UnitRead(UnitSummary):
     es_sistema: bool
     activo: bool
     creado_en: datetime
     actualizado_en: datetime
     usuario_auditoria: str | None
+    created_by: str | None = None
+    updated_by: str | None = None
+    uso: UnitUsage = Field(default_factory=UnitUsage)
 
 
 class CategoryOrigin(ContractModel):

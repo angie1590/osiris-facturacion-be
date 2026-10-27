@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -160,6 +161,31 @@ def test_unit_preserves_symbol_case(symbol: str) -> None:
     dto = UnitInput(codigo="MEGABYTE", nombre="Megabyte", simbolo=symbol,
                     magnitud_codigo="DATA_STORAGE")
     assert dto.simbolo == symbol
+
+
+def test_unit_read_exposes_backend_usage_counts() -> None:
+    unit = UnitRead.model_validate({
+        "id": IDENTITY,
+        "codigo": "GIGABYTE",
+        "nombre": "Gigabyte",
+        "simbolo": "GB",
+        "magnitud_codigo": "DATA_STORAGE",
+        "es_sistema": True,
+        "activo": True,
+        "creado_en": datetime(2026, 10, 27),
+        "actualizado_en": datetime(2026, 10, 27),
+        "usuario_auditoria": None,
+        "uso": {
+            "atributos_activos": 2,
+            "atributos_inactivos": 1,
+            "snapshots_historicos": 3,
+        },
+    })
+    assert unit.uso.model_dump() == {
+        "atributos_activos": 2,
+        "atributos_inactivos": 1,
+        "snapshots_historicos": 3,
+    }
 
 
 @pytest.mark.parametrize("field", ["codigo", "simbolo", "magnitud_codigo", "nombre"])

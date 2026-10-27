@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 
 CodigoUnidad = Annotated[
@@ -48,6 +48,14 @@ class UnidadUpdate(BaseModel):
         return valor
 
 
+class UnidadUsoRead(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    atributos_activos: int = 0
+    atributos_inactivos: int = 0
+    snapshots_historicos: int = 0
+
+
 class UnidadRead(UnidadCreate):
     model_config = ConfigDict(extra="forbid", strict=True, from_attributes=True)
 
@@ -59,3 +67,4 @@ class UnidadRead(UnidadCreate):
     created_by: str | None = None
     updated_by: str | None = None
     usuario_auditoria: str | None = None
+    uso: UnidadUsoRead = Field(default_factory=UnidadUsoRead)

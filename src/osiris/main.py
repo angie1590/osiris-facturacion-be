@@ -75,6 +75,7 @@ from osiris.modules.common.rol_modulo_permiso.router import (
 )
 from osiris.modules.common.sucursal.router import router as sucursal_router
 from osiris.modules.common.tipo_cliente.router import router as tipo_cliente_router
+from osiris.modules.common.unidad.router import router as unidad_router
 from osiris.modules.common.usuario.router import router as usuario_router
 from osiris.modules.compras.router import router as compras_router
 from osiris.modules.impresion.router import router as impresion_router
@@ -488,6 +489,7 @@ app.include_router(persona_router)
 app.include_router(cliente_router)
 app.include_router(empleado_router)
 app.include_router(tipo_cliente_router)
+app.include_router(unidad_router)
 app.include_router(modulo_router)
 app.include_router(rol_modulo_permiso_router)
 app.include_router(proveedor_persona_router)

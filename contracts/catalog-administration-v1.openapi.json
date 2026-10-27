@@ -1797,6 +1797,17 @@
             "title": "Creado En",
             "type": "string"
           },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
           "es_sistema": {
             "title": "Es Sistema",
             "type": "boolean"
@@ -1824,6 +1835,20 @@
             "pattern": "^\\S+$",
             "title": "Simbolo",
             "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "uso": {
+            "$ref": "#/components/schemas/UnitUsage"
           },
           "usuario_auditoria": {
             "anyOf": [
@@ -1926,6 +1951,31 @@
           }
         },
         "title": "UnitUpdate",
+        "type": "object"
+      },
+      "UnitUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "atributos_activos": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Atributos Activos",
+            "type": "integer"
+          },
+          "atributos_inactivos": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Atributos Inactivos",
+            "type": "integer"
+          },
+          "snapshots_historicos": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Snapshots Historicos",
+            "type": "integer"
+          }
+        },
+        "title": "UnitUsage",
         "type": "object"
       },
       "ValidationError": {
