@@ -118,11 +118,14 @@ class AtributoService(BaseService[Atributo]):
             code = "ATTRIBUTE_UNIT_REMOVAL_REQUIRES_MIGRATION"
         else:
             code = "ATTRIBUTE_UNIT_CHANGE_REQUIRES_CONVERSION"
+        unit_counts = AtributoService._unit_history_counts(state, snapshots)
         raise HTTPException(
             status_code=409,
             detail={
                 "code": code,
                 "message": "El cambio de unidad con historia esta bloqueado hasta la entrega 6.",
+                "conteos": unit_counts,
+                "acciones_permitidas": ["anotar_unidad", "migrar_valores", "cancelar"],
             },
         )
 
@@ -148,6 +151,47 @@ class AtributoService(BaseService[Atributo]):
             )
             for snapshot in snapshots
         )
+
+    @staticmethod
+    def _unit_history_counts(
+        state: dict[str, Any], snapshots: Sequence[AtributoCambio]
+    ) -> dict[str, int]:
+        current_values = state["valores"]
+        historical_values: dict[str, dict[str, Any]] = {}
+        historical_products: set[str] = set()
+        defaults_historical = 0
+        for snapshot in snapshots:
+            for value in snapshot.valores_anteriores + snapshot.valores_posteriores:
+                if value.get("id"):
+                    historical_values[str(value["id"])] = value
+                if value.get("producto_id"):
+                    historical_products.add(str(value["producto_id"]))
+            defaults_historical += sum(
+                1
+                for assignment in (
+                    snapshot.asignaciones_anteriores
+                    + snapshot.asignaciones_posteriores
+                )
+                if assignment.get("valor_default") is not None
+            )
+        current_products = {
+            str(value["producto_id"])
+            for value in current_values
+            if value.get("producto_id")
+        }
+        return {
+            "valores_activos": sum(1 for value in current_values if value["activo"]),
+            "valores_inactivos": sum(1 for value in current_values if not value["activo"]),
+            "valores_historicos": len(historical_values),
+            "snapshots_historicos": len(snapshots),
+            "defaults_actuales": sum(
+                1
+                for assignment in state["asignaciones"]
+                if assignment["valor_default"] is not None
+            ),
+            "defaults_historicos": defaults_historical,
+            "productos_afectados": len(current_products | historical_products),
+        }
 
     def _capture_unit_annotation_state(
         self, session: Session, attribute: Atributo, *, lock: bool = False

@@ -370,6 +370,8 @@ def test_unit_changes_with_values_remain_gated(session, units, active, operation
             method(session, attribute.id, {"unidad_id": target_unit})
         assert error.value.status_code == 409
         assert error.value.detail["code"] == expected_code
+        assert error.value.detail["conteos"]["valores_activos"] == int(active)
+        assert error.value.detail["conteos"]["valores_inactivos"] == int(not active)
     session.refresh(attribute)
     session.refresh(value)
     assert attribute.unidad_id == initial_unit
@@ -386,6 +388,67 @@ def test_reverted_unit_snapshot_alone_blocks_unit_change(session, units):
     with pytest.raises(HTTPException) as error:
         service.update(session, attribute.id, {"unidad_id": units[1].id})
     assert error.value.detail["code"] == "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION"
+    assert error.value.detail["conteos"]["snapshots_historicos"] == 1
+
+
+@pytest.mark.parametrize("change_value", [False, True])
+def test_annotation_snapshot_undo_is_conditional_and_preserves_values(
+    session, units, change_value
+):
+    service = AtributoService()
+    attribute = service.create(
+        session, {"nombre": "RAM", "tipo_dato": TipoDato.DECIMAL}
+    )
+    category = Categoria(nombre="Computadores")
+    product = Producto(nombre="Equipo")
+    session.add_all([category, product])
+    session.flush()
+    assignment = CategoriaAtributo(
+        categoria_id=category.id,
+        atributo_id=attribute.id,
+        valor_default="16.125",
+        activo=True,
+    )
+    value = ProductoAtributoValor(
+        producto_id=product.id,
+        atributo_id=attribute.id,
+        valor_decimal=Decimal("16.125"),
+        activo=True,
+    )
+    session.add_all([assignment, value])
+    session.commit()
+
+    service.update(
+        session,
+        attribute.id,
+        {"unidad_id": units[0].id},
+        allow_unit_annotation=True,
+    )
+    if change_value:
+        value.valor_decimal = Decimal("17.250")
+        session.add(value)
+        session.commit()
+        with pytest.raises(HTTPException) as error:
+            service.undo(session, attribute.id)
+        assert error.value.detail["code"] == "ATTRIBUTE_STATE_CHANGED"
+        session.refresh(attribute)
+        assert attribute.unidad_id == units[0].id
+        assert value.valor_decimal == Decimal("17.250")
+    else:
+        lifecycle = service.lifecycle_status(session, attribute.id)
+        assert lifecycle["can_undo"] is True
+        assert lifecycle["can_reactivate"] is False
+        service.undo(session, attribute.id)
+        session.refresh(attribute)
+        session.refresh(value)
+        session.refresh(assignment)
+        snapshot = session.exec(select(AtributoCambio)).one()
+        assert attribute.unidad_id is None
+        assert value.valor_decimal == Decimal("16.125")
+        assert assignment.valor_default == "16.125"
+        assert snapshot.revertido is True
+        assert snapshot.definicion_anterior["codigo"] == attribute.codigo
+        assert snapshot.definicion_posterior["unidad_id"] == str(units[0].id)
 
 
 def test_category_create_does_not_mutate_input(session):
