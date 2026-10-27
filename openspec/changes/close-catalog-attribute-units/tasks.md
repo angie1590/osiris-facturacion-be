@@ -53,7 +53,7 @@ Ejecutar por entregas 1-6 coordinadas con el cambio frontend homonimo. Cada entr
 - [x] 5.7 Implementar preview/quitar asignacion contextual, conservando EAV aun aplicable y desactivando solo no aplicable; validar obligatoriedad resultante y confirmar cuando existan valores afectados.
 - [x] 5.8 Conectar baja global/reactivacion/undo existentes al protocolo compartido de precondicion/locks; probar legacy sin snapshot, remapeo resuelto, nuevas filas y rollback de auditoria/commit.
 - [x] 5.9 Publicar rutas contextuales y errores definitivos; verificar actor JWT y ausencia de efectos en stock, impuestos y documentos historicos.
-- [ ] 5.10 Cerrar gate 5 con FE: asignar/reusar/override/default-null/backfill/quitar-local/baja-global/restauracion, sin productos activos nuevos incompletos por estas operaciones administrativas.
+- [x] 5.10 Cerrar gate 5 con FE: asignar/reusar/override/default-null/backfill/quitar-local/baja-global/restauracion, sin productos activos nuevos incompletos por estas operaciones administrativas.
 
 ## 6. Entrega 6 - Unidades de atributo
 
@@ -63,16 +63,16 @@ Ejecutar por entregas 1-6 coordinadas con el cambio frontend homonimo. Cada entr
 - [x] 6.4 Implementar anotacion inicial confirmada con precondicion_preview y confirmar_anotacion_unidad; contar datos activos/historicos y demostrar invariancia numerica/defaults.
 - [x] 6.5 Bloquear cambio A-B y retiro ordinario A-null con valores/historia; probar solo referencia historica y carrera baja unidad vs anotacion.
 - [x] 6.6 Extender snapshots/restore con codigo y unidad_id, politica legacy sin reescribir historia y undo de anotacion como excepcion condicional; bloquear ante post-estado cambiado.
-- [ ] 6.7 Cerrar gate 6 con FE: administrar unidades, crear atributo con/sin unidad, default con sufijo, anotacion/409/undo en API real; sin unidad comercial ni formulario Producto.
+- [x] 6.7 Cerrar gate 6 con FE: administrar unidades, crear atributo con/sin unidad, default con sufijo, anotacion/409/undo en API real; sin unidad comercial ni formulario Producto.
 
 ## 7. Gates ejecutables de cierre del alcance actual
 
-- [ ] 7.1 Ejecutar suite backend completa: `poetry run rtk pytest -q` (o `poetry run pytest` si el wrapper impide diagnostico); cero fallos, skips de integracion no cuentan como evidencia PostgreSQL.
-- [ ] 7.2 Ejecutar `poetry run ruff check .` y `poetry run mypy -p osiris`, mas mypy de la superficie de scripts nueva cuando corresponda.
-- [ ] 7.3 Ejecutar pruebas PostgreSQL aisladas de migracion y concurrencia, incluyendo upgrade/downgrade permitido y bloqueado; registrar fixtures/datos preservados sin usar bases reales para pruebas destructivas.
-- [ ] 7.4 Verificar contratos OpenAPI compartidos y evidencia E2E administrativa con FE por entregas 1-6; auditar que no cambio stock/cartera/SRI/documentos ni codigo/formulario Producto fuera de adaptadores de impacto ya acordados.
-- [ ] 7.5 Actualizar API/procesos/runbook/preflight y matriz de evidencia vinculada con manage-reversible-attribute-lifecycle; no cerrar ni archivar tareas antiguas sin evidencia especifica.
-- [ ] 7.6 Ejecutar `openspec validate close-catalog-attribute-units --strict --no-interactive` en ambos repos y verificar alcance final antes de declarar completadas entregas 1-6.
+- [x] 7.1 Ejecutar suite backend completa: `poetry run rtk pytest -q` (o `poetry run pytest` si el wrapper impide diagnostico); cero fallos, skips de integracion no cuentan como evidencia PostgreSQL.
+- [x] 7.2 Ejecutar `poetry run ruff check .` y `poetry run mypy -p osiris`, mas mypy de la superficie de scripts nueva cuando corresponda.
+- [x] 7.3 Ejecutar pruebas PostgreSQL aisladas de migracion y concurrencia, incluyendo upgrade/downgrade permitido y bloqueado; registrar fixtures/datos preservados sin usar bases reales para pruebas destructivas.
+- [x] 7.4 Verificar contratos OpenAPI compartidos y evidencia E2E administrativa con FE por entregas 1-6; auditar que no cambio stock/cartera/SRI/documentos ni codigo/formulario Producto fuera de adaptadores de impacto ya acordados.
+- [x] 7.5 Actualizar API/procesos/runbook/preflight y matriz de evidencia vinculada con manage-reversible-attribute-lifecycle; no cerrar ni archivar tareas antiguas sin evidencia especifica.
+- [x] 7.6 Ejecutar `openspec validate close-catalog-attribute-units --strict --no-interactive` en ambos repos y verificar alcance final antes de declarar completadas entregas 1-6.
 
 ## Fuera de esta ejecucion - Entregas futuras 7 y 8
 

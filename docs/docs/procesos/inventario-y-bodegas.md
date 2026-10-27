@@ -19,16 +19,19 @@ sidebar_position: 4
 
 **Flujo de Eventos Básico:**
 
-1. Crear categorías y subcategorías.
-2. Crear atributos (tipo de dato correcto).
-3. Asociar atributos a categorías.
-4. Crear producto.
-5. Asignar categorías al producto.
-6. Asignar impuestos al producto.
+1. Crear categorías y subcategorías; la hoja efectiva proviene del árbol del backend.
+2. Crear o reutilizar atributos globales y asignarlos a la categoría desde el panel administrativo.
+3. En tipos integer/decimal, seleccionar opcionalmente una unidad activa. La unidad y el default permanecen separados del número almacenado; el símbolo es solo un sufijo de presentación.
+4. Antes de anotar unidad a una definición con historia, revisar el preview y confirmar explícitamente; la operación no convierte valores ni defaults. Los cambios A-B y la retirada ordinaria quedan bloqueados mientras exista historia.
+5. Configurar obligatoriedad/default local con preview de faltantes. El backfill es opt-in, fill-only y conserva valores existentes.
+6. Crear producto.
+7. Asignar categorías al producto.
+8. Asignar impuestos al producto.
 
 **Flujos Alternativos:**
 
 - Atributo no aplicable a categoría: operación rechazada.
+- Unidad no numérica/inactiva, cambio semántico con historia o preview obsoleto: conflicto funcional; revisar el estado y generar un preview nuevo.
 - Configuración tributaria inválida: operación rechazada.
 
 **Postcondiciones:**

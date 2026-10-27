@@ -61,7 +61,7 @@ Todas las escrituras de contraseñas exigen ocho o más caracteres: Usuario, Usu
 
 UsuarioRead proyecta `persona`, `rol_nombre`, `requiere_cambio_password`, `tiene_codigo_aprobacion` y alias `codigo_aprobacion_configurado`, además de los campos base. No incluye `password`, hashes, código de aprobación ni tokens. Reset devuelve `password_temporal` solo en esa respuesta autorizada: no recuperarla por GET, ni guardarla en cache, storage, URL o logs. El frontend la descarta al cerrar el resultado.
 
-### POST /api/v1/usuarios/{usuario_id}/reactivar
+### `POST /api/v1/usuarios/{usuario_id}/reactivar`
 
 Exige `USUARIOS.actualizar`, Persona activa (y `PERSONAS.leer`) y Rol activo. Conserva el ID y no crea cuenta nueva. Si hay Empleado inactivo, devuelve `409` salvo decisión administrativa explícita:
 
@@ -73,7 +73,7 @@ Exige `USUARIOS.actualizar`, Persona activa (y `PERSONAS.leer`) y Rol activo. Co
 
 Reactivar Empleado no reactiva Usuario; restaurar cuenta es una acción separada auditada. El cuerpo es opcional cuando no se necesita esa confirmación. No automatizar la confirmación tras un conflicto.
 
-### POST /api/v1/usuarios/{usuario_id}/invalidar-sesion
+### `POST /api/v1/usuarios/{usuario_id}/invalidar-sesion`
 
 Exige `USUARIOS.actualizar`; responde `204` sin cuerpo y actualiza la marca de invalidación, sin dar de baja la cuenta. Tokens access/refresh anteriores no deben reutilizarse.
 

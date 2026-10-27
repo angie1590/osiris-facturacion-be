@@ -39,7 +39,7 @@ Persona es global y exclusivamente natural. Cliente, Proveedor Persona, Empleado
 | POST /api/v1/empleados                | `persona_id` XOR `persona_nueva`                   | Empresa activa/autorizada, datos laborales y bloque `usuario` obligatorio |
 | POST /api/v1/usuarios                 | `persona_id` XOR `persona_nueva`                   | `rol_id`, `username`, `password`; no exige Empleado                       |
 | POST /api/v1/proveedores-sociedad     | `persona_contacto_id` XOR `persona_contacto_nueva` | Identidad jurídica, dirección, email y catálogo activo                    |
-| PUT /api/v1/proveedores-sociedad/{id} | Como máximo una alternativa de contacto            | Omitir ambas conserva el contacto; no admite contacto nulo                |
+| `PUT /api/v1/proveedores-sociedad/{id}` | Como máximo una alternativa de contacto            | Omitir ambas conserva el contacto; no admite contacto nulo                |
 
 En POST debe existir exactamente una alternativa no nula: ambas o ninguna producen `422`. `persona_nueva` y `persona_contacto_nueva` usan PersonaCreate. Su `usuario_auditoria` es opcional por compatibilidad técnica, no un input de producción: el actor autoritativo es el JWT. Los ejemplos por ID siguen vigentes; los ejemplos Read muestran campos base, no la proyección completa.
 
@@ -68,7 +68,7 @@ Cada entidad tiene módulo propio: `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES`, `PRO
 Los listados admiten `q`, `estado`, `sort_by` y dirección permitida, además de `limit`, `offset`, `only_active`; Persona y roles con identidad admiten `identificacion` exacta normalizada. Persona usa `sort_direction`; comerciales y Usuario admiten `sort_order`/`sort_direction`, Empleado expone `sort_order`. No asumir que todos comparten los mismos campos ordenables: se aplica whitelist por recurso y un orden inválido devuelve `422`. `items` y `meta.total` proceden del servidor; no filtrar una página local como si fuera el directorio completo.
 
 - GET /api/v1/personas/contrato: devuelve OpenAPI de la aplicación por el prefijo API autenticado; exige `PERSONAS.leer`. La UI verifica allí soporte compuesto antes de habilitar el submit.
-- GET /api/v1/personas/{id}/vinculos: exige `PERSONAS.leer`; devuelve `persona_id`, `cliente`, `proveedor_persona`, `empleado`, `usuario`, `proveedores_sociedad` y `dependencias_activas`. Cada rol visible contiene `id`/`activo`; sociedades incluyen `razon_social`. Sin permiso de lectura del módulo correspondiente se ocultan sus detalles, pero se conserva la dependencia bloqueante con ID nulo.
+- `GET /api/v1/personas/{id}/vinculos`: exige `PERSONAS.leer`; devuelve `persona_id`, `cliente`, `proveedor_persona`, `empleado`, `usuario`, `proveedores_sociedad` y `dependencias_activas`. Cada rol visible contiene `id`/`activo`; sociedades incluyen `razon_social`. Sin permiso de lectura del módulo correspondiente se ocultan sus detalles, pero se conserva la dependencia bloqueante con ID nulo.
 
 Las proyecciones Read comerciales incluyen `persona` (también el contacto de Sociedad), nombre del catálogo y metadatos `created_by`, `updated_by`, `created_at`, `updated_at`, además de los campos base. Cliente incluye `tipo_cliente_nombre` y `descuento`; proveedores, `tipo_contribuyente_nombre`. Empleado incluye `persona`; Usuario incluye `persona`, `rol_nombre`, `tiene_codigo_aprobacion` y alias `codigo_aprobacion_configurado`. No asumir metadatos adicionales en PersonaRead, EmpleadoRead o UsuarioRead, ni hashes/secretos en ningún Read.
 
@@ -78,12 +78,12 @@ DELETE Persona devuelve `409` mientras exista Cliente, Proveedor Persona, Emplea
 
 | Acción                      | Endpoint                                         | Resultado                                           |
 | --------------------------- | ------------------------------------------------ | --------------------------------------------------- |
-| Reactivar Persona           | POST /api/v1/personas/{id}/reactivar             | Mismo ID, revalidación y auditoría                  |
-| Reactivar TipoCliente       | POST /api/v1/tipos-cliente/{id}/reactivar        | Mismo ID y validación del catálogo                  |
-| Reactivar Cliente           | POST /api/v1/clientes/{id}/reactivar             | Persona y TipoCliente activos                       |
-| Reactivar Proveedor Persona | POST /api/v1/proveedores-persona/{id}/reactivar  | Persona activa, RUC natural y catálogo compatible   |
-| Reactivar Sociedad          | POST /api/v1/proveedores-sociedad/{id}/reactivar | Contacto activo, RUC jurídico y catálogo compatible |
-| Reactivar Empleado          | POST /api/v1/empleados/{id}/reactivar            | Empresa/Persona activas; no reactiva Usuario        |
+| Reactivar Persona           | `POST /api/v1/personas/{id}/reactivar`             | Mismo ID, revalidación y auditoría                  |
+| Reactivar TipoCliente       | `POST /api/v1/tipos-cliente/{id}/reactivar`        | Mismo ID y validación del catálogo                  |
+| Reactivar Cliente           | `POST /api/v1/clientes/{id}/reactivar`             | Persona y TipoCliente activos                       |
+| Reactivar Proveedor Persona | `POST /api/v1/proveedores-persona/{id}/reactivar`  | Persona activa, RUC natural y catálogo compatible   |
+| Reactivar Sociedad          | `POST /api/v1/proveedores-sociedad/{id}/reactivar` | Contacto activo, RUC jurídico y catálogo compatible |
+| Reactivar Empleado          | `POST /api/v1/empleados/{id}/reactivar`            | Empresa/Persona activas; no reactiva Usuario        |
 
 DELETE Empleado desactiva Empleado y Usuario asociado e invalida access/refresh mediante `sesion_invalidada_en` en una transacción; no altera Persona ni roles comerciales. Usuario previo al alta Empleado produce conflicto administrativo: no se duplican cuentas ni sobrescriben credenciales. Restaurar acceso requiere la acción separada descrita en [Seguridad](./seguridad-accesos).
 

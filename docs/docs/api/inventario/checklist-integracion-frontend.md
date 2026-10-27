@@ -22,6 +22,8 @@ Este documento consolida la auditoría funcional de la sección de inventario pa
 | Categorías | Completo | `GET/POST/PUT/DELETE /api/v1/categorias` |
 | Atributos | Completo | `GET/POST/PUT/DELETE /api/v1/atributos` |
 | Categoría-Atributo | Completo | `GET/POST/PUT/DELETE /api/v1/categorias-atributos` |
+| Catálogo administrativo de atributos | Completo | árbol, seleccionables, atributos efectivos/propios, asignación contextual, preview, override, backfill, baja y restauración |
+| Unidades de atributo | Completo | `GET/POST /api/v1/unidades`, edición/reactivación/baja protegidas por uso y anotación confirmada en atributos numéricos |
 | Casas Comerciales | Completo | `GET/POST/PUT/DELETE /api/v1/casas-comerciales` |
 | Bodegas | Completo | `GET/POST/PUT/DELETE /api/v1/bodegas` + regla de bloqueo por stock/asignación |
 | Productos (CRUD) | Completo | `GET/POST/PUT/DELETE /api/v1/productos` |
@@ -54,3 +56,12 @@ Este documento consolida la auditoría funcional de la sección de inventario pa
 - `409`:
   - intento de operar con bodega inactiva,
   - asignación duplicada producto-bodega.
+
+## Catálogo de Categorías, Atributos y Unidades
+
+- Leer jerarquía y selección desde `GET /api/v1/categorias/arbol` y `/seleccionables`; consumir `GET /api/v1/categorias/{id}/atributos-efectivos` y `/atributos-propios` para origen, override y unidad.
+- Crear y asignar una definición en una sola operación con `POST /api/v1/atributos`; usar `/api/v1/atributos/previsualizar` cuando la operación requiera confirmar completitud o backfill. Las asignaciones contextuales se administran bajo `/api/v1/categorias/{id}/atributos` y su preview.
+- Los defaults son valores numéricos separados de `unidad_id`; la UI añade el símbolo solo como sufijo de presentación. El backfill es opt-in y fill-only.
+- Primera anotación de unidad requiere preview firmado y `confirmar_anotacion_unidad=true`; no convierte valores ni defaults. No cambiar una unidad A por B ni quitarla mediante PUT ordinario cuando existe historia. El undo de anotación usa `POST /api/v1/atributos/{id}/revertir` y verifica que el post-estado siga intacto.
+- Tratar `ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION`, `ATTRIBUTE_UNIT_CHANGE_REQUIRES_CONVERSION`, `ATTRIBUTE_UNIT_REMOVAL_REQUIRES_MIGRATION`, `UNIT_IN_USE` y `CATALOG_PREVIEW_STALE` como conflictos funcionales. No reintentar confirmaciones con un token o draft modificado.
+- La unidad comercial del producto, su formulario, alta atómica y corte del puente de categorías permanecen fuera del alcance de este catálogo administrativo.

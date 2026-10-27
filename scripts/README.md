@@ -297,3 +297,11 @@ make test && make cleanup-test-data
    - El hard delete elimina físicamente los registros de la BD
 
 5. **Seguridad**: El script `cleanup_test_data.py` **NUNCA** elimina datos del seed. Usa transacciones para garantizar atomicidad.
+
+## Gate de Categorías, Atributos y Unidades
+
+El preflight `audit_catalog_integrity.py` es de solo lectura y acepta candidatos de unidad explícitos; no infiere ni asigna semántica. Para pruebas de migración/concurrencia PostgreSQL, configura `CATALOG_TEST_DATABASE_URL` con una base de pruebas desechable: las fixtures crean un schema aleatorio, corren la prueba allí y lo eliminan al finalizar. No apuntes esas pruebas a una base de negocio.
+
+Al limpiar una prueba E2E administrativa hecha en una base local compartida, conserva los UUID devueltos por la API. Dentro de una única transacción, elimina primero valores EAV y snapshots de esos atributos, después las auditorías cuyo `entidad_id`/`registro_id` corresponda a esos UUID, luego mappings, atributos y por último las unidades temporales. Antes de confirmar, compara los conteos de las tablas con la línea base y comprueba que no queden filas identificadas por los UUID de prueba. No uses `cleanup_test_data.py` como sustituto: su alcance es más amplio y se basa en actores de auditoría.
+
+La evidencia de ejecución y el alcance coordinado BE/FE se mantiene en `openspec/changes/close-catalog-attribute-units/evidence.md` en ambos repositorios. El cambio antecedente `manage-reversible-attribute-lifecycle` conserva sus propias tareas y no se archiva ni se marca completo por esta evidencia.
