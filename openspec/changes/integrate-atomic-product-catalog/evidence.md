@@ -49,3 +49,12 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - Alta exige perfil tributario no vacío y categoría; update conserva `atributos` omitido como `None` y acepta `precondicion_preview`; ambas rechazan atributos duplicados y normalizan PVP a dos decimales.
 - `tests/test_producto_integral_models.py`: 5 passed. Ruff, mypy focal y OpenSpec strict: limpios.
 - La validación de pertenencia al resolver efectivo, obligatoriedad y perfil tributario real permanece en el servicio transaccional 3.2; estos DTOs solo validan estructura/tipos.
+
+## Gate 7.3.2 — Alta integral transaccional
+
+- `ProductoService.create_integral` usa el DTO canónico y persiste Producto con FK principal, una proyección bridge, perfil fiscal, EAV y eventos de auditoría en la sesión existente; hace un solo `commit` al final y revierte toda la sesión ante error.
+- Valida categoría activa/hoja/no temporal, aplicabilidad por resolver efectivo, obligatorios con default explícito o valor enviado, impuesto vigente/configurado/compatible y UUID de atributos; el actor se deriva de `get_current_usuario` y se establece en contexto de auditoría.
+- `POST /api/v1/productos` despacha al DTO integral nuevo o al DTO legacy para compatibilidad. La autorización del endpoint sigue temporalmente por rol y se sustituirá por permisos efectivos en 3.4; no se marca esa parte como completada.
+- `tests/test_producto_integral_service.py`: alta guarda FK/bridge/IVA/default EAV/auditoría; faltante obligatorio, atributo no aplicable e impuesto inválido responden errores canónicos y revierten todas las filas del producto.
+- Suite BE completa: 1298 passed, 80 skipped; tests legacy/DTOs/servicio y Ruff/mypy focales limpios; OpenSpec estricto válido.
+- La DB local conserva 0 productos tras la limpieza autorizada de 7.2.3; estas pruebas usan SQLite aislado y no sembraron datos compartidos.

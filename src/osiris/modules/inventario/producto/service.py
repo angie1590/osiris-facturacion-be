@@ -10,6 +10,7 @@ from sqlmodel import Session, col, select
 
 from osiris.core.company_scope import resolve_company_scope
 from osiris.core.audit import record_domain_change
+from osiris.core.audit_context import reset_current_user_id, set_current_user_id
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.core.errors import NotFoundError
 from osiris.modules.common.empresa.entity import Empresa
@@ -18,7 +19,11 @@ from osiris.domain.service import BaseService
 from osiris.modules.inventario.categoria.entity import Categoria  # existente
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
-from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
+from osiris.modules.inventario.producto.models import ProductoIntegralCreate
+from osiris.modules.inventario.producto.models_atributos import (
+    ProductoAtributoValor,
+    ProductoAtributoValorUpsert,
+)
 from osiris.modules.inventario.producto_impuesto.service import ProductoImpuestoService
 from osiris.modules.inventario.producto_impuesto.scope import resolve_product_tax_company
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo, TipoImpuesto
@@ -285,6 +290,208 @@ class ProductoService(BaseService[Producto]):
             return prod
         except Exception as exc:
             self._handle_transaction_error(session, exc)
+
+    def create_integral(
+        self,
+        session: Session,
+        payload: ProductoIntegralCreate,
+        *,
+        actor_id: UUID,
+        commit: bool = True,
+    ) -> Producto:
+        actor_token = set_current_user_id(str(actor_id))
+        try:
+            CategoriaService.acquire_hierarchy_mutation_lock(session)
+            category_id = payload.categoria_principal_id
+            category = session.get(Categoria, category_id)
+            if category is None or not category.activo:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_CATEGORY_INVALID",
+                        "message": "La categoría principal no existe o está inactiva.",
+                    },
+                )
+            if category.is_default or session.exec(
+                select(Categoria.id).where(
+                    col(Categoria.parent_id) == category_id,
+                    col(Categoria.activo).is_(True),
+                ).limit(1)
+            ).first() is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "PRODUCT_CATEGORY_NOT_SELECTABLE",
+                        "message": "La categoría principal debe ser una hoja activa seleccionable.",
+                    },
+                )
+
+            effective_attributes = CategoriaService().get_atributos_heredados_por_categoria(
+                session, category_id
+            )
+            effective_by_id = {
+                attribute["atributo_id"]: attribute
+                for attribute in effective_attributes
+            }
+            provided_values = {item.atributo_id: item.valor for item in payload.atributos}
+            unknown_ids = set(provided_values) - set(effective_by_id)
+            if unknown_ids:
+                fields = {
+                    f"atributos.{attribute_id}": "El atributo no aplica a la categoría principal."
+                    for attribute_id in sorted(unknown_ids, key=str)
+                }
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_ATTRIBUTE_NOT_APPLICABLE",
+                        "message": "Uno o más atributos no aplican a la categoría principal.",
+                        "fields": fields,
+                        "conteos": {"no_aplicables": len(fields)},
+                        "acciones_permitidas": ["corregir_atributos", "cancelar"],
+                    },
+                )
+
+            missing_fields: dict[str, str] = {}
+            for attribute_id, effective_attribute in effective_by_id.items():
+                if effective_attribute["obligatorio"] is not True:
+                    continue
+                if attribute_id in provided_values:
+                    value = provided_values[attribute_id]
+                    satisfied = value is not None and not (
+                        isinstance(value, str) and not value.strip()
+                    )
+                else:
+                    default_value = effective_attribute.get("valor_default")
+                    satisfied = default_value is not None and not (
+                        isinstance(default_value, str) and not default_value.strip()
+                    )
+                if not satisfied:
+                    missing_fields[f"atributos.{attribute_id}"] = "Este valor es obligatorio."
+            if missing_fields:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_REQUIRED_ATTRIBUTES_MISSING",
+                        "message": "Faltan atributos obligatorios.",
+                        "fields": missing_fields,
+                        "conteos": {"faltantes": len(missing_fields)},
+                        "acciones_permitidas": ["completar_valores", "cancelar"],
+                    },
+                )
+
+            tax_ids = payload.impuesto_catalogo_ids
+            if len(set(tax_ids)) != len(tax_ids):
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_TAX_PROFILE_INVALID",
+                        "message": "El perfil tributario contiene impuestos duplicados.",
+                    },
+                )
+            company = resolve_product_tax_company(session)
+            try:
+                self._validate_impuestos(session, tax_ids, payload.tipo, company)
+            except HTTPException as exc:
+                if exc.status_code != 400:
+                    raise
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_TAX_PROFILE_INVALID",
+                        "message": str(exc.detail),
+                    },
+                ) from exc
+
+            product_data = payload.model_dump(
+                exclude_unset=True,
+                exclude={"atributos", "impuesto_catalogo_ids"},
+            )
+            product = super().create(session, product_data, commit=False)
+            record_domain_change(
+                session,
+                entity="tbl_producto",
+                entity_id=product.id,
+                action="CREATE_PRODUCT_INTEGRAL",
+                before={},
+                after={
+                    "nombre": product.nombre,
+                    "tipo": product.tipo.value,
+                    "pvp": str(product.pvp),
+                    "categoria_principal_id": str(category_id),
+                },
+            )
+
+            session.add(
+                ProductoCategoria(producto_id=product.id, categoria_id=category_id)
+            )
+            session.flush()
+            record_domain_change(
+                session,
+                entity="tbl_producto",
+                entity_id=product.id,
+                action="SET_PRODUCT_PRIMARY_CATEGORY",
+                before={},
+                after={"categoria_principal_id": str(category_id)},
+            )
+
+            for tax_id in tax_ids:
+                tax = session.get(ImpuestoCatalogo, tax_id)
+                if tax is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "PRODUCT_TAX_PROFILE_INVALID",
+                            "message": "Uno de los impuestos del perfil no existe.",
+                        },
+                    )
+                session.add(
+                    ProductoImpuesto(
+                        producto_id=product.id,
+                        empresa_id=company.id,
+                        impuesto_catalogo_id=tax.id,
+                        codigo_impuesto_sri=tax.codigo_tipo_impuesto,
+                        codigo_porcentaje_sri=tax.codigo_sri,
+                        tarifa=ProductoImpuestoService._resolver_tarifa_principal(tax),
+                    )
+                )
+            record_domain_change(
+                session,
+                entity="tbl_producto_impuesto",
+                entity_id=product.id,
+                action="CREATE_PRODUCT_TAX_PROFILE",
+                before={"impuesto_catalogo_ids": []},
+                after={
+                    "empresa_id": str(company.id),
+                    "impuesto_catalogo_ids": [str(tax_id) for tax_id in tax_ids],
+                },
+            )
+
+            from osiris.modules.inventario.producto.service_atributos import (
+                ProductoAtributoValorService,
+            )
+
+            attributes = [
+                ProductoAtributoValorUpsert(
+                    atributo_id=item.atributo_id,
+                    valor=item.valor,
+                )
+                for item in payload.atributos
+            ]
+            ProductoAtributoValorService().upsert_valores_producto_validando_aplicabilidad(
+                session,
+                product.id,
+                attributes,
+                commit=False,
+            )
+
+            if commit:
+                session.commit()
+                session.refresh(product)
+            return product
+        except Exception as exc:
+            self._handle_transaction_error(session, exc)
+        finally:
+            reset_current_user_id(actor_token)
 
     def update(
         self,

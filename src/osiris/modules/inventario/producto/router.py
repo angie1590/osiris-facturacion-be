@@ -9,11 +9,12 @@ from sqlmodel import select
 from sqlmodel import Session
 
 from osiris.core.db import get_session
-from osiris.core.auth import require_roles
+from osiris.core.auth import get_current_usuario, require_roles
 from osiris.domain.schemas import PaginatedResponse
 from osiris.modules.inventario.producto.models import (
     ProductoCompletoRead,
     ProductoCreate,
+    ProductoIntegralCreate,
     ProductoListadoRead,
     ProductoUpdate,
 )
@@ -28,6 +29,7 @@ from osiris.modules.sri.impuesto_catalogo.models import ImpuestoCatalogoRead
 from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
 from osiris.modules.common.proveedor_persona.entity import ProveedorPersona
 from osiris.modules.common.proveedor_sociedad.entity import ProveedorSociedad
+from osiris.modules.common.usuario.entity import Usuario
 
 
 router = APIRouter(prefix="/api/v1/productos", tags=["Productos"])
@@ -67,10 +69,14 @@ def get_producto(producto_id: UUID, session: Session = Depends(get_session)) -> 
 
 @router.post("", response_model=ProductoCompletoRead, status_code=201, dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
 def create_producto(
-    payload: ProductoCreate,
+    payload: ProductoIntegralCreate | ProductoCreate,
     session: Session = Depends(get_session),
+    usuario: Usuario = Depends(get_current_usuario),
 ) -> ProductoCompletoRead:
-    producto = service.create(session, payload.model_dump(exclude_unset=True))
+    if isinstance(payload, ProductoIntegralCreate):
+        producto = service.create_integral(session, payload, actor_id=usuario.id)
+    else:
+        producto = service.create(session, payload.model_dump(exclude_unset=True))
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto.id))
 
 
