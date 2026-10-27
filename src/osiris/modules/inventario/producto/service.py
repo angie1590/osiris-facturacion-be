@@ -96,8 +96,13 @@ class ProductoService(BaseService[Producto]):
                 raise HTTPException(status_code=400, detail="La categoría no existe o está inactiva.")
             if categoria.is_default:
                 raise HTTPException(
-                    status_code=400,
-                    detail="No se pueden asignar productos a la categoría temporal Sin clasificar.",
+                    status_code=409,
+                    detail={
+                        "code": "CATEGORY_DEFAULT_PROTECTED",
+                        "message": "No se pueden asignar productos a la categoría temporal Sin clasificar.",
+                        "conteos": {},
+                        "acciones_permitidas": [],
+                    },
                 )
 
             has_children = session.exec(
@@ -192,6 +197,8 @@ class ProductoService(BaseService[Producto]):
                 return getattr(obj, key, None)
 
             categoria_ids: Optional[Iterable[UUID]] = _val(data, "categoria_ids")
+            if categoria_ids:
+                CategoriaService.acquire_hierarchy_mutation_lock(session)
             self._validate_leaf_categories(session, categoria_ids or [])
 
             # Validar impuestos antes de crear el producto
@@ -313,6 +320,7 @@ class ProductoService(BaseService[Producto]):
 
             categoria_ids = _val(data, "categoria_ids")
             if categoria_ids is not None:
+                CategoriaService.acquire_hierarchy_mutation_lock(session)
                 self._validate_leaf_categories(session, categoria_ids)
 
             tipo_producto = _val(data, "tipo")
@@ -435,6 +443,7 @@ class ProductoService(BaseService[Producto]):
         from osiris.modules.inventario.movimientos.models import InventarioStock
 
         try:
+            CategoriaService.acquire_hierarchy_mutation_lock(session)
             self._asegurar_producto_en_scope(session, item_id)
             product = session.get(Producto, item_id)
             if not product or not product.activo:
@@ -680,6 +689,13 @@ class ProductoService(BaseService[Producto]):
             }
 
             atributos = self._merge_atributos_esqueleto_con_valores(esqueleto, valores_por_atributo)
+        except HTTPException as exc:
+            if (
+                isinstance(exc.detail, dict)
+                and exc.detail.get("code") == "CATEGORY_ATTRIBUTE_SCOPE_AMBIGUOUS"
+            ):
+                raise
+            atributos = []
         except Exception:
             atributos = []
 

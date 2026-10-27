@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from types import SimpleNamespace
+from typing import Any
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -16,10 +17,15 @@ from osiris.main import app
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.rol.entity import Rol
+from osiris.modules.common.unidad.entity import Unidad
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.atributo.entity import Atributo
 from osiris.modules.inventario.categoria.entity import Categoria
+from osiris.modules.inventario.categoria.router import (
+    create_category_permission,
+    read_categories_permission,
+)
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.producto.entity import (
     Producto,
@@ -65,6 +71,7 @@ def _build_test_engine():
             Rol.__table__,
             Bodega.__table__,
             CasaComercial.__table__,
+            Unidad.__table__,
             Atributo.__table__,
             Categoria.__table__,
             CategoriaAtributo.__table__,
@@ -99,6 +106,21 @@ def _seed_iva(session: Session) -> str:
     return str(iva.id)
 
 
+def _create_category_with_b3_confirmation(client: TestClient, payload: dict) -> Any:
+    preview = client.post("/api/v1/categorias/previsualizar", json=payload)
+    assert preview.status_code == 200, preview.text
+    if preview.json()["requiere_confirmacion"]:
+        return client.post(
+            "/api/v1/categorias",
+            json={
+                "payload": payload,
+                "confirmar_b3": True,
+                "precondicion_preview": preview.json()["precondicion_preview"],
+            },
+        )
+    return client.post("/api/v1/categorias", json=payload)
+
+
 def _seed_company_and_admin(session: Session, iva_id: str):
     session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
     company = Empresa(
@@ -128,6 +150,9 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    test_actor = SimpleNamespace(id=uuid4())
+    app.dependency_overrides[create_category_permission] = lambda: test_actor
+    app.dependency_overrides[read_categories_permission] = lambda: None
     try:
         with TestClient(app, headers={"X-Empresa-Id": company_id}) as client:
             r = client.post(
@@ -137,9 +162,9 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
             assert r.status_code == 201, r.text
             categoria_a_id = r.json()["id"]
 
-            r = client.post(
-                "/api/v1/categorias",
-                json={
+            r = _create_category_with_b3_confirmation(
+                client,
+                {
                     "nombre": f"B-{uuid4().hex[:6]}",
                     "es_padre": False,
                     "parent_id": categoria_a_id,
@@ -164,6 +189,8 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        app.dependency_overrides.pop(create_category_permission, None)
+        app.dependency_overrides.pop(read_categories_permission, None)
 
 
 def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
@@ -178,6 +205,9 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    test_actor = SimpleNamespace(id=uuid4())
+    app.dependency_overrides[create_category_permission] = lambda: test_actor
+    app.dependency_overrides[read_categories_permission] = lambda: None
     try:
         with TestClient(app, headers={"X-Empresa-Id": company_id}) as client:
             r = client.post(
@@ -202,9 +232,9 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
             assert r.status_code == 201, r.text
             producto_id = r.json()["id"]
 
-            r = client.post(
-                "/api/v1/categorias",
-                json={
+            r = _create_category_with_b3_confirmation(
+                client,
+                {
                     "nombre": f"Y-{uuid4().hex[:6]}",
                     "es_padre": False,
                     "parent_id": categoria_x_id,
@@ -240,3 +270,5 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        app.dependency_overrides.pop(create_category_permission, None)
+        app.dependency_overrides.pop(read_categories_permission, None)

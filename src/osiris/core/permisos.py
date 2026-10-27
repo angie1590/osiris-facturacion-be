@@ -4,7 +4,9 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlmodel import Session, col, select
 
+from osiris.core.auth import is_admin_role
 from osiris.modules.common.usuario.entity import Usuario
+from osiris.modules.common.rol.entity import Rol
 from osiris.modules.common.rol_modulo_permiso.entity import RolModuloPermiso
 from osiris.modules.common.modulo.entity import Modulo
 
@@ -30,6 +32,11 @@ def verificar_permiso(
     usuario = session.get(Usuario, usuario_id)
     if not usuario or not usuario.activo:
         return False
+    role = session.get(Rol, usuario.rol_id)
+    if role is None or not role.activo:
+        return False
+    if is_admin_role(role):
+        return True
 
     # Obtener módulo
     modulo_stmt = select(Modulo).where(

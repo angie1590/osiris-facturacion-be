@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
 from osiris.modules.inventario.producto.service import ProductoService
 from osiris.modules.inventario.producto.entity import Producto
@@ -55,8 +56,13 @@ def test_producto_service_rechaza_categoria_temporal_o_inactiva(categoria, expec
     query.first.return_value = categoria
     session.exec.return_value = query
 
-    with pytest.raises(Exception, match=expected_message):
+    with pytest.raises(HTTPException) as error:
         service._validate_leaf_categories(session, [uuid4()])
+    if categoria.is_default:
+        assert error.value.status_code == 409
+        assert error.value.detail["code"] == "CATEGORY_DEFAULT_PROTECTED"
+    else:
+        assert expected_message in str(error.value.detail)
 
 
 def test_producto_service_create_ok_y_asocia_multiples():

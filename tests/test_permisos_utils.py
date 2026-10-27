@@ -100,6 +100,16 @@ def test_verificar_permiso_modulo_inexistente():
     assert resultado is False
 
 
+def test_verificar_permiso_admin_no_depende_de_modulo_ni_grant():
+    session = MagicMock()
+    mock_usuario = Mock(activo=True, rol_id="rol-uuid")
+    mock_role = Mock(activo=True, nombre=" ADMINISTRADOR ")
+    session.get.side_effect = [mock_usuario, mock_role]
+
+    assert verificar_permiso(session, "usuario-uuid", "INEXISTENTE", "leer") is True
+    session.exec.assert_not_called()
+
+
 def test_verificar_permiso_sin_registro():
     """Test verificar_permiso retorna False si no hay registro de permiso."""
     session = MagicMock()

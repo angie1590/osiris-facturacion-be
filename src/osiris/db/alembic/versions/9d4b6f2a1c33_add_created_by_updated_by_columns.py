@@ -25,7 +25,7 @@ def upgrade() -> None:
         FOR table_record IN
             SELECT DISTINCT table_name
             FROM information_schema.columns
-            WHERE table_schema = 'public' AND column_name = 'usuario_auditoria'
+            WHERE table_schema = current_schema() AND column_name = 'usuario_auditoria'
         LOOP
             EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS created_by VARCHAR(255)', table_record.table_name);
             EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255)', table_record.table_name);
@@ -45,7 +45,7 @@ def downgrade() -> None:
         FOR table_record IN
             SELECT DISTINCT table_name
             FROM information_schema.columns
-            WHERE table_schema = 'public' AND column_name = 'usuario_auditoria'
+            WHERE table_schema = current_schema() AND column_name = 'usuario_auditoria'
         LOOP
             EXECUTE format('DROP INDEX IF EXISTS %I', 'ix_' || table_record.table_name || '_created_by');
             EXECUTE format('DROP INDEX IF EXISTS %I', 'ix_' || table_record.table_name || '_updated_by');

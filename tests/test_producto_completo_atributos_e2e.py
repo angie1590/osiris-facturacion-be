@@ -17,6 +17,7 @@ from osiris.main import app
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.rol.entity import Rol
+from osiris.modules.common.unidad.entity import Unidad
 from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
@@ -69,6 +70,7 @@ def _build_test_engine():
             Rol.__table__,
             Bodega.__table__,
             CasaComercial.__table__,
+            Unidad.__table__,
             Categoria.__table__,
             Atributo.__table__,
             CategoriaAtributo.__table__,

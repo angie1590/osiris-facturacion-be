@@ -20,6 +20,14 @@ from osiris.modules.common.usuario.entity import Usuario
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
+def is_admin_role(role: Rol | None) -> bool:
+    return bool(
+        role
+        and role.activo
+        and role.nombre.strip().casefold() in {"admin", "administrador"}
+    )
+
+
 def create_token(subject: UUID, token_type: str, expires: timedelta) -> str:
     settings = get_settings()
     payload = {
@@ -91,7 +99,9 @@ def require_roles(*allowed_roles: str) -> Callable[..., Usuario]:
             "vendedor": "operator",
             "operador": "operator",
         }.get(role_name, role_name)
-        if normalized not in allowed:
+        if rol is None or not rol.activo or (
+            normalized not in allowed and not is_admin_role(rol)
+        ):
             from fastapi import HTTPException
 
             raise HTTPException(

@@ -1,0 +1,6412 @@
+{
+  "components": {
+    "schemas": {
+      "AssignmentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "aplicar_default_a_existentes": {
+            "default": false,
+            "description": "Explicit opt-in, fill-only; never inferred from required.",
+            "title": "Aplicar Default A Existentes",
+            "type": "boolean"
+          },
+          "atributo_id": {
+            "format": "uuid",
+            "title": "Atributo Id",
+            "type": "string"
+          },
+          "obligatorio": {
+            "default": false,
+            "description": "Omitted preserves on update.",
+            "title": "Obligatorio",
+            "type": "boolean"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves; null clears.",
+            "title": "Orden"
+          },
+          "precondicion_preview": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precondicion Preview"
+          },
+          "valor_default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves; null clears; value is validated by future EAV service.",
+            "title": "Valor Default"
+          }
+        },
+        "required": [
+          "atributo_id"
+        ],
+        "title": "AssignmentInput",
+        "type": "object"
+      },
+      "AttributeCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_negative": {
+            "default": false,
+            "title": "Allow Negative",
+            "type": "boolean"
+          },
+          "aplicar_default_a_existentes": {
+            "default": false,
+            "description": "Explicit opt-in, fill-only; never inferred from required.",
+            "title": "Aplicar Default A Existentes",
+            "type": "boolean"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "categoria_id": {
+            "format": "uuid",
+            "title": "Categoria Id",
+            "type": "string"
+          },
+          "confirmar_anotacion_unidad": {
+            "default": false,
+            "title": "Confirmar Anotacion Unidad",
+            "type": "boolean"
+          },
+          "max_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Value"
+          },
+          "min_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Value"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "obligatorio": {
+            "default": false,
+            "description": "Omitted preserves on update.",
+            "title": "Obligatorio",
+            "type": "boolean"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves; null clears.",
+            "title": "Orden"
+          },
+          "select_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Select Options"
+          },
+          "tipo_dato": {
+            "enum": [
+              "string",
+              "integer",
+              "decimal",
+              "boolean",
+              "date",
+              "select",
+              "catalog"
+            ],
+            "title": "Tipo Dato",
+            "type": "string"
+          },
+          "unidad_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unidad Id"
+          },
+          "valor_default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves; null clears; value is validated by future EAV service.",
+            "title": "Valor Default"
+          }
+        },
+        "required": [
+          "nombre",
+          "tipo_dato",
+          "categoria_id"
+        ],
+        "title": "AttributeCreate",
+        "type": "object"
+      },
+      "AttributeRead": {
+        "additionalProperties": false,
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "codigo": {
+            "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "restricciones": {
+            "$ref": "#/components/schemas/Restrictions"
+          },
+          "select_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Select Options"
+          },
+          "tipo_dato": {
+            "enum": [
+              "string",
+              "integer",
+              "decimal",
+              "boolean",
+              "date",
+              "select",
+              "catalog"
+            ],
+            "title": "Tipo Dato",
+            "type": "string"
+          },
+          "unidad": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "codigo",
+          "nombre",
+          "tipo_dato",
+          "unidad",
+          "restricciones",
+          "select_options",
+          "catalog_id",
+          "activo"
+        ],
+        "title": "AttributeRead",
+        "type": "object"
+      },
+      "AttributeUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_negative": {
+            "default": false,
+            "title": "Allow Negative",
+            "type": "boolean"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "confirmar_anotacion_unidad": {
+            "default": false,
+            "title": "Confirmar Anotacion Unidad",
+            "type": "boolean"
+          },
+          "max_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Value"
+          },
+          "min_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Value"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "select_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Select Options"
+          },
+          "tipo_dato": {
+            "enum": [
+              "string",
+              "integer",
+              "decimal",
+              "boolean",
+              "date",
+              "select",
+              "catalog"
+            ],
+            "title": "Tipo Dato",
+            "type": "string"
+          },
+          "unidad_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unidad Id"
+          }
+        },
+        "title": "AttributeUpdate",
+        "type": "object"
+      },
+      "B3Confirmation_CategoryCreate_": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmar_b3": {
+            "const": true,
+            "title": "Confirmar B3",
+            "type": "boolean"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/CategoryCreate"
+          },
+          "precondicion_preview": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmar_b3",
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "B3Confirmation[CategoryCreate]",
+        "type": "object"
+      },
+      "B3Confirmation_CategoryUpdate_": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmar_b3": {
+            "const": true,
+            "title": "Confirmar B3",
+            "type": "boolean"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/CategoryUpdate"
+          },
+          "precondicion_preview": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmar_b3",
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "B3Confirmation[CategoryUpdate]",
+        "type": "object"
+      },
+      "CatalogError": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "CatalogError",
+        "type": "object"
+      },
+      "CategoryCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "CategoryCreate",
+        "type": "object"
+      },
+      "CategoryOrigin": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nombre"
+        ],
+        "title": "CategoryOrigin",
+        "type": "object"
+      },
+      "CategoryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "atributos_efectivos_count": {
+            "minimum": 0.0,
+            "title": "Atributos Efectivos Count",
+            "type": "integer"
+          },
+          "atributos_propios_count": {
+            "minimum": 0.0,
+            "title": "Atributos Propios Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "tiene_hijos": {
+            "title": "Tiene Hijos",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "parent_id",
+          "tiene_hijos",
+          "is_default",
+          "atributos_propios_count",
+          "atributos_efectivos_count",
+          "activo"
+        ],
+        "title": "CategoryRead",
+        "type": "object"
+      },
+      "CategoryTreeNode": {
+        "additionalProperties": false,
+        "properties": {
+          "atributos_efectivos_count": {
+            "minimum": 0.0,
+            "title": "Atributos Efectivos Count",
+            "type": "integer"
+          },
+          "atributos_propios_count": {
+            "minimum": 0.0,
+            "title": "Atributos Propios Count",
+            "type": "integer"
+          },
+          "hijos": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryTreeNode"
+            },
+            "title": "Hijos",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "tiene_hijos": {
+            "title": "Tiene Hijos",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "parent_id",
+          "tiene_hijos",
+          "is_default",
+          "atributos_propios_count",
+          "atributos_efectivos_count",
+          "hijos"
+        ],
+        "title": "CategoryTreeNode",
+        "type": "object"
+      },
+      "CategoryUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves parent; explicit null moves to root.",
+            "title": "Parent Id"
+          }
+        },
+        "title": "CategoryUpdate",
+        "type": "object"
+      },
+      "ConfigurationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "aplicar_default_a_existentes": {
+            "default": false,
+            "description": "Explicit opt-in, fill-only; never inferred from required.",
+            "title": "Aplicar Default A Existentes",
+            "type": "boolean"
+          },
+          "obligatorio": {
+            "default": false,
+            "description": "Omitted preserves on update.",
+            "title": "Obligatorio",
+            "type": "boolean"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves; null clears.",
+            "title": "Orden"
+          },
+          "valor_default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted preserves; null clears; value is validated by future EAV service.",
+            "title": "Valor Default"
+          }
+        },
+        "title": "ConfigurationInput",
+        "type": "object"
+      },
+      "Confirmation_AssignmentInput_": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/AssignmentInput",
+            "description": "Exact previewed payload, including explicit consent flags. Preserve omission with model_dump(mode='json', exclude_unset=True)."
+          },
+          "precondicion_preview": {
+            "description": "Opaque authenticated token. Never parse claims/expiry in FE. Expired/changed token or state: 409 CATALOG_PREVIEW_STALE.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "Confirmation[AssignmentInput]",
+        "type": "object"
+      },
+      "Confirmation_AttributeCreate_": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/AttributeCreate",
+            "description": "Exact previewed payload, including explicit consent flags. Preserve omission with model_dump(mode='json', exclude_unset=True)."
+          },
+          "precondicion_preview": {
+            "description": "Opaque authenticated token. Never parse claims/expiry in FE. Expired/changed token or state: 409 CATALOG_PREVIEW_STALE.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "Confirmation[AttributeCreate]",
+        "type": "object"
+      },
+      "Confirmation_AttributeUpdate_": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/AttributeUpdate",
+            "description": "Exact previewed payload, including explicit consent flags. Preserve omission with model_dump(mode='json', exclude_unset=True)."
+          },
+          "precondicion_preview": {
+            "description": "Opaque authenticated token. Never parse claims/expiry in FE. Expired/changed token or state: 409 CATALOG_PREVIEW_STALE.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "Confirmation[AttributeUpdate]",
+        "type": "object"
+      },
+      "Confirmation_CategoryUpdate_": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/CategoryUpdate",
+            "description": "Exact previewed payload, including explicit consent flags. Preserve omission with model_dump(mode='json', exclude_unset=True)."
+          },
+          "precondicion_preview": {
+            "description": "Opaque authenticated token. Never parse claims/expiry in FE. Expired/changed token or state: 409 CATALOG_PREVIEW_STALE.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "Confirmation[CategoryUpdate]",
+        "type": "object"
+      },
+      "Confirmation_ConfigurationInput_": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/ConfigurationInput",
+            "description": "Exact previewed payload, including explicit consent flags. Preserve omission with model_dump(mode='json', exclude_unset=True)."
+          },
+          "precondicion_preview": {
+            "description": "Opaque authenticated token. Never parse claims/expiry in FE. Expired/changed token or state: 409 CATALOG_PREVIEW_STALE.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "Confirmation[ConfigurationInput]",
+        "type": "object"
+      },
+      "Confirmation_LifecycleInput_": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/LifecycleInput",
+            "description": "Exact previewed payload, including explicit consent flags. Preserve omission with model_dump(mode='json', exclude_unset=True)."
+          },
+          "precondicion_preview": {
+            "description": "Opaque authenticated token. Never parse claims/expiry in FE. Expired/changed token or state: 409 CATALOG_PREVIEW_STALE.",
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "precondicion_preview",
+          "payload"
+        ],
+        "title": "Confirmation[LifecycleInput]",
+        "type": "object"
+      },
+      "ContractUnavailable": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "const": "Contract only: endpoints are NOT deployed; handlers are not functional.",
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ContractUnavailable",
+        "type": "object"
+      },
+      "EffectiveAttribute": {
+        "additionalProperties": false,
+        "properties": {
+          "atributo_id": {
+            "format": "uuid",
+            "title": "Atributo Id",
+            "type": "string"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "categoria_origen": {
+            "$ref": "#/components/schemas/CategoryOrigin"
+          },
+          "codigo": {
+            "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "heredado": {
+            "title": "Heredado",
+            "type": "boolean"
+          },
+          "mapping_id": {
+            "format": "uuid",
+            "title": "Mapping Id",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "obligatorio": {
+            "title": "Obligatorio",
+            "type": "boolean"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden"
+          },
+          "profundidad": {
+            "minimum": 0.0,
+            "title": "Profundidad",
+            "type": "integer"
+          },
+          "restricciones": {
+            "$ref": "#/components/schemas/Restrictions"
+          },
+          "select_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Select Options"
+          },
+          "tipo_dato": {
+            "enum": [
+              "string",
+              "integer",
+              "decimal",
+              "boolean",
+              "date",
+              "select",
+              "catalog"
+            ],
+            "title": "Tipo Dato",
+            "type": "string"
+          },
+          "unidad": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valor_default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Default"
+          }
+        },
+        "required": [
+          "mapping_id",
+          "atributo_id",
+          "codigo",
+          "nombre",
+          "tipo_dato",
+          "unidad",
+          "restricciones",
+          "select_options",
+          "catalog_id",
+          "obligatorio",
+          "valor_default",
+          "orden",
+          "categoria_origen",
+          "profundidad",
+          "heredado"
+        ],
+        "title": "EffectiveAttribute",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "acciones_permitidas": {
+            "items": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "title": "Acciones Permitidas",
+            "type": "array"
+          },
+          "affected_ids": {
+            "description": "Only when authorized; omit to avoid disclosure.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Affected Ids",
+            "type": "array"
+          },
+          "code": {
+            "enum": [
+              "CATEGORY_DUPLICATE_NAME",
+              "CATEGORY_CYCLE",
+              "CATEGORY_PARENT_INACTIVE",
+              "CATEGORY_NOT_LEAF",
+              "CATEGORY_DEFAULT_PROTECTED",
+              "CATEGORY_HAS_ACTIVE_CHILDREN",
+              "CATEGORY_PRODUCTS_HAVE_STOCK",
+              "CATEGORY_CHANGE_REQUIRES_CONFIRMATION",
+              "ATTRIBUTE_DUPLICATE_NAME",
+              "ATTRIBUTE_DUPLICATE_CODE",
+              "ATTRIBUTE_NOT_APPLICABLE",
+              "ATTRIBUTE_ALREADY_ASSIGNED",
+              "ATTRIBUTE_INVALID_TYPE",
+              "ATTRIBUTE_HAS_PENDING_REMAPS",
+              "ATTRIBUTE_STATE_CHANGED",
+              "ATTRIBUTE_UNIT_INVALID_TYPE",
+              "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION",
+              "ATTRIBUTE_UNIT_CHANGE_REQUIRES_CONVERSION",
+              "ATTRIBUTE_UNIT_REMOVAL_REQUIRES_MIGRATION",
+              "CATEGORY_ATTRIBUTE_IN_USE",
+              "CATEGORY_ATTRIBUTE_REMOVAL_REQUIRES_CONFIRMATION",
+              "REQUIRED_ATTRIBUTE_MISSING",
+              "DEFAULT_VALUE_INVALID",
+              "PRODUCT_REQUIRED_ATTRIBUTES_MISSING",
+              "UNIT_DUPLICATE_CODE",
+              "UNIT_DUPLICATE_SYMBOL",
+              "UNIT_IN_USE",
+              "UNIT_PROTECTED",
+              "UNIT_INACTIVE",
+              "CATALOG_PREVIEW_STALE"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "conteos": {
+            "additionalProperties": {
+              "minimum": 0.0,
+              "type": "integer"
+            },
+            "title": "Conteos",
+            "type": "object"
+          },
+          "message": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "conteos",
+          "acciones_permitidas"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImpactItem": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "motivo": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Motivo",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "motivo"
+        ],
+        "title": "ImpactItem",
+        "type": "object"
+      },
+      "LifecycleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmar": {
+            "default": false,
+            "title": "Confirmar",
+            "type": "boolean"
+          }
+        },
+        "title": "LifecycleInput",
+        "type": "object"
+      },
+      "Page_AttributeRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AttributeRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "items",
+          "meta"
+        ],
+        "title": "Page[AttributeRead]",
+        "type": "object"
+      },
+      "Page_CategoryRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "items",
+          "meta"
+        ],
+        "title": "Page[CategoryRead]",
+        "type": "object"
+      },
+      "Page_UnitRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UnitRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "items",
+          "meta"
+        ],
+        "title": "Page[UnitRead]",
+        "type": "object"
+      },
+      "Pagination": {
+        "additionalProperties": false,
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "exclusiveMinimum": 0.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "offset": {
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "page": {
+            "exclusiveMinimum": 0.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_count": {
+            "minimum": 0.0,
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "prev_offset": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Offset"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "next_offset",
+          "prev_offset",
+          "has_more",
+          "page",
+          "page_count"
+        ],
+        "title": "Pagination",
+        "type": "object"
+      },
+      "PreviewInput_AssignmentInput_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AssignmentInput"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[AssignmentInput]",
+        "type": "object"
+      },
+      "PreviewInput_AttributeCreate_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AttributeCreate"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[AttributeCreate]",
+        "type": "object"
+      },
+      "PreviewInput_AttributeUpdate_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AttributeUpdate"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[AttributeUpdate]",
+        "type": "object"
+      },
+      "PreviewInput_CategoryCreate_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/CategoryCreate"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[CategoryCreate]",
+        "type": "object"
+      },
+      "PreviewInput_CategoryUpdate_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/CategoryUpdate"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[CategoryUpdate]",
+        "type": "object"
+      },
+      "PreviewInput_ConfigurationInput_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/ConfigurationInput"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[ConfigurationInput]",
+        "type": "object"
+      },
+      "PreviewInput_LifecycleInput_": {
+        "additionalProperties": false,
+        "properties": {
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/LifecycleInput"
+          }
+        },
+        "required": [
+          "operacion",
+          "payload"
+        ],
+        "title": "PreviewInput[LifecycleInput]",
+        "type": "object"
+      },
+      "PreviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "acciones_permitidas": {
+            "items": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "title": "Acciones Permitidas",
+            "type": "array"
+          },
+          "cambio_unidad": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conteos": {
+            "additionalProperties": {
+              "minimum": 0.0,
+              "type": "integer"
+            },
+            "title": "Conteos",
+            "type": "object"
+          },
+          "conversiones": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Conversiones",
+            "type": "array"
+          },
+          "faltantes": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Faltantes",
+            "type": "array"
+          },
+          "incompatibles": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Incompatibles",
+            "type": "array"
+          },
+          "operacion": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Operacion",
+            "type": "string"
+          },
+          "precondicion_preview": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Precondicion Preview",
+            "type": "string"
+          },
+          "remapeos": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Remapeos",
+            "type": "array"
+          },
+          "requiere_confirmacion": {
+            "title": "Requiere Confirmacion",
+            "type": "boolean"
+          },
+          "resumen": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Resumen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operacion",
+          "resumen",
+          "conteos",
+          "faltantes",
+          "conversiones",
+          "incompatibles",
+          "remapeos",
+          "cambio_unidad",
+          "requiere_confirmacion",
+          "acciones_permitidas",
+          "precondicion_preview"
+        ],
+        "title": "PreviewResponse",
+        "type": "object"
+      },
+      "Restrictions": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_negative": {
+            "title": "Allow Negative",
+            "type": "boolean"
+          },
+          "max_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Value"
+          },
+          "min_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Value"
+          }
+        },
+        "required": [
+          "allow_negative",
+          "min_value",
+          "max_value"
+        ],
+        "title": "Restrictions",
+        "type": "object"
+      },
+      "ReversionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "acciones_permitidas": {
+            "items": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "title": "Acciones Permitidas",
+            "type": "array"
+          },
+          "disponible": {
+            "title": "Disponible",
+            "type": "boolean"
+          },
+          "resumen": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Resumen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "disponible",
+          "resumen",
+          "acciones_permitidas"
+        ],
+        "title": "ReversionRead",
+        "type": "object"
+      },
+      "SelectableCategory": {
+        "additionalProperties": false,
+        "properties": {
+          "activo": {
+            "const": true,
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "atributos_efectivos_count": {
+            "minimum": 0.0,
+            "title": "Atributos Efectivos Count",
+            "type": "integer"
+          },
+          "atributos_propios_count": {
+            "minimum": 0.0,
+            "title": "Atributos Propios Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "const": false,
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "tiene_hijos": {
+            "const": false,
+            "title": "Tiene Hijos",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "parent_id",
+          "tiene_hijos",
+          "is_default",
+          "atributos_propios_count",
+          "atributos_efectivos_count",
+          "activo"
+        ],
+        "title": "SelectableCategory",
+        "type": "object"
+      },
+      "UnitChange": {
+        "additionalProperties": false,
+        "properties": {
+          "anterior": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "posterior": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "anterior",
+          "posterior"
+        ],
+        "title": "UnitChange",
+        "type": "object"
+      },
+      "UnitInput": {
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "magnitud_codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Magnitud Codigo",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "simbolo": {
+            "description": "Exact, case-sensitive symbol; MB and Mb differ.",
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "nombre",
+          "simbolo",
+          "magnitud_codigo"
+        ],
+        "title": "UnitInput",
+        "type": "object"
+      },
+      "UnitRead": {
+        "additionalProperties": false,
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "actualizado_en": {
+            "format": "date-time",
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "es_sistema": {
+            "title": "Es Sistema",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "magnitud_codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Magnitud Codigo",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "simbolo": {
+            "description": "Exact, case-sensitive symbol; MB and Mb differ.",
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Simbolo",
+            "type": "string"
+          },
+          "usuario_auditoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Auditoria"
+          }
+        },
+        "required": [
+          "codigo",
+          "nombre",
+          "simbolo",
+          "magnitud_codigo",
+          "id",
+          "es_sistema",
+          "activo",
+          "creado_en",
+          "actualizado_en",
+          "usuario_auditoria"
+        ],
+        "title": "UnitRead",
+        "type": "object"
+      },
+      "UnitSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "magnitud_codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Magnitud Codigo",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "simbolo": {
+            "description": "Exact, case-sensitive symbol; MB and Mb differ.",
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "nombre",
+          "simbolo",
+          "magnitud_codigo",
+          "id"
+        ],
+        "title": "UnitSummary",
+        "type": "object"
+      },
+      "UnitUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "description": "Omitted preserves; null is invalid.",
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "magnitud_codigo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Magnitud Codigo",
+            "type": "string"
+          },
+          "nombre": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Nombre",
+            "type": "string"
+          },
+          "simbolo": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "title": "UnitUpdate",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Target contract for deliveries 1-6, NOT the runtime API. Every handler is non-functional and returns 501. No DB/auth/signing. Nullable read fields are required; omitted update fields preserve state. Send the exact previewed payload, preserving omitted fields, inside {payload, precondicion_preview} when confirming. Consent flags belong inside payload and are bound by preview; this app does not verify tokens. Type/default/catalog validation requiring existing state belongs to future services.",
+    "title": "Catalog administration v1 - NOT DEPLOYED - CONTRACT ONLY",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/atributos": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_atributos",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "only_active",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Only Active",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AttributeRead_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_atributos",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AttributeCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_AttributeCreate_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/atributos/previsualizar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_atributos_previsualizar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewInput_AttributeCreate_"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "acciones_permitidas": [
+                    "previsualizar"
+                  ],
+                  "cambio_unidad": {
+                    "anterior": null,
+                    "posterior": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    }
+                  },
+                  "conteos": {
+                    "productos_activos": 2,
+                    "valores_actuales": 2,
+                    "valores_historicos": 1
+                  },
+                  "conversiones": [],
+                  "faltantes": [],
+                  "incompatibles": [],
+                  "operacion": "actualizar",
+                  "precondicion_preview": "EXAMPLE_ONLY_NOT_A_VALID_SIGNED_TOKEN",
+                  "remapeos": [],
+                  "requiere_confirmacion": true,
+                  "resumen": "Anotar unidad sin modificar numeros."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/atributos/{id}": {
+      "delete": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "delete_atributos_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LifecycleInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_atributos_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "put": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "put_atributos_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AttributeUpdate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_AttributeUpdate_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/atributos/{id}/previsualizar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_atributos_id_previsualizar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreviewInput_AttributeUpdate_"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PreviewInput_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "acciones_permitidas": [
+                    "previsualizar"
+                  ],
+                  "cambio_unidad": {
+                    "anterior": null,
+                    "posterior": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    }
+                  },
+                  "conteos": {
+                    "productos_activos": 2,
+                    "valores_actuales": 2,
+                    "valores_historicos": 1
+                  },
+                  "conversiones": [],
+                  "faltantes": [],
+                  "incompatibles": [],
+                  "operacion": "actualizar",
+                  "precondicion_preview": "EXAMPLE_ONLY_NOT_A_VALID_SIGNED_TOKEN",
+                  "remapeos": [],
+                  "requiere_confirmacion": true,
+                  "resumen": "Anotar unidad sin modificar numeros."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/atributos/{id}/reactivar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_atributos_id_reactivar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LifecycleInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/atributos/{id}/reversion": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_atributos_id_reversion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReversionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/atributos/{id}/revertir": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_atributos_id_revertir",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LifecycleInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_categorias",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "only_active",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Only Active",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CategoryRead_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CategoryCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/B3Confirmation_CategoryCreate_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/arbol": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_categorias_arbol",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "atributos_efectivos_count": 1,
+                    "atributos_propios_count": 1,
+                    "hijos": [],
+                    "id": "11111111-1111-4111-8111-111111111111",
+                    "is_default": false,
+                    "nombre": "Computadores",
+                    "parent_id": null,
+                    "tiene_hijos": false
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryTreeNode"
+                  },
+                  "title": "Response Get Categorias Arbol",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/previsualizar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_previsualizar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewInput_CategoryCreate_"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "acciones_permitidas": [
+                    "previsualizar"
+                  ],
+                  "cambio_unidad": {
+                    "anterior": null,
+                    "posterior": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    }
+                  },
+                  "conteos": {
+                    "productos_activos": 2,
+                    "valores_actuales": 2,
+                    "valores_historicos": 1
+                  },
+                  "conversiones": [],
+                  "faltantes": [],
+                  "incompatibles": [],
+                  "operacion": "actualizar",
+                  "precondicion_preview": "EXAMPLE_ONLY_NOT_A_VALID_SIGNED_TOKEN",
+                  "remapeos": [],
+                  "requiere_confirmacion": true,
+                  "resumen": "Anotar unidad sin modificar numeros."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/seleccionables": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_categorias_seleccionables",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "activo": true,
+                    "atributos_efectivos_count": 1,
+                    "atributos_propios_count": 1,
+                    "id": "11111111-1111-4111-8111-111111111111",
+                    "is_default": false,
+                    "nombre": "Computadores",
+                    "parent_id": null,
+                    "tiene_hijos": false
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SelectableCategory"
+                  },
+                  "title": "Response Get Categorias Seleccionables",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}": {
+      "delete": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "delete_categorias_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LifecycleInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_categorias_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "put": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "put_categorias_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CategoryUpdate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_CategoryUpdate_"
+                  },
+                  {
+                    "$ref": "#/components/schemas/B3Confirmation_CategoryUpdate_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_id_atributos",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AssignmentInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_AssignmentInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAttribute"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos-efectivos": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_categorias_id_atributos_efectivos",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "atributo_id": "11111111-1111-4111-8111-111111111111",
+                    "catalog_id": null,
+                    "categoria_origen": {
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "nombre": "Computadores"
+                    },
+                    "codigo": "memoria_ram",
+                    "heredado": false,
+                    "mapping_id": "11111111-1111-4111-8111-111111111111",
+                    "nombre": "Memoria RAM",
+                    "obligatorio": true,
+                    "orden": null,
+                    "profundidad": 0,
+                    "restricciones": {
+                      "allow_negative": false,
+                      "max_value": null,
+                      "min_value": null
+                    },
+                    "select_options": null,
+                    "tipo_dato": "integer",
+                    "unidad": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    },
+                    "valor_default": null
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EffectiveAttribute"
+                  },
+                  "title": "Response Get Categorias Id Atributos Efectivos",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos-propios": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_categorias_id_atributos_propios",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "atributo_id": "11111111-1111-4111-8111-111111111111",
+                    "catalog_id": null,
+                    "categoria_origen": {
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "nombre": "Computadores"
+                    },
+                    "codigo": "memoria_ram",
+                    "heredado": false,
+                    "mapping_id": "11111111-1111-4111-8111-111111111111",
+                    "nombre": "Memoria RAM",
+                    "obligatorio": true,
+                    "orden": null,
+                    "profundidad": 0,
+                    "restricciones": {
+                      "allow_negative": false,
+                      "max_value": null,
+                      "min_value": null
+                    },
+                    "select_options": null,
+                    "tipo_dato": "integer",
+                    "unidad": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    },
+                    "valor_default": null
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EffectiveAttribute"
+                  },
+                  "title": "Response Get Categorias Id Atributos Propios",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos/previsualizar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_id_atributos_previsualizar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewInput_AssignmentInput_"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "acciones_permitidas": [
+                    "previsualizar"
+                  ],
+                  "cambio_unidad": {
+                    "anterior": null,
+                    "posterior": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    }
+                  },
+                  "conteos": {
+                    "productos_activos": 2,
+                    "valores_actuales": 2,
+                    "valores_historicos": 1
+                  },
+                  "conversiones": [],
+                  "faltantes": [],
+                  "incompatibles": [],
+                  "operacion": "actualizar",
+                  "precondicion_preview": "EXAMPLE_ONLY_NOT_A_VALID_SIGNED_TOKEN",
+                  "remapeos": [],
+                  "requiere_confirmacion": true,
+                  "resumen": "Anotar unidad sin modificar numeros."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos/{mapping_id}": {
+      "delete": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "delete_categorias_id_atributos_mapping_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LifecycleInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAttribute"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "put": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "put_categorias_id_atributos_mapping_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConfigurationInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_ConfigurationInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAttribute"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos/{mapping_id}/previsualizar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_id_atributos_mapping_id_previsualizar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreviewInput_ConfigurationInput_"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PreviewInput_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "acciones_permitidas": [
+                    "previsualizar"
+                  ],
+                  "cambio_unidad": {
+                    "anterior": null,
+                    "posterior": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    }
+                  },
+                  "conteos": {
+                    "productos_activos": 2,
+                    "valores_actuales": 2,
+                    "valores_historicos": 1
+                  },
+                  "conversiones": [],
+                  "faltantes": [],
+                  "incompatibles": [],
+                  "operacion": "actualizar",
+                  "precondicion_preview": "EXAMPLE_ONLY_NOT_A_VALID_SIGNED_TOKEN",
+                  "remapeos": [],
+                  "requiere_confirmacion": true,
+                  "resumen": "Anotar unidad sin modificar numeros."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/atributos/{mapping_id}/reactivar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_id_atributos_mapping_id_reactivar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConfigurationInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Confirmation_ConfigurationInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAttribute"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/previsualizar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_id_previsualizar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreviewInput_CategoryUpdate_"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PreviewInput_LifecycleInput_"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "acciones_permitidas": [
+                    "previsualizar"
+                  ],
+                  "cambio_unidad": {
+                    "anterior": null,
+                    "posterior": {
+                      "codigo": "GIGABYTE",
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "magnitud_codigo": "DATA_STORAGE",
+                      "nombre": "Gigabyte",
+                      "simbolo": "GB"
+                    }
+                  },
+                  "conteos": {
+                    "productos_activos": 2,
+                    "valores_actuales": 2,
+                    "valores_historicos": 1
+                  },
+                  "conversiones": [],
+                  "faltantes": [],
+                  "incompatibles": [],
+                  "operacion": "actualizar",
+                  "precondicion_preview": "EXAMPLE_ONLY_NOT_A_VALID_SIGNED_TOKEN",
+                  "remapeos": [],
+                  "requiere_confirmacion": true,
+                  "resumen": "Anotar unidad sin modificar numeros."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/categorias/{id}/reactivar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_categorias_id_reactivar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/unidades": {
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_unidades",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "only_active",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Only Active",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "magnitud_codigo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Magnitud Codigo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_UnitRead_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_unidades",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/unidades/{id}": {
+      "delete": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "delete_unidades_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "get": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "get_unidades_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "activo": true,
+                  "actualizado_en": "2026-10-25T00:00:00Z",
+                  "codigo": "GIGABYTE",
+                  "creado_en": "2026-10-25T00:00:00Z",
+                  "es_sistema": true,
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "magnitud_codigo": "DATA_STORAGE",
+                  "nombre": "Gigabyte",
+                  "simbolo": "GB",
+                  "usuario_auditoria": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      },
+      "put": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "put_unidades_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    },
+    "/api/v1/unidades/{id}/reactivar": {
+      "post": {
+        "description": "NOT DEPLOYED. Contract fixture only; handler always returns 501.",
+        "operationId": "post_unidades_id_reactivar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Effective permissions required by future runtime API."
+          },
+          "404": {
+            "description": "Target not found by future runtime API."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CATALOG_PREVIEW_STALE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "CATALOG_PREVIEW_STALE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_CODE": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_CODE",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  },
+                  "UNIT_DUPLICATE_SYMBOL": {
+                    "value": {
+                      "detail": {
+                        "acciones_permitidas": [
+                          "previsualizar"
+                        ],
+                        "code": "UNIT_DUPLICATE_SYMBOL",
+                        "conteos": {},
+                        "message": "Conflicto de catalogo."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogError"
+                }
+              }
+            },
+            "description": "Canonical catalog conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractUnavailable"
+                }
+              }
+            },
+            "description": "Non-functional contract stub."
+          }
+        },
+        "summary": "Unavailable",
+        "tags": [
+          "contract-only"
+        ],
+        "x-contract-only": true,
+        "x-deployed": false
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "NOT deployed; stubs return 501.",
+      "name": "contract-only"
+    }
+  ],
+  "x-contract-only": true,
+  "x-deployed": false
+}

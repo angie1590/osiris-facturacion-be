@@ -15,6 +15,7 @@ from osiris.core.auth import get_current_usuario
 from osiris.main import app
 from osiris.modules.common.catalogo.entity import Catalogo, CatalogoValor
 from osiris.modules.common.rol.entity import Rol
+from osiris.modules.common.unidad.entity import Unidad
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.categoria.entity import Categoria
@@ -40,6 +41,7 @@ def _build_test_engine():
             AuditLog.__table__,
             Rol.__table__,
             CasaComercial.__table__,
+            Unidad.__table__,
             Producto.__table__,
             Categoria.__table__,
             CategoriaAtributo.__table__,

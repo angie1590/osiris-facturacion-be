@@ -4,6 +4,53 @@ Este directorio contiene scripts de utilidad para gestionar datos en la base de 
 
 ## Scripts Disponibles
 
+### audit_catalog_integrity.py
+
+Preflight global de Categorias/Atributos, solo lectura. Detecta hermanos
+duplicados incluyendo inactivos, atributos/codigos/asignaciones duplicados,
+ciclos, padres invalidos, flags padre inconsistentes y problemas de clasificacion
+o atributos obligatorios de productos. No fusiona, renombra ni actualiza filas.
+
+```bash
+ENVIRONMENT=development PYTHONPATH=src poetry run python scripts/audit_catalog_integrity.py --host 127.0.0.1 --port 5435 --summary
+```
+
+Sin `--summary` incluye nombres, IDs y rutas accionables; restringir ese reporte
+a revision administrativa. Sale con 0 si no hay conflictos detectados, 1 si hay
+bloqueos/esquema incompleto y 2 para argumentos invalidos. PostgreSQL se consulta
+con una transaccion REPEATABLE READ y READ ONLY. No ejecuta migraciones ni seeds.
+
+`--unit-candidates <archivo.json>` acepta un objeto explicito
+`{"<atributo UUID>": "GIGABYTE"}` para informar el alcance de una anotacion
+futura; no infiere ni asigna unidades y no valida el destino aun no desplegado.
+Los defaults no cuentan como valores ya cargados y los remapeos pendientes no
+satisfacen un obligatorio. El diagnostico reconoce buckets B3 por estructura;
+no certifica por si solo la procedencia de auditoria de un bucket legacy.
+
+Si existen conflictos, detener las migraciones dependientes y conciliar con
+aprobacion administrativa. Un resultado limpio no sustituye las pruebas de
+constraints, permisos, migraciones y concurrencia ni autoriza activar la FK de
+Producto; ese corte sigue reservado a la entrega 7.
+
+### reconcile_test_catalog.py
+
+Conciliacion explicita para datos de prueba autorizados. Conserva IDs y relaciones;
+renombra categorias inactivas historicamente duplicadas y recalcula es_padre desde
+hijos activos. No elimina filas, no aplica migraciones ni elige entre duplicados
+activos. Cada cambio registra auditoria antes/despues en la misma transaccion.
+
+```bash
+# Previsualizar sin escrituras y revisar cambios/plan_hash:
+ENVIRONMENT=development PYTHONPATH=src poetry run python scripts/reconcile_test_catalog.py --host 127.0.0.1 --port 5435
+# Solo con autorizacion para datos de prueba y el hash revisado:
+ENVIRONMENT=development PYTHONPATH=src poetry run python scripts/reconcile_test_catalog.py --host 127.0.0.1 --port 5435 --apply-test-data --expected-plan-hash <hash-revisado>
+```
+
+La aplicacion exige hash vigente, actor de mantenimiento y entorno development/test;
+adquiere locks, revalida el plan y comprueba el preflight antes de confirmar.
+Un fallo de auditoria/postflight hace rollback. Un segundo plan limpio no propone
+cambios. Esta herramienta no autoriza reconciliaciones de datos productivos.
+
 ### audit_directory_integrity.py
 
 Preflight de solo lectura antes de las migraciones de identidad del Directorio.

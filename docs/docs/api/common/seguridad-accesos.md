@@ -20,8 +20,9 @@ autenticacion; consultar los de otra cuenta exige permiso de lectura de Usuarios
 
 Las denegaciones del Directorio se auditan despues de revertir cualquier trabajo
 pendiente, sin guardar el cuerpo del request, passwords, tokens ni codigos de
-aprobacion. Persona, credenciales y los roles siguen validandose en backend aunque
-el frontend oculte las acciones.
+aprobacion. Persona, credenciales y permisos siguen validandose en backend aunque
+el frontend oculte las acciones; el rol activo `admin`/`administrador` es la
+excepcion de acceso global definida abajo.
 
 ## Esquema de Autenticación Recomendado
 
@@ -46,9 +47,9 @@ Según la arquitectura actual (`main.py` + `audit_context.py`):
 
 ## Contrato de Seguridad del Directorio
 
-Los módulos autorizados son `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES`, `PROVEEDORES_PERSONA`, `PROVEEDORES_SOCIEDAD`, `EMPLEADOS`, `USUARIOS`, con permisos efectivos `leer`, `crear`, `actualizar`, `eliminar`. GET de cuentas exige `USUARIOS.leer`, alta `crear`, PUT/reactivación/reset/verificación/invalidación `actualizar`, baja `eliminar`. El backend valida cada llamada y el Rol activo; ocultar controles o usar un nombre de rol no autoriza.
+Los módulos del Directorio son `PERSONAS`, `TIPOS_CLIENTE`, `CLIENTES`, `PROVEEDORES_PERSONA`, `PROVEEDORES_SOCIEDAD`, `EMPLEADOS`, `USUARIOS`, con permisos efectivos `leer`, `crear`, `actualizar`, `eliminar`. GET de cuentas exige `USUARIOS.leer`, alta `crear`, PUT/reactivación/reset/verificación/invalidación `actualizar`, baja `eliminar`. El backend valida cada llamada y exige usuario/rol activos. Un rol activo cuyo nombre normalizado sea `admin` o `administrador` tiene acceso global aunque no exista una fila de permiso; ningún rol inactivo recibe el bypass. Los demás roles requieren los grants explícitos.
 
-Bootstrap aprobado: la migración `a9c3d6e41f82`, posterior a `f8b2c5d30e71` (y esta a `e7a1b4c29d60`), crea los siete módulos y concede CRUD completo a roles activos cuyo nombre normalizado es `administrador` o `admin`, solo si falta la asignación. No sobrescribe permisos administrados existentes. El resto no recibe acceso inicial y requiere concesión explícita. Esta identificación por nombre es la excepción de bootstrap, no una regla de autorización en runtime ni un bypass permanente de Administrador.
+Bootstrap aprobado: la migración `a9c3d6e41f82`, posterior a `f8b2c5d30e71` (y esta a `e7a1b4c29d60`), crea los siete módulos de directorio y concede CRUD completo a roles activos cuyo nombre normalizado es `administrador` o `admin`, solo si falta la asignación. No sobrescribe permisos administrados existentes. En runtime, todo rol activo `admin`/`administrador` tiene acceso completo a todos los módulos y operaciones; los guards por rol y por permiso efectivo aplican la misma excepción. El endpoint de permisos propios refleja CRUD completo e incluye los módulos administrativos de catálogo aunque aún no estén registrados, para que la interfaz no oculte sus acciones. Se siguen exigiendo usuario activo, sesión JWT válida y rol activo. Los roles no-admin conservan autorización explícita por módulo/acción.
 
 El actor de escrituras proviene del JWT. `usuario_auditoria` opcional conserva compatibilidad con scripts/tests confiables, pero no debe enviarse en payloads productivos ni sustituye al actor autenticado. Los ejemplos de lectura pueden mostrarlo; no es un campo editable de cuenta.
 

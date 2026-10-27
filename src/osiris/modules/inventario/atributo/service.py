@@ -6,15 +6,21 @@ from uuid import UUID
 from osiris.core.audit import record_domain_change
 from fastapi import HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 
 from osiris.modules.common.catalogo.entity import Catalogo
 from osiris.modules.common.catalogo.entity import CatalogoValor
+from osiris.modules.common.unidad.entity import Unidad
+from osiris.utils.attribute_code import generate_attribute_code
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
-from osiris.modules.inventario.categoria_atributo.models import CategoriaAtributoCreate
 from osiris.modules.inventario.categoria_atributo.service import (
     CategoriaAtributoService,
+)
+from osiris.modules.inventario.categoria.entity import Categoria
+from osiris.modules.inventario.categoria.resolver import (
+    get_effective_attributes_by_category,
 )
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
@@ -31,6 +37,8 @@ class AtributoService(BaseService[Atributo]):
     repo = AtributoRepository()
     _DEFINITION_FIELDS = (
         "nombre",
+        "codigo",
+        "unidad_id",
         "tipo_dato",
         "select_options",
         "catalog_id",
@@ -39,6 +47,93 @@ class AtributoService(BaseService[Atributo]):
         "max_value",
         "activo",
     )
+
+    @staticmethod
+    def _reject_code_input(values: dict[str, Any]) -> None:
+        if "codigo" in values:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "ATTRIBUTE_CODE_IMMUTABLE", "message": "codigo es de solo lectura."},
+            )
+
+    @staticmethod
+    def _validate_unique_code(session: Session, code: str) -> None:
+        statement = (
+            select(Atributo)
+            .where(func.lower(func.trim(col(Atributo.codigo))) == code)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        )
+        if session.exec(statement.limit(1)).first() is not None:
+            raise AtributoRepository.duplicate_code()
+
+    @staticmethod
+    def _validate_unit(session: Session, data: dict[str, Any]) -> None:
+        unit_id = data.get("unidad_id")
+        if unit_id is None:
+            return
+        if data["tipo_dato"] not in {TipoDato.INTEGER, TipoDato.DECIMAL}:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "ATTRIBUTE_UNIT_INVALID_TYPE",
+                    "message": "La unidad solo aplica a atributos integer o decimal.",
+                },
+            )
+        unit = session.exec(
+            select(Unidad)
+            .where(col(Unidad.id) == unit_id)
+            .with_for_update()
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        ).first()
+        if unit is None:
+            raise HTTPException(status_code=404, detail="Unidad no encontrada.")
+        if not unit.activo:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "UNIT_INACTIVE", "message": "La unidad esta inactiva."},
+            )
+
+    @staticmethod
+    def _guard_unit_change(
+        session: Session, attribute: Atributo, target: dict[str, Any], state: dict[str, Any]
+    ) -> None:
+        if attribute.unidad_id == target.get("unidad_id"):
+            return
+        snapshots = session.exec(
+            select(AtributoCambio).where(col(AtributoCambio.atributo_id) == attribute.id)
+        ).all()
+        has_history = bool(state["valores"] or state["remapeos"]) or any(
+            assignment["valor_default"] is not None for assignment in state["asignaciones"]
+        ) or any(
+            snapshot.valores_anteriores
+            or snapshot.valores_posteriores
+            or snapshot.remapeos_anteriores
+            or snapshot.remapeos_posteriores
+            or snapshot.definicion_anterior.get("unidad_id") is not None
+            or snapshot.definicion_posterior.get("unidad_id") is not None
+            or any(
+                assignment["valor_default"] is not None
+                for assignment in (
+                    snapshot.asignaciones_anteriores + snapshot.asignaciones_posteriores
+                )
+            )
+            for snapshot in snapshots
+        )
+        if not has_history:
+            return
+        if attribute.unidad_id is None:
+            code = "ATTRIBUTE_UNIT_ANNOTATION_REQUIRES_CONFIRMATION"
+        elif target.get("unidad_id") is None:
+            code = "ATTRIBUTE_UNIT_REMOVAL_REQUIRES_MIGRATION"
+        else:
+            code = "ATTRIBUTE_UNIT_CHANGE_REQUIRES_CONVERSION"
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": code,
+                "message": "El cambio de unidad con historia esta bloqueado hasta la entrega 6.",
+            },
+        )
 
     @staticmethod
     def _validate_unique_name(
@@ -68,23 +163,26 @@ class AtributoService(BaseService[Atributo]):
         *,
         commit: bool = True,
     ) -> Atributo:
-        values = self._ensure_dict(data)
+        values = self._ensure_dict(data).copy()
         categoria_id = values.pop("categoria_id")
         assignment_values = {
             "orden": values.pop("orden", None),
             "obligatorio": values.pop("obligatorio", False),
             "valor_default": values.pop("valor_default", None),
+            "aplicar_default_a_existentes": values.pop(
+                "aplicar_default_a_existentes", False
+            ),
             "usuario_auditoria": values.get("usuario_auditoria"),
         }
         try:
             attribute = self.create(session, values, commit=False)
-            CategoriaAtributoService().create(
+            CategoriaAtributoService().assign_existing(
                 session,
-                CategoriaAtributoCreate(
+                categoria_id,
+                {
                     **assignment_values,
-                    categoria_id=categoria_id,
-                    atributo_id=attribute.id,
-                ),
+                    "atributo_id": attribute.id,
+                },
                 usuario_auditoria=assignment_values["usuario_auditoria"],
                 commit=False,
             )
@@ -125,7 +223,7 @@ class AtributoService(BaseService[Atributo]):
             value = getattr(attribute, field)
             if field == "tipo_dato":
                 value = value.value
-            elif field == "catalog_id" and value is not None:
+            elif field in {"catalog_id", "unidad_id"} and value is not None:
                 value = str(value)
             elif field in {"min_value", "max_value"} and value is not None:
                 value = str(value)
@@ -140,9 +238,9 @@ class AtributoService(BaseService[Atributo]):
         tipo = result.get("tipo_dato")
         if isinstance(tipo, TipoDato):
             result["tipo_dato"] = tipo.value
-        catalog_id = result.get("catalog_id")
-        if catalog_id is not None:
-            result["catalog_id"] = str(catalog_id)
+        for field in ("catalog_id", "unidad_id"):
+            if result[field] is not None:
+                result[field] = str(result[field])
         for field in ("min_value", "max_value"):
             if result[field] is not None:
                 result[field] = str(result[field])
@@ -419,6 +517,7 @@ class AtributoService(BaseService[Atributo]):
                     status_code=400, detail="Tipo de dato de atributo no soportado."
                 ) from None
         data["tipo_dato"] = tipo
+        self._validate_unit(session, data)
 
         if tipo == TipoDato.SELECT:
             options = [
@@ -497,8 +596,15 @@ class AtributoService(BaseService[Atributo]):
         *,
         commit: bool = True,
     ) -> Atributo:
-        values = self._ensure_dict(data)
+        values = self._ensure_dict(data).copy()
         try:
+            self._reject_code_input(values)
+            try:
+                code = generate_attribute_code(str(values.get("nombre", "")))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            self._validate_unique_code(session, code)
+            values["codigo"] = code
             self._validate_unique_name(session, str(values.get("nombre", "")))
             values = self._normalize_definition(session, values)
             attribute: Atributo = super().create(session, values, commit=False)
@@ -511,6 +617,8 @@ class AtributoService(BaseService[Atributo]):
                     before={},
                     after={
                         "nombre": attribute.nombre,
+                        "codigo": attribute.codigo,
+                        "unidad_id": str(attribute.unidad_id) if attribute.unidad_id else None,
                         "tipo_dato": attribute.tipo_dato.value,
                         "catalog_id": (
                             str(attribute.catalog_id) if attribute.catalog_id else None
@@ -522,7 +630,17 @@ class AtributoService(BaseService[Atributo]):
                 session.refresh(attribute)
             return attribute
         except Exception as exc:
-            self._handle_transaction_error(session, exc)
+            try:
+                self._handle_transaction_error(session, exc)
+            except HTTPException as error:
+                cause: BaseException | None = error
+                while cause is not None:
+                    if isinstance(cause, IntegrityError):
+                        if "codigo" in values:
+                            self._validate_unique_code(session, values["codigo"])
+                        break
+                    cause = cause.__cause__
+                raise
 
     def update(
         self,
@@ -532,8 +650,13 @@ class AtributoService(BaseService[Atributo]):
         *,
         commit: bool = True,
     ) -> Atributo | None:
-        values = self._ensure_dict(data)
+        values = self._ensure_dict(data).copy()
         try:
+            if isinstance(session, Session):
+                from osiris.modules.inventario.categoria.service import CategoriaService
+
+                CategoriaService.acquire_hierarchy_mutation_lock(session)
+            self._reject_code_input(values)
             current = session.exec(
                 select(Atributo).where(col(Atributo.id) == item_id).with_for_update()
             ).first()
@@ -541,6 +664,8 @@ class AtributoService(BaseService[Atributo]):
                 return None
             merged = {
                 "nombre": values.get("nombre", current.nombre),
+                "codigo": current.codigo,
+                "unidad_id": values.get("unidad_id", current.unidad_id),
                 "tipo_dato": values.get("tipo_dato", current.tipo_dato),
                 "select_options": values.get("select_options", current.select_options),
                 "catalog_id": values.get("catalog_id", current.catalog_id),
@@ -560,6 +685,7 @@ class AtributoService(BaseService[Atributo]):
             if not definition_changed:
                 return current
             before_state = self._capture_state(session, current, lock=True)
+            self._guard_unit_change(session, current, normalized, before_state)
             conversion_fields = {
                 "tipo_dato",
                 "select_options",
@@ -583,6 +709,9 @@ class AtributoService(BaseService[Atributo]):
             converted_count = 0
             pending_remaps: list[UUID] = []
             if conversion_changed and isinstance(session, Session):
+                self._assert_required_conversion_preserves_values(
+                    session, current, normalized
+                )
                 converted_count, pending_remaps = self._convert_existing_values(
                     session, current, normalized
                 )
@@ -619,10 +748,54 @@ class AtributoService(BaseService[Atributo]):
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
+    def _assert_required_conversion_preserves_values(
+        self, session: Session, attribute: Atributo, target: dict[str, Any]
+    ) -> None:
+        active_rows = session.exec(
+            select(ProductoAtributoValor).where(
+                col(ProductoAtributoValor.atributo_id) == attribute.id,
+                col(ProductoAtributoValor.activo).is_(True),
+            )
+        ).all()
+        incompatible_ids: set[UUID] = set()
+        for row in active_rows:
+            old_value = self._value_from_row(row, attribute.tipo_dato)
+            try:
+                self._convert_value(session, old_value, target)
+            except (ValueError, TypeError, InvalidOperation, KeyError):
+                incompatible_ids.add(row.producto_id)
+        if not incompatible_ids:
+            return
+
+        required_mappings = session.exec(
+            select(CategoriaAtributo).where(
+                col(CategoriaAtributo.atributo_id) == attribute.id,
+                col(CategoriaAtributo.activo).is_(True),
+                col(CategoriaAtributo.obligatorio).is_(True),
+            )
+        ).all()
+        affected_required: set[UUID] = set()
+        names: dict[UUID, str] = {}
+        mapping_service = CategoriaAtributoService()
+        for mapping in required_mappings:
+            _, affected_ids, _, product_names = mapping_service.required_attribute_impact(
+                session, mapping
+            )
+            affected_required.update(set(affected_ids) & incompatible_ids)
+            names.update(product_names)
+        if affected_required:
+            mapping_service._raise_required_attribute_missing(
+                sorted(affected_required, key=str), names
+            )
+
     def delete(
         self, session: Session, item_id: UUID, *, commit: bool = True
     ) -> bool | None:
         try:
+            if isinstance(session, Session):
+                from osiris.modules.inventario.categoria.service import CategoriaService
+
+                CategoriaService.acquire_hierarchy_mutation_lock(session)
             attribute: Atributo | None = session.exec(
                 select(Atributo).where(col(Atributo.id) == item_id).with_for_update()
             ).first()
@@ -685,13 +858,16 @@ class AtributoService(BaseService[Atributo]):
     def preview_update(
         self, session: Session, item_id: UUID, data: Any
     ) -> dict[str, Any] | None:
-        values = self._ensure_dict(data)
+        values = self._ensure_dict(data).copy()
+        self._reject_code_input(values)
         attribute = self.repo.get(session, item_id)
         if attribute is None:
             return None
 
         target = {
             "nombre": values.get("nombre", attribute.nombre),
+            "codigo": attribute.codigo,
+            "unidad_id": values.get("unidad_id", attribute.unidad_id),
             "tipo_dato": values.get("tipo_dato", attribute.tipo_dato),
             "select_options": values.get("select_options", attribute.select_options),
             "catalog_id": values.get("catalog_id", attribute.catalog_id),
@@ -710,6 +886,7 @@ class AtributoService(BaseService[Atributo]):
                 status_code=400, detail="Tipo de dato de atributo no soportado."
             ) from None
         self._validate_unique_name(session, str(target["nombre"]), exclude_id=item_id)
+        self._validate_unit(session, target)
 
         tipo = target["tipo_dato"]
         if tipo == TipoDato.SELECT:
@@ -777,6 +954,7 @@ class AtributoService(BaseService[Atributo]):
         target["max_value"] = maximum
 
         before_state = self._capture_state(session, attribute)
+        self._guard_unit_change(session, attribute, target, before_state)
         changed = any(
             getattr(attribute, field) != target[field]
             for field in (
@@ -818,6 +996,40 @@ class AtributoService(BaseService[Atributo]):
                         "motivo": str(exc),
                     }
                 )
+        if changed and incompatible:
+            self._assert_required_conversion_preserves_values(
+                session, attribute, target
+            )
+        active_categories = session.exec(
+            select(col(Categoria.id), col(Categoria.nombre)).where(
+                col(Categoria.activo).is_(True)
+            )
+        ).all()
+        category_names = {category_id: name for category_id, name in active_categories}
+        effective_by_category = get_effective_attributes_by_category(
+            session, list(category_names)
+        )
+        effective_categories = [
+            {
+                "categoria_id": str(category_id),
+                "categoria_nombre": category_names[category_id],
+                "mapping_id": str(mapping["mapping_id"]),
+                "categoria_origen": {
+                    "id": str(mapping["categoria_origen"]["id"]),
+                    "nombre": mapping["categoria_origen"]["nombre"],
+                },
+                "profundidad": mapping["profundidad"],
+            }
+            for category_id, mappings in effective_by_category.items()
+            for mapping in mappings
+            if mapping["atributo_id"] == attribute.id
+        ]
+        effective_categories.sort(
+            key=lambda item: (
+                str(item["categoria_nombre"]).strip().casefold(),
+                str(item["categoria_id"]),
+            )
+        )
         return {
             "atributo_id": str(item_id),
             "definicion_actual": before_state["definicion"],
@@ -828,6 +1040,7 @@ class AtributoService(BaseService[Atributo]):
             "asignaciones_activas": sum(
                 1 for assignment in before_state["asignaciones"] if assignment["activo"]
             ),
+            "categorias_efectivas": effective_categories,
             "productos_afectados": len({str(row.producto_id) for row in rows}),
             "convertibles": converted,
             "incompatibles": incompatible,
@@ -841,6 +1054,7 @@ class AtributoService(BaseService[Atributo]):
     def _restore_definition(attribute: Atributo, definition: dict[str, Any]) -> None:
         attribute.nombre = definition["nombre"]
         attribute.tipo_dato = TipoDato(definition["tipo_dato"])
+        attribute.unidad_id = UUID(definition["unidad_id"]) if definition.get("unidad_id") else None
         attribute.select_options = definition["select_options"]
         attribute.catalog_id = (
             UUID(definition["catalog_id"]) if definition["catalog_id"] else None
@@ -857,6 +1071,12 @@ class AtributoService(BaseService[Atributo]):
             else None
         )
         attribute.activo = definition["activo"]
+
+    @staticmethod
+    def _compatible_snapshot_definition(
+        attribute: Atributo, definition: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"codigo": attribute.codigo, "unidad_id": None, **definition}
 
     @staticmethod
     def _restore_rows(
@@ -963,7 +1183,9 @@ class AtributoService(BaseService[Atributo]):
             }
         current_state = self._capture_state(session, attribute)
         expected_state = {
-            "definicion": snapshot.definicion_posterior,
+            "definicion": self._compatible_snapshot_definition(
+                attribute, snapshot.definicion_posterior
+            ),
             "asignaciones": snapshot.asignaciones_posteriores,
             "valores": snapshot.valores_posteriores,
             "remapeos": snapshot.remapeos_posteriores,
@@ -1001,6 +1223,10 @@ class AtributoService(BaseService[Atributo]):
         self, session: Session, item_id: UUID, *, operation: str | None = None
     ) -> dict[str, Any] | None:
         try:
+            if isinstance(session, Session):
+                from osiris.modules.inventario.categoria.service import CategoriaService
+
+                CategoriaService.acquire_hierarchy_mutation_lock(session)
             attribute = session.exec(
                 select(Atributo)
                 .where(col(Atributo.id) == item_id)
@@ -1042,7 +1268,9 @@ class AtributoService(BaseService[Atributo]):
 
             current_state = self._capture_state(session, attribute, lock=True)
             expected_state = {
-                "definicion": snapshot.definicion_posterior,
+                "definicion": self._compatible_snapshot_definition(
+                    attribute, snapshot.definicion_posterior
+                ),
                 "asignaciones": snapshot.asignaciones_posteriores,
                 "valores": snapshot.valores_posteriores,
                 "remapeos": snapshot.remapeos_posteriores,

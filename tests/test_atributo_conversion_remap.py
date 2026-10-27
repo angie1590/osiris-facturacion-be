@@ -9,6 +9,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.catalogo.entity import Catalogo, CatalogoValor
+from osiris.modules.common.unidad.entity import Unidad
 from osiris.modules.inventario.atributo.entity import Atributo, AtributoCambio, TipoDato
 from osiris.modules.inventario.atributo.remap_service import AtributoRemapeoService
 from osiris.modules.inventario.atributo.service import AtributoService
@@ -38,6 +39,7 @@ def _engine():
             Catalogo.__table__,
             CatalogoValor.__table__,
             CasaComercial.__table__,
+            Unidad.__table__,
             Atributo.__table__,
             AtributoCambio.__table__,
             Categoria.__table__,
@@ -157,6 +159,67 @@ def test_type_change_converts_valid_values_and_preserves_invalid_values_for_rema
         assert undo_error.value.status_code == 409
 
 
+def test_required_attribute_conversion_blocks_incompatible_values_before_remap():
+    engine = _engine()
+    with Session(engine) as session:
+        category = Categoria(nombre=f"Required-{uuid4().hex[:8]}", activo=True)
+        attribute = Atributo(
+            nombre=f"Required value-{uuid4().hex[:8]}",
+            tipo_dato=TipoDato.STRING,
+            activo=True,
+        )
+        product = Producto(
+            nombre=f"Product-{uuid4().hex[:8]}",
+            tipo=TipoProducto.BIEN,
+            pvp=Decimal("10.00"),
+            activo=True,
+        )
+        session.add_all([category, attribute, product])
+        session.flush()
+        mapping = CategoriaAtributo(
+            categoria_id=category.id,
+            atributo_id=attribute.id,
+            obligatorio=True,
+            activo=True,
+        )
+        value = ProductoAtributoValor(
+            producto_id=product.id,
+            atributo_id=attribute.id,
+            valor_string="n/a",
+            activo=True,
+        )
+        session.add_all(
+            [
+                mapping,
+                value,
+                ProductoCategoria(producto_id=product.id, categoria_id=category.id),
+            ]
+        )
+        session.commit()
+
+        with pytest.raises(HTTPException) as preview_error:
+            AtributoService().preview_update(
+                session, attribute.id, {"tipo_dato": TipoDato.INTEGER}
+            )
+        assert preview_error.value.status_code == 409
+        assert preview_error.value.detail["code"] == "PRODUCT_REQUIRED_ATTRIBUTES_MISSING"
+        assert session.exec(select(ProductoAtributoRemapeo)).all() == []
+
+        with pytest.raises(HTTPException) as error:
+            AtributoService().update(
+                session, attribute.id, {"tipo_dato": TipoDato.INTEGER}
+            )
+
+        assert error.value.status_code == 409
+        assert error.value.detail["code"] == "PRODUCT_REQUIRED_ATTRIBUTES_MISSING"
+        assert session.get(Atributo, attribute.id).tipo_dato == TipoDato.STRING
+        assert session.exec(select(ProductoAtributoRemapeo)).all() == []
+        current_value = session.get(ProductoAtributoValor, value.id)
+        assert current_value is not None
+        assert current_value.valor_string == "n/a"
+    engine.dispose()
+
+
 def test_preview_is_read_only_and_undo_restores_attribute_and_value():
     engine = _engine()
     with Session(engine) as session:
@@ -204,6 +267,53 @@ def test_preview_is_read_only_and_undo_restores_attribute_and_value():
         assert attribute.tipo_dato == TipoDato.STRING
         assert value.valor_string == "42"
         assert value.valor_integer is None
+
+
+def test_preview_update_reports_effective_categories_with_local_override_scope():
+    engine = _engine()
+    with Session(engine) as session:
+        parent = Categoria(nombre="Preview parent", activo=True)
+        session.add(parent)
+        session.flush()
+        child = Categoria(nombre="Preview child", parent_id=parent.id, activo=True)
+        attribute = Atributo(
+            nombre="Preview attribute",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add_all([child, attribute])
+        session.flush()
+        parent_mapping = CategoriaAtributo(
+            categoria_id=parent.id,
+            atributo_id=attribute.id,
+            obligatorio=False,
+            valor_default="ancestor",
+            activo=True,
+        )
+        child_mapping = CategoriaAtributo(
+            categoria_id=child.id,
+            atributo_id=attribute.id,
+            obligatorio=False,
+            valor_default=None,
+            activo=True,
+        )
+        session.add_all([parent_mapping, child_mapping])
+        session.commit()
+
+        preview = AtributoService().preview_update(
+            session, attribute.id, {"nombre": "Preview attribute renamed"}
+        )
+
+        scopes = {
+            item["categoria_id"]: item for item in preview["categorias_efectivas"]
+        }
+        assert scopes[str(parent.id)]["mapping_id"] == str(parent_mapping.id)
+        assert scopes[str(child.id)]["mapping_id"] == str(child_mapping.id)
+        assert scopes[str(child.id)]["categoria_origen"] == {
+            "id": str(child.id),
+            "nombre": child.nombre,
+        }
 
 
 def test_undo_rejects_attribute_values_changed_after_snapshot():

@@ -4,9 +4,9 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, literal, update
-from sqlalchemy.orm import aliased
+from sqlalchemy import func, update
 from sqlmodel import Session, col, select
+from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.core.company_scope import resolve_company_scope
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.inventario.bodega.entity import Bodega
@@ -17,6 +17,10 @@ from osiris.modules.inventario.atributo.entity import Atributo
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from .entity import Categoria
 from .repository import CategoriaRepository
+from .resolver import (
+    get_effective_attributes,
+    resolve_unambiguous_category_scope,
+)
 
 
 class CategoriaService(BaseService[Categoria]):
@@ -28,6 +32,49 @@ class CategoriaService(BaseService[Categoria]):
     }
 
     @staticmethod
+    def acquire_hierarchy_mutation_lock(session: Session) -> None:
+        if not isinstance(session, Session) or session.get_bind().dialect.name != "postgresql":
+            return
+        if not session.in_transaction():
+            session.connection()
+        from osiris.core.catalog_lock import acquire_catalog_mutation_lock
+
+        acquire_catalog_mutation_lock(session)
+
+    @staticmethod
+    def _sync_parent_projection(session: Session, parent_id: UUID | None) -> None:
+        if parent_id is None or not isinstance(session, Session):
+            return
+        parent = session.get(Categoria, parent_id)
+        if parent is None:
+            return
+        active_child = session.exec(
+            select(col(Categoria.id))
+            .where(
+                col(Categoria.parent_id) == parent_id,
+                col(Categoria.activo).is_(True),
+            )
+            .limit(1)
+        ).first()
+        parent.es_padre = active_child is not None
+        session.add(parent)
+
+    def _validate_parent(self, session: Session, parent_id: UUID | None) -> None:
+        if parent_id is None or not isinstance(session, Session) or hasattr(session, "_mock_methods"):
+            return
+        parent = session.exec(
+            select(Categoria)
+            .where(col(Categoria.id) == parent_id)
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+        ).first()
+        if parent is None:
+            raise HTTPException(status_code=404, detail="Categoria no encontrada.")
+        if not parent.activo:
+            raise self.repo.inactive_parent()
+        if parent.is_default:
+            raise self.repo.default_protected()
+
+    @staticmethod
     def _validate_sibling_name(
         session: Session,
         nombre: str,
@@ -37,7 +84,6 @@ class CategoriaService(BaseService[Categoria]):
         if not isinstance(session, Session) or hasattr(session, "_mock_methods"):
             return
         statement = select(col(Categoria.id)).where(
-            col(Categoria.activo).is_(True),
             func.lower(func.trim(col(Categoria.nombre))) == nombre.strip().lower(),
             (
                 col(Categoria.parent_id) == parent_id
@@ -47,23 +93,23 @@ class CategoriaService(BaseService[Categoria]):
         )
         if exclude_id is not None:
             statement = statement.where(col(Categoria.id) != exclude_id)
+        statement = statement.execution_options(
+            **{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True}
+        )
         if session.exec(statement.limit(1)).first() is not None:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "CATEGORY_DUPLICATE_NAME",
-                    "message": "Ya existe una categoría activa con ese nombre dentro de la misma categoría padre.",
-                },
-            )
+            raise CategoriaRepository.duplicate_name()
 
     def validate_create(self, data: dict[str, Any], session: Session) -> None:
         """Reglas de negocio para create:
         - parent_id es opcional; una categoría puede ser padre y al mismo tiempo hija
         """
-        # parent_id is optional; if provided, validate the FK exists and is active
-        if "parent_id" in data and data.get("parent_id"):
-            # _check_fk_active_and_exists conoce fk_models y validará parent_id
-            self._check_fk_active_and_exists(session, data)
+        if str(data.get("nombre", "")).strip().casefold() == "sin clasificar":
+            raise self.repo.default_protected()
+        if "parent_id" in data:
+            if isinstance(session, Session) and not hasattr(session, "_mock_methods"):
+                self._validate_parent(session, data.get("parent_id"))
+            else:
+                self._check_fk_active_and_exists(session, data)
 
     def _aplicar_regla_b3_migracion(self, session: Session, parent_id: UUID) -> None:
         """
@@ -85,13 +131,7 @@ class CategoriaService(BaseService[Categoria]):
         session.add(parent)
         session.flush()
 
-        direct_product_ids = list(
-            session.exec(
-                select(ProductoCategoria.producto_id).where(
-                    col(ProductoCategoria.categoria_id) == parent_id
-                )
-            ).all()
-        )
+        direct_product_ids = self._direct_product_ids(session, parent_id)
         if not direct_product_ids:
             return
 
@@ -99,7 +139,7 @@ class CategoriaService(BaseService[Categoria]):
             select(Categoria)
             .where(col(Categoria.parent_id) == parent_id)
             .where(col(Categoria.is_default).is_(True))
-            .where(col(Categoria.activo).is_(True))
+            .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
             .with_for_update()
         ).first()
 
@@ -113,6 +153,17 @@ class CategoriaService(BaseService[Categoria]):
             )
             session.add(sin_clasificar)
             session.flush()
+        elif not sin_clasificar.activo:
+            sin_clasificar.activo = True
+            session.add(sin_clasificar)
+            record_domain_change(
+                session,
+                entity="tbl_categoria",
+                entity_id=sin_clasificar.id,
+                action="CATEGORY_B3_REACTIVATE",
+                before={"activo": False},
+                after={"activo": True},
+            )
 
         session.exec(
             update(ProductoCategoria)
@@ -140,10 +191,36 @@ class CategoriaService(BaseService[Categoria]):
                 },
             )
 
+    @staticmethod
+    def _direct_product_ids(session: Session, parent_id: UUID) -> list[UUID]:
+        from osiris.modules.inventario.producto.entity import ProductoCategoria
+
+        return list(
+            session.exec(
+                select(ProductoCategoria.producto_id).where(
+                    col(ProductoCategoria.categoria_id) == parent_id
+                )
+            ).all()
+        )
+
+    @staticmethod
+    def _require_b3_confirmation(parent_id: UUID, product_ids: list[UUID]) -> None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "CATEGORY_CHANGE_REQUIRES_CONFIRMATION",
+                "message": "Crear o mover la categoria cambiara la clasificacion B3 de productos directos.",
+                "conteos": {"productos_directos": len(product_ids)},
+                "affected_ids": [str(product_id) for product_id in product_ids],
+                "acciones_permitidas": ["previsualizar"],
+            },
+        )
+
     def desactivar_defaults_vacios(
         self, session: Session, categoria_ids: set[UUID]
     ) -> None:
         """Desactiva buckets temporales que ya no contienen productos activos."""
+        self.acquire_hierarchy_mutation_lock(session)
         from osiris.modules.inventario.producto.entity import (
             Producto,
             ProductoCategoria,
@@ -169,6 +246,14 @@ class CategoriaService(BaseService[Categoria]):
             if producto_activo is None:
                 categoria.activo = False
                 session.add(categoria)
+                record_domain_change(
+                    session,
+                    entity="tbl_categoria",
+                    entity_id=categoria.id,
+                    action="CATEGORY_B3_DEACTIVATE",
+                    before={"activo": True},
+                    after={"activo": False, "is_default": True},
+                )
         session.flush()
 
     def create(
@@ -177,23 +262,35 @@ class CategoriaService(BaseService[Categoria]):
         data: dict[str, Any],
         *,
         commit: bool = True,
+        confirmar_b3: bool = False,
     ) -> Categoria:
         """
         Override de create para inyectar la Regla B3 dentro de una única transacción.
         """
         try:
+            self.acquire_hierarchy_mutation_lock(session)
             data = self._ensure_dict(data)
+            data.pop("es_padre", None)
+            data["es_padre"] = False
             self.validate_create(data, session)
-            self._check_fk_active_and_exists(session, data)
             self._validate_sibling_name(
                 session, str(data.get("nombre", "")), data.get("parent_id")
             )
 
             parent_id = data.get("parent_id")
             if parent_id:
+                direct_product_ids = (
+                    self._direct_product_ids(session, parent_id)
+                    if isinstance(session, Session)
+                    and not hasattr(session, "_mock_methods")
+                    else []
+                )
+                if direct_product_ids and not confirmar_b3:
+                    self._require_b3_confirmation(parent_id, direct_product_ids)
                 self._aplicar_regla_b3_migracion(session, parent_id)
 
             obj: Categoria = self.repo.create(session, data)
+            self._sync_parent_projection(session, obj.parent_id)
             self.on_created(obj, session)
             if isinstance(session, Session) and not hasattr(session, "_mock_methods"):
                 record_domain_change(
@@ -211,6 +308,59 @@ class CategoriaService(BaseService[Categoria]):
                 session.commit()
                 session.refresh(obj)
             return obj
+        except Exception as exc:
+            self._handle_transaction_error(session, exc)
+
+    def reactivate(
+        self, session: Session, item_id: UUID, *, commit: bool = True
+    ) -> Categoria | None:
+        try:
+            self.acquire_hierarchy_mutation_lock(session)
+            category = session.exec(
+                select(Categoria)
+                .where(col(Categoria.id) == item_id)
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+            ).first()
+            if category is None:
+                return None
+            if category.is_default:
+                raise self.repo.default_protected()
+            if category.activo:
+                return category
+            if category.parent_id is not None:
+                parent = session.get(Categoria, category.parent_id)
+                if parent is None or not parent.activo:
+                    raise self.repo.inactive_parent()
+                if parent.is_default:
+                    raise self.repo.default_protected()
+            if category.nombre.strip().casefold() == "sin clasificar":
+                raise self.repo.default_protected()
+            self._validate_sibling_name(
+                session,
+                category.nombre,
+                category.parent_id,
+                exclude_id=category.id,
+            )
+            category.activo = True
+            session.add(category)
+            session.flush()
+            self._sync_parent_projection(session, category.parent_id)
+            self._sync_parent_projection(session, category.id)
+            record_domain_change(
+                session,
+                entity="tbl_categoria",
+                entity_id=category.id,
+                action="REACTIVATE_CATEGORY",
+                before={"activo": False},
+                after={
+                    "activo": True,
+                    "parent_id": str(category.parent_id) if category.parent_id else None,
+                },
+            )
+            if commit:
+                session.commit()
+                session.refresh(category)
+            return category
         except Exception as exc:
             self._handle_transaction_error(session, exc)
 
@@ -347,20 +497,30 @@ class CategoriaService(BaseService[Categoria]):
         data: Any,
         *,
         commit: bool = True,
+        confirmar_b3: bool = False,
     ) -> Categoria | None:
-        """Override para validar/update con contexto del objeto existente.
-        - si se marca es_padre=True se limpia parent_id automáticamente.
-        - si se marca es_padre=False se exige que exista parent_id (en data o en DB).
-        - evita self-referencia y ciclos en la jerarquía
-        """
+        """Update category identity and hierarchy; es_padre remains projection-only."""
         try:
+            self.acquire_hierarchy_mutation_lock(session)
             data = self._ensure_dict(data)
+            data.pop("es_padre", None)
             confirmar_limpieza_colision = bool(
                 data.pop("confirmar_limpieza_colision", False)
             )
             db_obj = self.repo.get(session, item_id)
+            if db_obj is None and isinstance(session, Session):
+                db_obj = session.exec(
+                    select(Categoria)
+                    .where(col(Categoria.id) == item_id)
+                    .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+                ).first()
             if not db_obj:
                 return None
+            if getattr(db_obj, "is_default", False) is True:
+                raise self.repo.default_protected()
+            if "nombre" in data and str(data["nombre"]).strip().casefold() == "sin clasificar":
+                raise self.repo.default_protected()
+            before_parent_id = db_obj.parent_id
 
             self._validate_sibling_name(
                 session,
@@ -371,25 +531,9 @@ class CategoriaService(BaseService[Categoria]):
 
             # Evitar que parent_id apunte a sí mismo
             if data.get("parent_id") and data.get("parent_id") == item_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="parent_id no puede referenciar al mismo registro",
+                raise CategoriaRepository.hierarchy_cycle(
+                    "Una categoria no puede ser su propio padre."
                 )
-
-            if data.get("es_padre") is False:
-                active_child = session.exec(
-                    select(Categoria.id)
-                    .where(
-                        col(Categoria.parent_id) == item_id,
-                        col(Categoria.activo).is_(True),
-                    )
-                    .limit(1)
-                ).first()
-                if active_child is not None:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="No se puede marcar como hoja una categoría con hijos activos.",
-                    )
 
             # Detectar ciclos si se está cambiando el parent_id (cuando se proporciona uno nuevo)
             new_parent_id = data.get("parent_id")
@@ -407,18 +551,16 @@ class CategoriaService(BaseService[Categoria]):
                     parent_nombre = getattr(parent_obj, "nombre", str(new_parent_id))
                     item_nombre = getattr(db_obj, "nombre", str(item_id))
 
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            f"La actualización crearía un ciclo en la jerarquía: intentar establecer "
-                            f"parent '{parent_nombre}' (id={new_parent_id}) como padre de "
-                            f"'{item_nombre}' (id={item_id}) formaría un bucle"
-                        ),
+                    raise CategoriaRepository.hierarchy_cycle(
+                        f"Mover '{item_nombre}' bajo '{parent_nombre}' crearia un ciclo."
                     )
 
             # Validar FKs si vienen en data
             if "parent_id" in data:
-                self._check_fk_active_and_exists(session, data)
+                if isinstance(session, Session) and not hasattr(session, "_mock_methods"):
+                    self._validate_parent(session, data["parent_id"])
+                else:
+                    self._check_fk_active_and_exists(session, data)
 
             subtree_ids: set[UUID] = set()
             conflicting_attribute_ids: set[UUID] = set()
@@ -515,7 +657,15 @@ class CategoriaService(BaseService[Categoria]):
                         )
 
             # Regla B3 en update: antes de mover la categoría actual al nuevo padre
-            if parent_changed:
+            if parent_changed and new_parent_id is not None:
+                direct_product_ids = (
+                    self._direct_product_ids(session, new_parent_id)
+                    if isinstance(session, Session)
+                    and not hasattr(session, "_mock_methods")
+                    else []
+                )
+                if direct_product_ids and not confirmar_b3:
+                    self._require_b3_confirmation(new_parent_id, direct_product_ids)
                 self._aplicar_regla_b3_migracion(session, new_parent_id)
 
             before_category = {
@@ -523,6 +673,9 @@ class CategoriaService(BaseService[Categoria]):
                 "parent_id": str(db_obj.parent_id) if db_obj.parent_id else None,
             }
             updated: Categoria = self.repo.update(session, db_obj, data)
+            if parent_changed:
+                self._sync_parent_projection(session, before_parent_id)
+                self._sync_parent_projection(session, new_parent_id)
             if isinstance(session, Session) and not hasattr(session, "_mock_methods"):
                 record_domain_change(
                     session,
@@ -575,9 +728,12 @@ class CategoriaService(BaseService[Categoria]):
         )
 
         try:
+            self.acquire_hierarchy_mutation_lock(session)
             categoria = self.repo.get(session, item_id)
             if not categoria:
                 return None
+            if categoria.is_default:
+                raise self.repo.default_protected()
 
             active_child = session.exec(
                 select(Categoria.id)
@@ -667,21 +823,7 @@ class CategoriaService(BaseService[Categoria]):
                     },
                     after={"activo": False, "confirmado": confirmar_baja_productos},
                 )
-            if categoria.parent_id:
-                parent = session.get(Categoria, categoria.parent_id)
-                if parent:
-                    sibling = session.exec(
-                        select(Categoria.id)
-                        .where(
-                            col(Categoria.parent_id) == parent.id,
-                            col(Categoria.id) != item_id,
-                            col(Categoria.activo).is_(True),
-                        )
-                        .limit(1)
-                    ).first()
-                    if sibling is None:
-                        parent.es_padre = False
-                        session.add(parent)
+            self._sync_parent_projection(session, categoria.parent_id)
             if commit:
                 session.commit()
             return deleted
@@ -838,6 +980,7 @@ class CategoriaService(BaseService[Categoria]):
             )
 
         try:
+            self.acquire_hierarchy_mutation_lock(session)
             source_category_ids: set[UUID] = set()
             for assignment in assignments:
                 producto = session.get(Producto, assignment.producto_id)
@@ -965,102 +1108,8 @@ class CategoriaService(BaseService[Categoria]):
         usando CTE recursivo + row_number para deduplicar por atributo.
         Regla: gana la categoría más específica (menor profundidad).
         """
-        if not categoria_ids:
-            return []
-
-        ancestros_cte = (
-            select(
-                col(Categoria.id).label("categoria_id"),
-                col(Categoria.parent_id).label("parent_id"),
-                literal(0).label("profundidad"),
-            )
-            .where(col(Categoria.id).in_(categoria_ids))
-            .cte(name="categoria_ancestros", recursive=True)
-        )
-
-        categoria_padre = aliased(Categoria)
-        ancestros_cte = ancestros_cte.union_all(
-            select(
-                col(categoria_padre.id).label("categoria_id"),
-                col(categoria_padre.parent_id).label("parent_id"),
-                (ancestros_cte.c.profundidad + 1).label("profundidad"),
-            ).join(ancestros_cte, col(categoria_padre.id) == ancestros_cte.c.parent_id)
-        )
-
-        ranked_cte = (
-            select(col(CategoriaAtributo.atributo_id).label("atributo_id"))
-            .add_columns(
-                col(Atributo.nombre).label("atributo_nombre"),
-                col(Atributo.tipo_dato).label("tipo_dato"),
-                col(Atributo.select_options).label("select_options"),
-                col(Atributo.catalog_id).label("catalog_id"),
-                col(Atributo.allow_negative).label("allow_negative"),
-                col(Atributo.min_value).label("min_value"),
-                col(Atributo.max_value).label("max_value"),
-                col(CategoriaAtributo.orden).label("orden"),
-                col(CategoriaAtributo.obligatorio).label("obligatorio"),
-            )
-            .add_columns(
-                col(CategoriaAtributo.valor_default).label("valor_default"),
-                ancestros_cte.c.categoria_id.label("categoria_origen_id"),
-                ancestros_cte.c.profundidad.label("profundidad"),
-                func.row_number()
-                .over(
-                    partition_by=col(Atributo.id),
-                    order_by=ancestros_cte.c.profundidad.asc(),
-                )
-                .label("rn"),
-            )
-            .join(
-                ancestros_cte,
-                col(CategoriaAtributo.categoria_id) == ancestros_cte.c.categoria_id,
-            )
-            .join(Atributo, col(Atributo.id) == col(CategoriaAtributo.atributo_id))
-            .where(col(CategoriaAtributo.activo).is_(True))
-            .cte(name="atributos_ranked")
-        )
-
-        stmt = (
-            select(ranked_cte.c.atributo_id)
-            .add_columns(
-                ranked_cte.c.atributo_nombre,
-                ranked_cte.c.tipo_dato,
-                ranked_cte.c.select_options,
-                ranked_cte.c.catalog_id,
-                ranked_cte.c.allow_negative,
-                ranked_cte.c.min_value,
-                ranked_cte.c.max_value,
-                ranked_cte.c.orden,
-            )
-            .add_columns(
-                ranked_cte.c.obligatorio,
-                ranked_cte.c.valor_default,
-                ranked_cte.c.categoria_origen_id,
-                ranked_cte.c.profundidad,
-            )
-            .where(ranked_cte.c.rn == 1)
-            .order_by(ranked_cte.c.atributo_nombre.asc())
-        )
-
-        rows = session.execute(stmt).all()
-        return [
-            {
-                "atributo_id": row.atributo_id,
-                "atributo_nombre": row.atributo_nombre,
-                "tipo_dato": row.tipo_dato,
-                "select_options": row.select_options,
-                "catalog_id": row.catalog_id,
-                "allow_negative": row.allow_negative,
-                "min_value": row.min_value,
-                "max_value": row.max_value,
-                "orden": row.orden,
-                "obligatorio": row.obligatorio,
-                "valor_default": row.valor_default,
-                "categoria_origen_id": row.categoria_origen_id,
-                "profundidad": row.profundidad,
-            }
-            for row in rows
-        ]
+        category_id = resolve_unambiguous_category_scope(session, categoria_ids)
+        return get_effective_attributes(session, [category_id]) if category_id else []
 
     def get_atributos_heredados_por_categoria(
         self, session: Session, categoria_id: UUID

@@ -528,6 +528,7 @@ def test_missing_embedded_person_permission_rolls_back_without_disclosure(
     directory_db, directory_client
 ):
     with Session(directory_db.engine) as session:
+        session.get(Rol, directory_db.role_id).nombre = "Operador de prueba"
         module = session.exec(select(Modulo).where(Modulo.codigo == "PERSONAS")).one()
         permission = session.exec(
             select(RolModuloPermiso).where(RolModuloPermiso.modulo_id == module.id)
@@ -548,6 +549,7 @@ def test_every_directory_endpoint_enforces_action_permission(
     directory_db, directory_client, resource
 ):
     with Session(directory_db.engine) as session:
+        session.get(Rol, directory_db.role_id).nombre = "Operador de prueba"
         module = session.exec(
             select(Modulo).where(Modulo.codigo == resource.upper())
         ).one()

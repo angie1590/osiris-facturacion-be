@@ -37,3 +37,18 @@ def test_product_mutations_allow_operator_role():
     operator, session = _guarded_user("operador")
 
     assert product_guard(usuario=operator, session=session) is operator
+
+
+def test_admin_bypasses_role_specific_guards():
+    admin, session = _guarded_user("  ADMINISTRADOR  ")
+    assert require_roles("operator")(usuario=admin, session=session) is admin
+
+
+def test_inactive_admin_does_not_bypass_role_guards():
+    admin, session = _guarded_user("admin")
+    session.get.return_value.activo = False
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_roles("operator")(usuario=admin, session=session)
+
+    assert exc_info.value.status_code == 403

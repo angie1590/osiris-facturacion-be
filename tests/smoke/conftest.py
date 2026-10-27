@@ -11,6 +11,10 @@ from sqlmodel import SQLModel, Session, create_engine, select
 
 from osiris.core.db import get_session
 from osiris.core.auth import get_current_usuario
+from osiris.modules.inventario.categoria.router import (
+    create_category_permission,
+    read_categories_permission,
+)
 from osiris.main import app
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.cliente.entity import Cliente
@@ -22,6 +26,7 @@ from osiris.modules.common.proveedor_persona.entity import ProveedorPersona
 from osiris.modules.common.proveedor_sociedad.entity import ProveedorSociedad
 from osiris.modules.common.rol.entity import Rol
 from osiris.modules.common.sucursal.entity import Sucursal
+from osiris.modules.common.unidad.entity import Unidad
 from osiris.modules.common.tipo_cliente.entity import TipoCliente
 from osiris.modules.common.usuario.entity import Usuario
 from osiris.modules.sri.core_sri.models import (
@@ -87,6 +92,7 @@ def test_engine():
         Bodega.__table__,
         Categoria.__table__,
         CasaComercial.__table__,
+        Unidad.__table__,
         ImpuestoCatalogo.__table__,
         Producto.__table__,
         ProductoCategoria.__table__,
@@ -204,11 +210,15 @@ def client(test_engine):
             session.refresh(admin_role)
         role_id = admin_role.id
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    app.dependency_overrides[create_category_permission] = lambda: None
+    app.dependency_overrides[read_categories_permission] = lambda: None
     app.state.security_audit_engine = test_engine
     with TestClient(app, base_url="http://localhost:8000") as test_client:
         yield test_client
     app.dependency_overrides.pop(get_session, None)
     app.dependency_overrides.pop(get_current_usuario, None)
+    app.dependency_overrides.pop(create_category_permission, None)
+    app.dependency_overrides.pop(read_categories_permission, None)
 
 
 @pytest.fixture

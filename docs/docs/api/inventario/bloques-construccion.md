@@ -48,6 +48,13 @@ Obtiene una lista paginada de categorías activas (por defecto) o todas.
 - `offset` (int, default: 0) - Desplazamiento desde el inicio
 - `only_active` (bool, default: true) - Si es `true`, solo categorías activas
 
+Las escrituras canónicas ya no aceptan `es_padre`. Las respuestas conservan el
+campo legacy y exponen `tiene_hijos`, derivado de hijos activos. La jerarquía
+canónica está disponible en `GET /api/v1/categorias/arbol` y las hojas activas
+no temporales para selección de categoría en
+`GET /api/v1/categorias/seleccionables`; ambos requieren permiso efectivo
+`CATEGORIAS.leer`.
+
 **Response 200:**
 
 ```json
@@ -57,6 +64,7 @@ Obtiene una lista paginada de categorías activas (por defecto) o todas.
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "nombre": "Electrónica",
       "es_padre": true,
+      "tiene_hijos": true,
       "parent_id": null,
       "activo": true,
       "creado_en": "2024-01-15T10:30:00Z",
@@ -67,6 +75,7 @@ Obtiene una lista paginada de categorías activas (por defecto) o todas.
       "id": "660e8400-e29b-41d4-a716-446655440000",
       "nombre": "Computadoras",
       "es_padre": false,
+      "tiene_hijos": false,
       "parent_id": "550e8400-e29b-41d4-a716-446655440000",
       "activo": true,
       "creado_en": "2024-01-15T10:35:00Z",
@@ -81,6 +90,144 @@ Obtiene una lista paginada de categorías activas (por defecto) o todas.
   }
 }
 ```
+
+**GET** `/api/v1/categorias/arbol` devuelve nodos anidados y ordenados por
+nombre normalizado e ID. Incluye `id`, `nombre`, `parent_id`, `tiene_hijos`,
+`is_default`, `atributos_propios_count`, `atributos_efectivos_count` e `hijos`.
+**GET** `/api/v1/categorias/seleccionables` devuelve únicamente hojas activas no
+temporales con los conteos de atributos y usa el mismo permiso efectivo.
+
+**GET** `/api/v1/categorias/{item_id}/atributos-efectivos` devuelve una sola
+fila por atributo aplicable usando la asignación más cercana de la jerarquía.
+Requiere `CATEGORIAS.leer` y `ATRIBUTOS.leer`; el orden explícito va primero
+(`orden` ascendente), y las asignaciones sin orden quedan al final por nombre
+normalizado e ID. `valor_default: null` y `orden: null` de una asignación hija
+son overrides deliberados, no heredan el valor del padre.
+
+**GET** `/api/v1/categorias/{item_id}/atributos-propios` usa los mismos campos,
+pero devuelve solo mappings asignados directamente a esa categoría. Ambas rutas
+excluyen categorías, mappings y atributos inactivos y devuelven `mapping_id`,
+`atributo_id`, `codigo`, `nombre`, `tipo_dato`, `unidad` expandida o `null`,
+`restricciones`, `select_options`, `catalog_id`, `obligatorio`,
+`valor_default`, `orden`, `categoria_origen` (`id`/`nombre`), `profundidad` y
+`heredado`.
+
+**POST** `/api/v1/categorias/{item_id}/atributos` asigna una definición canónica
+existente a la categoría con permisos efectivos
+`CATEGORIAS.actualizar` + `ATRIBUTOS.leer`. Si ya existe un mapping activo,
+devuelve `409 ATTRIBUTE_ALREADY_ASSIGNED`; si el mapping histórico está
+inactivo, reactiva la misma identidad. Campos omitidos conservan su configuración
+al reactivar y `valor_default: null` limpia el default. La respuesta devuelve el
+atributo efectivo actualizado. `aplicar_default_a_existentes` es opt-in y por
+omisión es `false` y no escribe valores EAV. `obligatorio` no exige un default;
+cuando `valor_default` se envía, el servidor valida tipo, opciones/catálogo y
+límites incluso para asignaciones opcionales. En actualizaciones, omitir
+`valor_default` conserva su configuración y enviar `null` la limpia.
+
+**POST** `/api/v1/categorias/{item_id}/atributos/previsualizar` calcula el
+impacto de una asignación u override sin escribir. **POST**
+`/api/v1/categorias/{item_id}/atributos/{mapping_id}/previsualizar` calcula el
+impacto de una configuración. Ambos reportan `productos_afectados`,
+`productos_faltantes` y nombres/IDs legibles, y devuelven un
+`precondicion_preview` firmado por operación, categoría, actor, payload y
+definición/mappings/productos/EAV observados. Cambiar ese estado invalida el
+token con `409 CATALOG_PREVIEW_STALE`.
+
+Activar obligatoriedad o backfill en la mutación final requiere la precondición
+vigente. Si quedan faltantes sin backfill explícito válido, se devuelve
+`409 PRODUCT_REQUIRED_ATTRIBUTES_MISSING` con IDs accionables y se revierte
+toda escritura. El backfill es fill-only; los valores existentes se conservan.
+Si existe una identidad EAV inactiva, se reactiva con el mismo ID solo cuando su
+valor histórico sigue siendo válido para la definición actual; se registra la
+recuperación en auditoría y no se reemplaza ese valor por el default. Una fila
+histórica incompatible permanece intacta y no se sobrescribe silenciosamente.
+Una conversión global que vuelva incompatible un valor efectivo obligatorio
+también se bloquea, mientras que los remapeos opcionales mantienen su flujo
+reversible.
+
+**PUT** `/api/v1/categorias/{item_id}/atributos/{mapping_id}` actualiza solo
+`orden`, `obligatorio` y `valor_default` del mapping activo perteneciente a la
+categoría indicada. Requiere `CATEGORIAS.actualizar` + `ATRIBUTOS.leer`; el
+servidor registra el actor autenticado. El DTO rechaza campos de definición
+global como `nombre`, `codigo`, `tipo_dato`, `unidad_id` y restricciones.
+Configurar un atributo heredado crea o reactiva un mapping local mediante el
+POST anterior con el mismo `atributo_id`; no modifica el mapping de origen.
+
+**POST** `/api/v1/categorias/{item_id}/atributos/{mapping_id}/previsualizar-remocion`
+simula quitar solo el mapping propio. Informa productos afectados, valores que
+se conservarán porque el atributo sigue aplicando, valores que dejarán de aplicar
+y faltantes obligatorios del esquema resultante. **DELETE**
+`/api/v1/categorias/{item_id}/atributos/{mapping_id}` requiere
+`{"confirmar": true, "precondicion_preview": "..."}`. Si el preview quedó stale,
+faltan valores obligatorios o existen remapeos pendientes, responde 409 sin
+mutar mapping ni EAV. Los valores que ya no aplican se desactivan lógicamente y
+se auditan; la baja global del atributo es una operación distinta.
+
+`POST /api/v1/atributos` con `categoria_id` crea la definición y su mapping en
+una transacción exterior única; si falla cualquiera de los dos pasos, ninguno
+persiste. Requiere `CATEGORIAS.actualizar` + `ATRIBUTOS.leer` + `ATRIBUTOS.crear`.
+Cuando la creación hace obligatorio el atributo o solicita backfill, requiere
+una precondición vigente de **POST** `/api/v1/atributos/previsualizar`, que
+simula la definición y el mapping sin insertar filas. El token liga actor,
+categoría, definición/defaults y estado efectivo de productos/EAV; un cambio o
+expiración devuelve `409 CATALOG_PREVIEW_STALE`. Los faltantes sin default
+explícito y consentimiento de backfill devuelven
+`409 PRODUCT_REQUIRED_ATTRIBUTES_MISSING` y revierten la transacción completa.
+
+Ejemplo de atributo numérico efectivo:
+
+```json
+{
+  "mapping_id": "550e8400-e29b-41d4-a716-446655440001",
+  "atributo_id": "550e8400-e29b-41d4-a716-446655440002",
+  "codigo": "almacenamiento",
+  "nombre": "Almacenamiento",
+  "tipo_dato": "integer",
+  "unidad": {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "codigo": "GB",
+    "nombre": "Gigabyte",
+    "simbolo": "GB",
+    "magnitud_codigo": "DATA_STORAGE"
+  },
+  "restricciones": {
+    "allow_negative": false,
+    "min_value": 0,
+    "max_value": 4096
+  },
+  "select_options": null,
+  "catalog_id": null,
+  "obligatorio": true,
+  "valor_default": null,
+  "orden": 1,
+  "categoria_origen": {
+    "id": "550e8400-e29b-41d4-a716-446655440004",
+    "nombre": "Mouse"
+  },
+  "profundidad": 0,
+  "heredado": false
+}
+```
+
+La validación EAV legacy y el esqueleto de atributos de Producto reutilizan el
+mismo resolver. Si el puente de categorías de un Producto contiene varias
+categorías que no pertenecen a una única cadena ancestro-descendiente, el
+backend responde `409 CATEGORY_ATTRIBUTE_SCOPE_AMBIGUOUS` y no combina ramas;
+la clasificación debe revisarse antes de guardar o validar atributos.
+
+**POST** `/api/v1/categorias/{item_id}/reactivar` reactiva una categoría
+ordinaria inactiva conservando su ID. No reactiva productos ni asignaciones.
+El bucket `Sin clasificar` se administra únicamente por la regla interna B3.
+
+Al crear una hija o mover una categoría bajo un padre con productos directos,
+la UI debe solicitar primero `POST /api/v1/categorias/previsualizar` o
+`POST /api/v1/categorias/{item_id}/previsualizar`. Si el preview informa
+`requiere_confirmacion`, la confirmación reenvía `{payload, confirmar_b3: true,
+precondicion_preview}` a `POST /api/v1/categorias` o `PUT
+/api/v1/categorias/{item_id}`. El token liga actor, operación, payload y estado
+de productos/bucket; un cambio responde `CATALOG_PREVIEW_STALE` y exige un
+preview nuevo. B3 mueve solo la clasificación; no modifica cantidades ni
+documentos.
 
   </TabItem>
 
@@ -130,9 +277,7 @@ Crea una nueva categoría. Puede ser una categoría raíz (`parent_id=null`) o s
 ```json
 {
   "nombre": "Computadoras",
-  "es_padre": true,
-  "parent_id": "550e8400-e29b-41d4-a716-446655440000",
-  "usuario_auditoria": "admin"
+  "parent_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -165,7 +310,8 @@ Crea una nueva categoría. Puede ser una categoría raíz (`parent_id=null`) o s
 
 **PUT** `/api/v1/categorias/{item_id}`
 
-Actualiza parcialmente una categoría. Permite cambiar nombre, es_padre, o parent_id.
+Actualiza parcialmente nombre y/o `parent_id`. Enviar `parent_id: null` mueve a raíz.
+`es_padre` se ignora como entrada legacy; el servidor deriva `tiene_hijos`.
 
 **Parámetros de Path:**
 
@@ -175,9 +321,7 @@ Actualiza parcialmente una categoría. Permite cambiar nombre, es_padre, o paren
 
 ```json
 {
-  "nombre": "Computadoras de Escritorio",
-  "es_padre": false,
-  "usuario_auditoria": "admin"
+  "nombre": "Computadoras de Escritorio"
 }
 ```
 
@@ -411,7 +555,20 @@ Actualiza un atributo. Se puede cambiar nombre y tipo_dato.
 
 **DELETE** `/api/v1/atributos/{item_id}`
 
-Realiza un borrado lógico del atributo. Las asignaciones en `categoria_atributo` permanecen inactivas.
+Requiere primero **POST** `/api/v1/atributos/{item_id}/previsualizar-baja` y
+confirmación con `{ "payload": { "confirmar": true }, "precondicion_preview":
+"..." }`. La precondición liga actor y estado completo de definición,
+asignaciones, valores EAV y remapeos. El token vencido o estado cambiado devuelve
+`409 CATALOG_PREVIEW_STALE`; remapeos pendientes bloquean la baja con
+`ATTRIBUTE_HAS_PENDING_REMAPS`. La baja lógica y el snapshot son atómicos; las
+asignaciones y valores históricos conservan su identidad.
+
+**GET** `/api/v1/atributos/{item_id}/reversion` devuelve la operación más
+reciente y disponibilidad de undo/reactivación. **POST**
+`/api/v1/atributos/{item_id}/revertir` y `/reactivar` restauran únicamente el
+snapshot intacto; un estado posterior cambiado devuelve `409 ATTRIBUTE_STATE_CHANGED`.
+Un atributo legacy inactivo sin snapshot devuelve `LEGACY_ATTRIBUTE_NO_SNAPSHOT`
+y requiere recuperación administrativa, sin reactivación parcial.
 
 **Response 204:** No content
 
@@ -588,7 +745,7 @@ Actualiza los parámetros de una asignación (orden, obligatorio, valor_default)
 }
 ```
 
-Al cambiar una asignación opcional a obligatoria, envía `valor_default`. `aplicar_default_a_existentes` es opcional y por defecto conserva el comportamiento previo del API; cuando es `true`, el backend agrega el valor tipado solo a productos aplicables que todavía no tengan un valor EAV para ese atributo. Los valores existentes nunca se sobrescriben. La interfaz solicita confirmación antes de enviar esta opción.
+Una asignación puede ser obligatoria sin default. `aplicar_default_a_existentes` es `false` por defecto en crear, asignar y actualizar; cuando se envía `true`, requiere un default explícito válido. Valores existentes no se sobrescriben y el flag no se infiere de `obligatorio`. Un default inválido devuelve `422 DEFAULT_VALUE_INVALID`.
 
 **Response 200:**
 

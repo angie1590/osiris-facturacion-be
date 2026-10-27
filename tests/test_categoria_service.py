@@ -45,7 +45,7 @@ def test_update_self_reference_raises():
     with pytest.raises(HTTPException) as exc:
         service.update(session, item_id, data)
 
-    assert "parent_id no puede referenciar" in str(exc.value.detail)
+    assert exc.value.detail["code"] == "CATEGORY_CYCLE"
 
 
 def test_update_detects_cycle_and_raises():

@@ -51,22 +51,23 @@ def test_categoria_update_cleans_parent_and_prevents_self_ref():
     item_id = "11111111-1111-1111-1111-111111111111"
     service.repo.get.return_value = existing
 
-    # Caso: actualizar a es_padre True -> parent_id se mantiene si se proporciona
+    # El flag legacy se ignora; parent_id sigue controlando la jerarquía.
     service.repo.update.return_value = existing
     data = {"es_padre": True, "parent_id": "22222222-2222-2222-2222-222222222222"}
     service.update(session, item_id, data)
-    # repo.update fue llamado y parent_id se conserva (argumento en posición 2)
     called_data = service.repo.update.call_args[0][2]
     assert called_data.get("parent_id") == "22222222-2222-2222-2222-222222222222"
+    assert "es_padre" not in called_data
 
     # Caso: evitar self-reference
     data = {"es_padre": False, "parent_id": item_id}
     with pytest.raises(HTTPException) as exc2:
         service.update(session, item_id, data)
-    assert exc2.value.status_code == 400
+    assert exc2.value.status_code == 409
+    assert exc2.value.detail["code"] == "CATEGORY_CYCLE"
 
 
-def test_categoria_no_puede_marcarse_hoja_con_hijos_activos():
+def test_legacy_flag_cannot_mark_category_with_active_children_as_leaf():
     service = CategoriaService()
     service.repo = MagicMock(spec=CategoriaRepository)
     service.repo.get.return_value = Categoria(nombre="Padre", es_padre=True, activo=True)
@@ -75,11 +76,8 @@ def test_categoria_no_puede_marcarse_hoja_con_hijos_activos():
     child_query.first.return_value = uuid4()
     session.exec.return_value = child_query
 
-    with pytest.raises(HTTPException, match="hijos activos") as exc_info:
-        service.update(session, uuid4(), {"es_padre": False})
-
-    assert exc_info.value.status_code == 409
-    service.repo.update.assert_not_called()
+    service.update(session, uuid4(), {"es_padre": False})
+    assert "es_padre" not in service.repo.update.call_args[0][2]
 
 
 def test_categoria_repository_delete_logico():
