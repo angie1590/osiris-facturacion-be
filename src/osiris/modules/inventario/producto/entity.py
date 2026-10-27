@@ -35,6 +35,11 @@ class Producto(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
     # Define si el producto puede manejar unidades fraccionarias (kg, litros, etc.).
     permite_fracciones: bool = Field(default=False, nullable=False)
     casa_comercial_id: UUID | None = Field(default=None, foreign_key="tbl_casa_comercial.id")
+    categoria_principal_id: UUID | None = Field(
+        default=None,
+        foreign_key="tbl_categoria.id",
+        index=True,
+    )
 
     # Relaciones de lectura para evitar N+1 en listados completos.
     producto_categorias: list[ProductoCategoria] = Relationship(

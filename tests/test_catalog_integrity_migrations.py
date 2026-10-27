@@ -575,6 +575,103 @@ def test_postgresql_ddl_rendering_without_database(monkeypatch: pytest.MonkeyPat
     assert "'MB'" in sql and "'MiB'" in sql and "'GHz'" in sql
 
 
+PRIMARY_CATEGORY_REVISION = "f51c8a2d7e90_add_producto_categoria_principal.py"
+
+
+def test_primary_product_category_migration_is_additive_and_round_trips(database: Engine) -> None:
+    migration = _load(PRIMARY_CATEGORY_REVISION)
+    category_id = uuid4()
+    product_id = uuid4()
+    bridge_id = uuid4()
+    with database.begin() as connection:
+        _insert(
+            connection,
+            "tbl_categoria",
+            id=category_id,
+            nombre="Mouse",
+            parent_id=None,
+            activo=True,
+            es_padre=False,
+            is_default=False,
+        )
+        _insert(connection, "tbl_producto", id=product_id, nombre="Mouse", activo=False)
+        _insert(
+            connection,
+            "tbl_producto_categoria",
+            id=bridge_id,
+            producto_id=product_id,
+            categoria_id=category_id,
+        )
+
+    _run(database, migration.upgrade)
+    with database.connect() as connection:
+        column = next(
+            item
+            for item in sa.inspect(connection).get_columns("tbl_producto")
+            if item["name"] == "categoria_principal_id"
+        )
+        assert column["nullable"] is True
+        assert "categoria_principal_id" in {
+            column_name
+            for index in sa.inspect(connection).get_indexes("tbl_producto")
+            for column_name in index["column_names"]
+        }
+        assert any(
+            foreign_key["constrained_columns"] == ["categoria_principal_id"]
+            and foreign_key["referred_table"] == "tbl_categoria"
+            for foreign_key in sa.inspect(connection).get_foreign_keys("tbl_producto")
+        )
+        product = _table(connection, "tbl_producto")
+        bridge = _table(connection, "tbl_producto_categoria")
+        assert connection.execute(
+            sa.select(product.c.categoria_principal_id).where(product.c.id == product_id)
+        ).scalar_one() is None
+        assert connection.execute(
+            sa.select(sa.func.count()).select_from(bridge).where(bridge.c.id == bridge_id)
+        ).scalar_one() == 1
+
+    _run(database, migration.downgrade)
+    assert "categoria_principal_id" not in {
+        column["name"] for column in sa.inspect(database).get_columns("tbl_producto")
+    }
+    _run(database, migration.upgrade)
+
+
+def test_primary_product_category_downgrade_blocks_populated_fk(database: Engine) -> None:
+    migration = _load(PRIMARY_CATEGORY_REVISION)
+    category_id = uuid4()
+    product_id = uuid4()
+    with database.begin() as connection:
+        _insert(
+            connection,
+            "tbl_categoria",
+            id=category_id,
+            nombre="Mouse",
+            parent_id=None,
+            activo=True,
+            es_padre=False,
+            is_default=False,
+        )
+        _insert(connection, "tbl_producto", id=product_id, nombre="Mouse", activo=False)
+    _run(database, migration.upgrade)
+    with database.begin() as connection:
+        product = _table(connection, "tbl_producto")
+        category_value = (
+            category_id.hex if database.dialect.name == "sqlite" else category_id
+        )
+        connection.execute(
+            product.update()
+            .where(product.c.id == product_id)
+            .values(categoria_principal_id=category_value)
+        )
+
+    with pytest.raises(RuntimeError, match="contains 1 values"):
+        _run(database, migration.downgrade)
+    assert "categoria_principal_id" in {
+        column["name"] for column in sa.inspect(database).get_columns("tbl_producto")
+    }
+
+
 @pytest.mark.parametrize("identity", ["root", "child", "mapping", "attribute_code",
                                      "unit_code", "unit_symbol"])
 @pytest.mark.parametrize("rollback_first", [False, True])
