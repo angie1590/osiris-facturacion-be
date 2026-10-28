@@ -9,7 +9,12 @@ from sqlmodel import select
 from sqlmodel import Session
 
 from osiris.core.db import get_session
-from osiris.core.auth import get_current_usuario, require_roles
+from osiris.core.product_permissions import (
+    create_product_permission,
+    delete_product_permission,
+    read_product_permission,
+    update_product_permission,
+)
 from osiris.domain.schemas import PaginatedResponse
 from osiris.modules.inventario.producto.models import (
     ProductoCompletoRead,
@@ -43,7 +48,11 @@ class ProveedoresProductoRequest(BaseModel):
     proveedor_ids: List[UUID]
 
 
-@router.get("/impuestos-disponibles", response_model=list[ImpuestoCatalogoRead])
+@router.get(
+    "/impuestos-disponibles",
+    response_model=list[ImpuestoCatalogoRead],
+    dependencies=[Depends(read_product_permission)],
+)
 def listar_impuestos_disponibles(
     tipo_producto: TipoProducto,
     session: Session = Depends(get_session),
@@ -52,7 +61,11 @@ def listar_impuestos_disponibles(
     return [ImpuestoCatalogoRead.model_validate(impuesto) for impuesto in impuestos]
 
 
-@router.get("", response_model=PaginatedResponse[ProductoListadoRead])
+@router.get(
+    "",
+    response_model=PaginatedResponse[ProductoListadoRead],
+    dependencies=[Depends(read_product_permission)],
+)
 def list_productos(
     limit: int = Query(50, ge=1, le=1000, description="Máximo de registros a devolver"),
     offset: int = Query(0, ge=0, description="Número de registros a saltar"),
@@ -63,30 +76,36 @@ def list_productos(
     return PaginatedResponse[ProductoListadoRead].model_validate({"items": items, "meta": meta})
 
 
-@router.get("/{producto_id}", response_model=ProductoCompletoRead)
+@router.get(
+    "/{producto_id}",
+    response_model=ProductoCompletoRead,
+    dependencies=[Depends(read_product_permission)],
+)
 def get_producto(producto_id: UUID, session: Session = Depends(get_session)) -> ProductoCompletoRead:
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto_id))
 
 
-@router.post("", response_model=ProductoCompletoRead, status_code=201, dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
+@router.post("", response_model=ProductoCompletoRead, status_code=201)
 def create_producto(
     payload: ProductoIntegralCreate | ProductoCreate,
     session: Session = Depends(get_session),
-    usuario: Usuario = Depends(get_current_usuario),
+    usuario: Usuario = Depends(create_product_permission),
 ) -> ProductoCompletoRead:
     if isinstance(payload, ProductoIntegralCreate):
         producto = service.create_integral(session, payload, actor_id=usuario.id)
     else:
-        producto = service.create(session, payload.model_dump(exclude_unset=True))
+        legacy_payload = payload.model_dump(exclude_unset=True)
+        legacy_payload["usuario_auditoria"] = str(usuario.id)
+        producto = service.create(session, legacy_payload)
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto.id))
 
 
-@router.put("/{producto_id}", response_model=ProductoCompletoRead, dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
+@router.put("/{producto_id}", response_model=ProductoCompletoRead)
 def update_producto(
     producto_id: UUID,
     payload: ProductoIntegralUpdate | ProductoUpdate,
     session: Session = Depends(get_session),
-    usuario: Usuario = Depends(get_current_usuario),
+    usuario: Usuario = Depends(update_product_permission),
 ) -> ProductoCompletoRead:
     if isinstance(payload, ProductoIntegralUpdate):
         producto = service.update_integral(
@@ -96,13 +115,19 @@ def update_producto(
             actor_id=usuario.id,
         )
     else:
-        producto = service.update(session, producto_id, payload.model_dump(exclude_unset=True))
+        legacy_payload = payload.model_dump(exclude_unset=True)
+        legacy_payload["usuario_auditoria"] = str(usuario.id)
+        producto = service.update(session, producto_id, legacy_payload)
     if not producto:
         raise HTTPException(status_code=404, detail=f"Producto {producto_id} no encontrado")
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto_id))
 
 
-@router.delete("/{producto_id}", status_code=204, dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
+@router.delete(
+    "/{producto_id}",
+    status_code=204,
+    dependencies=[Depends(delete_product_permission)],
+)
 def delete_producto(producto_id: UUID, session: Session = Depends(get_session)) -> None:
     service.delete(session, producto_id)
     return None
@@ -112,7 +137,7 @@ def delete_producto(producto_id: UUID, session: Session = Depends(get_session)) 
     "/{producto_id}/atributos",
     response_model=list[ProductoAtributoValorRead],
     status_code=200,
-    dependencies=[Depends(require_roles("admin", "operator", "supervisor"))],
+    dependencies=[Depends(update_product_permission)],
     responses={
         400: {
             "description": (
@@ -148,7 +173,10 @@ def _set_proveedores(
     session.commit()
 
 
-@router.put("/{producto_id}/proveedores-persona", dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
+@router.put(
+    "/{producto_id}/proveedores-persona",
+    dependencies=[Depends(update_product_permission)],
+)
 def asignar_proveedores_persona(
     producto_id: UUID,
     payload: ProveedoresProductoRequest,
@@ -158,7 +186,10 @@ def asignar_proveedores_persona(
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto_id))
 
 
-@router.put("/{producto_id}/proveedores-sociedad", dependencies=[Depends(require_roles("admin", "operator", "supervisor"))])
+@router.put(
+    "/{producto_id}/proveedores-sociedad",
+    dependencies=[Depends(update_product_permission)],
+)
 def asignar_proveedores_sociedad(
     producto_id: UUID,
     payload: ProveedoresProductoRequest,

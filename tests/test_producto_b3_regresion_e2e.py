@@ -26,6 +26,10 @@ from osiris.modules.inventario.categoria.router import (
     create_category_permission,
     read_categories_permission,
 )
+from tests.utils.product_permissions import (
+    clear_product_permission_overrides,
+    override_product_permissions,
+)
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.producto.entity import (
     Producto,
@@ -150,6 +154,7 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    override_product_permissions(app, role_id)
     test_actor = SimpleNamespace(id=uuid4())
     app.dependency_overrides[create_category_permission] = lambda: test_actor
     app.dependency_overrides[read_categories_permission] = lambda: None
@@ -189,6 +194,7 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
         app.dependency_overrides.pop(create_category_permission, None)
         app.dependency_overrides.pop(read_categories_permission, None)
 
@@ -205,6 +211,7 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    override_product_permissions(app, role_id)
     test_actor = SimpleNamespace(id=uuid4())
     app.dependency_overrides[create_category_permission] = lambda: test_actor
     app.dependency_overrides[read_categories_permission] = lambda: None
@@ -270,5 +277,6 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
         app.dependency_overrides.pop(create_category_permission, None)
         app.dependency_overrides.pop(read_categories_permission, None)

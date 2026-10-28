@@ -7,7 +7,10 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from osiris.core.db import get_session
-from osiris.core.auth import require_roles
+from osiris.core.product_permissions import (
+    read_product_permission,
+    update_product_permission,
+)
 from osiris.modules.inventario.producto_impuesto.models import ProductoImpuestoRead
 from osiris.modules.inventario.producto_impuesto.service import ProductoImpuestoService
 from osiris.modules.sri.impuesto_catalogo.models import ImpuestoCatalogoRead
@@ -16,7 +19,11 @@ router = APIRouter(prefix="/api/v1/productos", tags=["Productos"])
 service = ProductoImpuestoService()
 
 
-@router.get("/{producto_id}/impuestos", response_model=List[ImpuestoCatalogoRead])
+@router.get(
+    "/{producto_id}/impuestos",
+    response_model=List[ImpuestoCatalogoRead],
+    dependencies=[Depends(read_product_permission)],
+)
 def listar_impuestos_producto(
     producto_id: UUID,
     session: Session = Depends(get_session),
@@ -29,7 +36,7 @@ def listar_impuestos_producto(
     "/{producto_id}/impuestos",
     response_model=ProductoImpuestoRead,
     status_code=201,
-    dependencies=[Depends(require_roles("admin", "operator", "supervisor"))],
+    dependencies=[Depends(update_product_permission)],
 )
 def asignar_impuesto_a_producto(
     producto_id: UUID,
@@ -53,7 +60,7 @@ def asignar_impuesto_a_producto(
 @router.delete(
     "/impuestos/{producto_impuesto_id}",
     status_code=204,
-    dependencies=[Depends(require_roles("admin", "operator", "supervisor"))],
+    dependencies=[Depends(update_product_permission)],
 )
 def eliminar_impuesto_de_producto(
     producto_impuesto_id: UUID,

@@ -27,6 +27,10 @@ from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoValorUpsert,
 )
 from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
+from tests.utils.product_permissions import (
+    clear_product_permission_overrides,
+    override_product_permissions,
+)
 
 
 def _build_test_engine():
@@ -334,6 +338,7 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=admin_role_id)
+    override_product_permissions(app, admin_role_id)
     try:
         with TestClient(app) as client:
             response = client.put(
@@ -348,6 +353,7 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
 
 
 def test_upsert_valores_producto_rechaza_atributo_no_aplicable():

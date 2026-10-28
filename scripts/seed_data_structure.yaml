@@ -634,10 +634,16 @@ modulos:
     orden: 3
     icono: "package"
 
+  - codigo: "PRODUCTOS"
+    nombre: "Productos"
+    descripcion: "Gestión integral de productos"
+    orden: 4
+    icono: "package"
+
   - codigo: "CONTABILIDAD"
     nombre: "Contabilidad"
     descripcion: "Módulo de contabilidad y finanzas"
-    orden: 4
+    orden: 5
     icono: "calculator"
 
 # 14.2. PERMISOS POR ROL Y MÓDULO
@@ -652,6 +658,13 @@ permisos:
 
   - rol: "Administrador"
     modulo: "INVENTARIO"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  - rol: "Administrador"
+    modulo: "PRODUCTOS"
     puede_leer: true
     puede_crear: true
     puede_actualizar: true
@@ -686,9 +699,23 @@ permisos:
     puede_actualizar: false
     puede_eliminar: false
 
+  - rol: "Vendedor"
+    modulo: "PRODUCTOS"
+    puede_leer: true
+    puede_crear: false
+    puede_actualizar: false
+    puede_eliminar: false
+
   # Jefe de Almacén: acceso completo a inventario, lectura en compras
   - rol: "Jefe de Almacén"
     modulo: "INVENTARIO"
+    puede_leer: true
+    puede_crear: true
+    puede_actualizar: true
+    puede_eliminar: true
+
+  - rol: "Jefe de Almacén"
+    modulo: "PRODUCTOS"
     puede_leer: true
     puede_crear: true
     puede_actualizar: true

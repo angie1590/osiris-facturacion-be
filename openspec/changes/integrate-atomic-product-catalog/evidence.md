@@ -65,3 +65,11 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - Colección de atributos omitida conserva valores existentes; `null` desactiva lógicamente solo atributos opcionales y retiene la fila/valor histórico. Un obligatorio `null`, un atributo no aplicable o un valor inválido abortan la transacción.
 - Cambio de categoría sin preview devuelve `409 PRODUCT_CATEGORY_CHANGE_REQUIRES_PREVIEW` sin mutar el producto.
 - `tests/test_producto_integral_service.py`: 8 passed, incluyendo rollback completo de update cuando un EAV falla después de modificar un dato general. Suite BE completa: 1302 passed, 80 skipped; Ruff/mypy focales limpios.
+
+## Gate 7.3.4 — Permisos efectivos de Producto
+
+- `PRODUCTOS.leer/crear/actualizar/eliminar` se verifica mediante `product_permission`; CRUD, opciones fiscales, EAV, impuestos y proveedores ya no dependen de nombres de rol.
+- La migración `c8d7e9f1a204` crea `PRODUCTOS` y copia grants activos faltantes de `INVENTARIO` sin sobrescribir los existentes. Se aplicó en PostgreSQL local; matriz postflight: Administrador y Jefe de Almacén full, Vendedor lectura solamente.
+- `scripts/seed_data_structure.yaml` incluye la misma matriz para instalaciones nuevas. `RolModuloPermisoService` entrega también PRODUCTOS al administrador.
+- `tests/test_product_permissions_migration.py` e `tests/test_catalog_permissions.py`: 112 passed; suite BE completa tras actualizar fixtures de auth: 1308 passed, 80 skipped. Ruff/mypy limpios.
+- Las rutas de `producto_bodega` quedan como subflujo separado de inventario; no se modificaron reglas ni datos de stock en esta entrega.

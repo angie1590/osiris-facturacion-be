@@ -35,6 +35,10 @@ from osiris.modules.inventario.producto.entity import (
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
+from tests.utils.product_permissions import (
+    clear_product_permission_overrides,
+    override_product_permissions,
+)
 
 
 def _ensure_fk_stub_targets_in_metadata() -> None:
@@ -217,6 +221,7 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    override_product_permissions(app, role_id)
     try:
         with TestClient(app) as client:
             put_resp = client.put(
@@ -255,6 +260,7 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
 
 
 def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
@@ -290,6 +296,7 @@ def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    override_product_permissions(app, role_id)
     try:
         with TestClient(app) as client:
             resp = client.put(
@@ -305,3 +312,4 @@ def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)

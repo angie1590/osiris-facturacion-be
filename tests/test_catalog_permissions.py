@@ -30,6 +30,13 @@ from osiris.core.catalog_permissions import (
     catalog_permission,
     require_catalog_permission,
 )
+from osiris.core.product_permissions import (
+    PRODUCT_PERMISSIONS,
+    create_product_permission,
+    delete_product_permission,
+    read_product_permission,
+    update_product_permission,
+)
 from osiris.core.db import get_session
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.common.modulo.entity import Modulo
@@ -54,6 +61,10 @@ from osiris.modules.inventario.categoria.router import (
     update_category_permission,
 )
 from osiris.modules.inventario.categoria.service import CategoriaService
+from osiris.modules.inventario.producto.router import router as producto_router
+from osiris.modules.inventario.producto_impuesto.router import (
+    router as producto_impuesto_router,
+)
 
 
 EXPECTED: dict[CatalogOperation, tuple[CatalogPermission, ...]] = {
@@ -304,7 +315,7 @@ def test_admin_effective_permissions_include_missing_catalog_modules(
     )
 
     by_code = {permission.codigo: permission for permission in permissions}
-    for code in ("CATEGORIAS", "ATRIBUTOS", "UNIDADES"):
+    for code in ("CATEGORIAS", "ATRIBUTOS", "UNIDADES", "PRODUCTOS"):
         assert code in by_code
         assert by_code[code].puede_leer
         assert by_code[code].puede_crear
@@ -441,6 +452,63 @@ def test_b3_reads_and_recategorize_enforce_effective_permissions(
         )
         assert response.status_code == 200
         assert response.json() == {"recategorized": 1}
+
+
+def test_product_routes_use_effective_product_permissions() -> None:
+    expected_dependencies = (
+        (producto_router, "/api/v1/productos", "GET", read_product_permission),
+        (producto_router, "/api/v1/productos", "POST", create_product_permission),
+        (producto_router, "/api/v1/productos/{producto_id}", "GET", read_product_permission),
+        (producto_router, "/api/v1/productos/{producto_id}", "PUT", update_product_permission),
+        (producto_router, "/api/v1/productos/{producto_id}", "DELETE", delete_product_permission),
+        (
+            producto_router,
+            "/api/v1/productos/{producto_id}/atributos",
+            "PUT",
+            update_product_permission,
+        ),
+        (
+            producto_router,
+            "/api/v1/productos/{producto_id}/proveedores-persona",
+            "PUT",
+            update_product_permission,
+        ),
+        (
+            producto_router,
+            "/api/v1/productos/{producto_id}/proveedores-sociedad",
+            "PUT",
+            update_product_permission,
+        ),
+        (
+            producto_impuesto_router,
+            "/api/v1/productos/{producto_id}/impuestos",
+            "GET",
+            read_product_permission,
+        ),
+        (
+            producto_impuesto_router,
+            "/api/v1/productos/{producto_id}/impuestos",
+            "POST",
+            update_product_permission,
+        ),
+        (
+            producto_impuesto_router,
+            "/api/v1/productos/impuestos/{producto_impuesto_id}",
+            "DELETE",
+            update_product_permission,
+        ),
+    )
+    for router, path, method, permission in expected_dependencies:
+        route = next(
+            route
+            for route in router.routes
+            if getattr(route, "path", None) == path
+            and method in getattr(route, "methods", set())
+        )
+        assert any(
+            dependency.call is permission
+            for dependency in route.dependant.dependencies
+        )
 
 
 def test_remap_routes_enforce_effective_attribute_permissions(
@@ -582,6 +650,63 @@ def test_anonymous_request_does_not_reach_caller(catalog: CatalogFixture) -> Non
     assert catalog.writes == []
     assert catalog.callers == []
 
+
+def test_product_permission_matrix_and_route_dependencies_are_explicit() -> None:
+    assert dict(PRODUCT_PERMISSIONS) == {
+        "read": "leer",
+        "create": "crear",
+        "update": "actualizar",
+        "delete": "eliminar",
+    }
+    expected_routes = (
+        ("/api/v1/productos", "GET", read_product_permission),
+        ("/api/v1/productos/{producto_id}", "GET", read_product_permission),
+        ("/api/v1/productos/impuestos-disponibles", "GET", read_product_permission),
+        ("/api/v1/productos", "POST", create_product_permission),
+        ("/api/v1/productos/{producto_id}", "PUT", update_product_permission),
+        ("/api/v1/productos/{producto_id}", "DELETE", delete_product_permission),
+        ("/api/v1/productos/{producto_id}/atributos", "PUT", update_product_permission),
+    )
+    for path, method, permission in expected_routes:
+        route = next(
+            route
+            for route in producto_router.routes
+            if getattr(route, "path", None) == path
+            and method in getattr(route, "methods", set())
+        )
+        assert any(dependency.call is permission for dependency in route.dependant.dependencies)
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_product_permission_dependency_denies_without_grant_and_sets_authenticated_actor(
+    catalog: CatalogFixture, allowed: bool
+) -> None:
+    if allowed:
+        catalog.grant((("PRODUCTOS", "crear"),))
+    else:
+        catalog.grant(())
+    app = FastAPI()
+    app.dependency_overrides[get_session] = lambda: catalog.session
+    app.dependency_overrides[get_current_usuario] = lambda: catalog.user
+
+    @app.post("/probe")
+    def caller(actor: Usuario = Depends(create_product_permission)) -> dict[str, str]:
+        observed_actor = get_current_user_id()
+        catalog.callers.append((str(actor.id), observed_actor))
+        return {"actor": str(actor.id)}
+
+    with TestClient(app) as client:
+        response = client.post("/probe")
+
+    assert response.status_code == (200 if allowed else 403)
+    if allowed:
+        expected = str(catalog.user.id)
+        assert response.json() == {"actor": expected}
+        assert catalog.callers == [(expected, expected)]
+    else:
+        assert catalog.callers == []
+        assert catalog.writes == []
+        assert catalog.session.exec(select(AuditLog)).all() == []
 
 @pytest.mark.parametrize("token_type", ["refresh", "invalid"])
 def test_non_access_subject_is_not_a_catalog_actor(

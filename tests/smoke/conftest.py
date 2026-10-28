@@ -29,6 +29,10 @@ from osiris.modules.common.sucursal.entity import Sucursal
 from osiris.modules.common.unidad.entity import Unidad
 from osiris.modules.common.tipo_cliente.entity import TipoCliente
 from osiris.modules.common.usuario.entity import Usuario
+from tests.utils.product_permissions import (
+    clear_product_permission_overrides,
+    override_product_permissions,
+)
 from osiris.modules.sri.core_sri.models import (
     Compra,
     CompraDetalle,
@@ -210,6 +214,7 @@ def client(test_engine):
             session.refresh(admin_role)
         role_id = admin_role.id
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    override_product_permissions(app, role_id)
     app.dependency_overrides[create_category_permission] = lambda: None
     app.dependency_overrides[read_categories_permission] = lambda: None
     app.state.security_audit_engine = test_engine
@@ -217,6 +222,7 @@ def client(test_engine):
         yield test_client
     app.dependency_overrides.pop(get_session, None)
     app.dependency_overrides.pop(get_current_usuario, None)
+    clear_product_permission_overrides(app)
     app.dependency_overrides.pop(create_category_permission, None)
     app.dependency_overrides.pop(read_categories_permission, None)
 

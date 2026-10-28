@@ -39,6 +39,10 @@ from osiris.modules.inventario.producto.models_atributos import (
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.inventario.producto.entity import ProductoBodega, ProductoImpuesto
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
+from tests.utils.product_permissions import (
+    clear_product_permission_overrides,
+    override_product_permissions,
+)
 
 
 def _ensure_fk_stub_targets_in_metadata() -> None:
@@ -325,6 +329,7 @@ def _install_test_dependencies(engine: sa.Engine, role_id):
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_current_usuario] = lambda: SimpleNamespace(rol_id=role_id)
+    override_product_permissions(app, role_id)
 
 
 def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos():
@@ -363,6 +368,7 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
 
 
 def test_get_producto_detalle_conflicto_herencia_abuelo_padre_hijo_gana_mas_especifico():
@@ -386,6 +392,7 @@ def test_get_producto_detalle_conflicto_herencia_abuelo_padre_hijo_gana_mas_espe
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
 
 
 def test_list_productos_retorna_metadata_basica_sin_detalle_de_atributos():
@@ -410,6 +417,7 @@ def test_list_productos_retorna_metadata_basica_sin_detalle_de_atributos():
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
 
 
 def test_contextual_remove_category_attribute_hides_product_and_deactivates_eav():
@@ -482,6 +490,7 @@ def test_contextual_remove_category_attribute_hides_product_and_deactivates_eav(
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
         app.dependency_overrides.pop(assign_category_attribute_permission, None)
 
 
@@ -529,3 +538,4 @@ def test_cambio_categoria_oculta_atributo_huerfano_pero_conserva_historico_eav()
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)

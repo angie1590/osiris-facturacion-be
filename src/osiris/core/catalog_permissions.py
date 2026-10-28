@@ -52,6 +52,7 @@ CATALOG_MODULE_NAMES: Mapping[str, str] = MappingProxyType(
         "CATEGORIAS": "Categorías",
         "ATRIBUTOS": "Atributos",
         "UNIDADES": "Unidades",
+        "PRODUCTOS": "Productos",
     }
 )
 
