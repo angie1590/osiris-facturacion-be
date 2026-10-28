@@ -70,10 +70,19 @@ jobs:
         run: poetry run ruff check src tests
 
       - name: Mypy full source
+        id: mypy
+        continue-on-error: true
         run: poetry run mypy src
 
       - name: Pytest full suite with PostgreSQL opt-in tests
+        id: pytest
         run: poetry run pytest -q -rs
+
+      - name: Preserve mypy failure after tests
+        if: always() && steps.mypy.outcome == 'failure'
+        run: |
+          echo "Mypy failed; pytest was still executed so both results are available."
+          exit 1
 
   docs-build:
     runs-on: ubuntu-latest
