@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import logging
 from typing import Any, Iterable, Optional
 from uuid import UUID
 
@@ -40,6 +41,8 @@ from .entity import (
     TipoProducto,
 )
 from osiris.modules.inventario.bodega.entity import Bodega
+
+logger = logging.getLogger(__name__)
 
 class ProductoService(BaseService[Producto]):
     repo = ProductoRepository()
@@ -535,14 +538,85 @@ class ProductoService(BaseService[Producto]):
             previous_category_id = product.categoria_principal_id or (
                 bridge_category_ids[0] if bridge_category_ids else None
             )
-            if previous_category_id != payload.categoria_principal_id:
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "code": "PRODUCT_CATEGORY_CHANGE_REQUIRES_PREVIEW",
-                        "message": "El cambio de categoría requiere preview vigente.",
-                    },
+            category_changed = previous_category_id != payload.categoria_principal_id
+            preview_input = None
+            if category_changed:
+                if not payload.precondicion_preview:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "PRODUCT_CATEGORY_CHANGE_REQUIRES_PREVIEW",
+                            "message": "El cambio de categoría requiere preview vigente.",
+                        },
+                    )
+                from osiris.modules.inventario.producto.category_preview import (
+                    OPERATION,
+                    preview_product_category_change,
+                    product_category_preview_payload,
+                    product_category_preview_state,
+                    product_preview_signer,
                 )
+                from osiris.modules.inventario.producto.models import (
+                    ProductoCambioCategoriaPreviewInput,
+                )
+
+                preview_input = ProductoCambioCategoriaPreviewInput(
+                    categoria_principal_id=payload.categoria_principal_id,
+                    atributos=payload.atributos or [],
+                )
+                signed_payload = product_category_preview_payload(
+                    payload.categoria_principal_id,
+                    payload.atributos,
+                )
+                signed_state = product_category_preview_state(
+                    session,
+                    product,
+                    previous_category_id,
+                    payload.categoria_principal_id,
+                    bridge_category_ids,
+                )
+                product_preview_signer().verify(
+                    payload.precondicion_preview,
+                    operation=OPERATION,
+                    target=f"/api/v1/productos/{producto_id}/previsualizar-cambio-categoria",
+                    actor=str(actor_id),
+                    payload=signed_payload,
+                    state=signed_state,
+                )
+                impact = preview_product_category_change(
+                    session,
+                    producto_id,
+                    preview_input,
+                    actor_id=actor_id,
+                )
+                if impact.faltantes:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "PRODUCT_REQUIRED_ATTRIBUTES_MISSING",
+                            "message": "Faltan atributos obligatorios para la categoría destino.",
+                            "fields": {
+                                f"atributos.{item.atributo_id}": item.motivo
+                                for item in impact.faltantes
+                            },
+                            "conteos": impact.conteos,
+                            "acciones_permitidas": ["completar_valores", "previsualizar", "cancelar"],
+                        },
+                    )
+                if impact.incompatibles:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "PRODUCT_ATTRIBUTE_VALUE_INVALID",
+                            "message": "Uno o más valores no son compatibles con la categoría destino.",
+                            "fields": {
+                                f"atributos.{item.atributo_id}": item.motivo
+                                for item in impact.incompatibles
+                            },
+                            "conteos": impact.conteos,
+                            "acciones_permitidas": ["corregir_valores", "previsualizar", "cancelar"],
+                        },
+                    )
 
             self._validate_leaf_categories(session, [payload.categoria_principal_id])
             effective_attributes = CategoriaService().get_atributos_heredados_por_categoria(
@@ -597,42 +671,97 @@ class ProductoService(BaseService[Producto]):
             if updated is None:
                 raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-            if updated.categoria_principal_id != payload.categoria_principal_id:
-                updated.categoria_principal_id = payload.categoria_principal_id
-                session.add(updated)
+            if category_changed:
+                self.repo.set_categorias(
+                    session,
+                    producto_id,
+                    [payload.categoria_principal_id],
+                )
                 session.flush()
+                record_domain_change(
+                    session,
+                    entity="tbl_producto",
+                    entity_id=producto_id,
+                    action="CHANGE_PRODUCT_PRIMARY_CATEGORY",
+                    before={"categoria_principal_id": str(previous_category_id) if previous_category_id else None},
+                    after={"categoria_principal_id": str(payload.categoria_principal_id)},
+                )
+
+            target_attribute_ids = set(effective_by_id)
+            current_active_values = session.exec(
+                select(ProductoAtributoValor).where(
+                    col(ProductoAtributoValor.producto_id) == producto_id,
+                    col(ProductoAtributoValor.activo).is_(True),
+                )
+            ).all()
+            if category_changed:
+                for value_entity in current_active_values:
+                    if value_entity.atributo_id in target_attribute_ids:
+                        continue
+                    before_value = {
+                        "producto_id": str(producto_id),
+                        "atributo_id": str(value_entity.atributo_id),
+                        "valor_string": value_entity.valor_string,
+                        "valor_integer": value_entity.valor_integer,
+                        "valor_decimal": str(value_entity.valor_decimal)
+                        if value_entity.valor_decimal is not None
+                        else None,
+                        "valor_boolean": value_entity.valor_boolean,
+                        "valor_date": value_entity.valor_date.isoformat()
+                        if value_entity.valor_date is not None
+                        else None,
+                        "activo": True,
+                    }
+                    value_entity.activo = False
+                    session.add(value_entity)
+                    record_domain_change(
+                        session,
+                        entity="tbl_producto_atributo_valor",
+                        entity_id=value_entity.id,
+                        action="DEACTIVATE_NON_APPLICABLE_PRODUCT_ATTRIBUTE",
+                        before=before_value,
+                        after={
+                            "producto_id": str(producto_id),
+                            "atributo_id": str(value_entity.atributo_id),
+                            "activo": False,
+                        },
+                    )
 
             for attribute_id in null_optional_ids:
-                value_entity = session.exec(
+                optional_value_entity = session.exec(
                     select(ProductoAtributoValor).where(
                         col(ProductoAtributoValor.producto_id) == producto_id,
                         col(ProductoAtributoValor.atributo_id) == attribute_id,
                         col(ProductoAtributoValor.activo).is_(True),
                     )
                 ).first()
-                if value_entity is None:
+                if optional_value_entity is None:
                     continue
                 before_value = {
-                    "valor_string": value_entity.valor_string,
-                    "valor_integer": value_entity.valor_integer,
-                    "valor_decimal": str(value_entity.valor_decimal)
-                    if value_entity.valor_decimal is not None
+                    "valor_string": optional_value_entity.valor_string,
+                    "valor_integer": optional_value_entity.valor_integer,
+                    "valor_decimal": str(optional_value_entity.valor_decimal)
+                    if optional_value_entity.valor_decimal is not None
                     else None,
-                    "valor_boolean": value_entity.valor_boolean,
-                    "valor_date": value_entity.valor_date.isoformat()
-                    if value_entity.valor_date is not None
+                    "valor_boolean": optional_value_entity.valor_boolean,
+                    "valor_date": optional_value_entity.valor_date.isoformat()
+                    if optional_value_entity.valor_date is not None
                     else None,
                     "activo": True,
                 }
-                value_entity.activo = False
-                session.add(value_entity)
+                optional_value_entity.activo = False
+                session.add(optional_value_entity)
                 record_domain_change(
                     session,
                     entity="tbl_producto_atributo_valor",
-                    entity_id=value_entity.id,
+                    entity_id=optional_value_entity.id,
                     action="DEACTIVATE_NON_APPLICABLE_PRODUCT_ATTRIBUTE",
                     before=before_value,
-                    after={"producto_id": str(producto_id), "atributo_id": str(attribute_id), "activo": False},
+                    after={
+                        "producto_id": str(producto_id),
+                        "atributo_id": str(attribute_id),
+                        "activo": False,
+                    },
                 )
 
             from osiris.modules.inventario.producto.service_atributos import (
@@ -980,13 +1109,20 @@ class ProductoService(BaseService[Producto]):
                 {
                     "atributo": {
                         "id": atributo_id,
+                        "codigo": item.get("codigo"),
                         "nombre": item["atributo_nombre"],
                         "tipo_dato": tipo_dato_val,
+                        "unidad_id": item.get("unidad_id"),
+                        "unidad": item.get("unidad"),
                         "select_options": item.get("select_options"),
                         "catalog_id": item.get("catalog_id"),
                         "allow_negative": item.get("allow_negative", False),
                         "min_value": item.get("min_value"),
                         "max_value": item.get("max_value"),
+                        "restricciones": item.get("restricciones"),
+                        "categoria_origen_id": item.get("categoria_origen_id"),
+                        "categoria_origen": item.get("categoria_origen"),
+                        "heredado": item.get("heredado", False),
                     },
                     "valor": valores_por_atributo.get(atributo_id),
                     "obligatorio": item.get("obligatorio"),
@@ -994,6 +1130,27 @@ class ProductoService(BaseService[Producto]):
                 }
             )
         return merged
+
+    @staticmethod
+    def _categoria_ruta(session: Session, categoria_id: UUID | None) -> list[dict[str, Any]]:
+        from osiris.modules.inventario.categoria.entity import Categoria
+
+        ruta: list[dict[str, Any]] = []
+        visitados: set[UUID] = set()
+        categoria = session.get(Categoria, categoria_id) if categoria_id else None
+        while categoria is not None:
+            if categoria.id in visitados:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "CATEGORY_HIERARCHY_CYCLE",
+                        "message": "No se puede resolver la ruta de una jerarquía de categorías cíclica.",
+                    },
+                )
+            visitados.add(categoria.id)
+            ruta.append({"id": categoria.id, "nombre": categoria.nombre})
+            categoria = session.get(Categoria, categoria.parent_id) if categoria.parent_id else None
+        return list(reversed(ruta))
 
     def get_producto_completo(self, session: Session, producto_id: UUID) -> dict[str, Any]:
         """Obtiene un producto con todas sus relaciones completas según contrato"""
@@ -1026,6 +1183,15 @@ class ProductoService(BaseService[Producto]):
                     "id": cat.id,
                     "nombre": cat.nombre,
                 })
+
+        categoria_principal_id = producto.categoria_principal_id
+        categoria_principal = (
+            session.get(Categoria, categoria_principal_id) if categoria_principal_id else None
+        )
+        categoria_ruta = self._categoria_ruta(session, categoria_principal_id)
+        categoria_ids_efectivas = (
+            [categoria_principal_id] if categoria_principal_id else list(cat_ids)
+        )
 
         # Proveedores persona
         proveedores_persona = []
@@ -1064,7 +1230,9 @@ class ProductoService(BaseService[Producto]):
         atributos = []
         try:
             categoria_service = CategoriaService()
-            esqueleto = categoria_service.get_atributos_heredados_por_categorias(session, list(cat_ids))
+            esqueleto = categoria_service.get_atributos_heredados_por_categorias(
+                session, categoria_ids_efectivas
+            )
 
             # Valores persistidos
             valores_rows = session.exec(
@@ -1080,15 +1248,20 @@ class ProductoService(BaseService[Producto]):
             }
 
             atributos = self._merge_atributos_esqueleto_con_valores(esqueleto, valores_por_atributo)
-        except HTTPException as exc:
-            if (
-                isinstance(exc.detail, dict)
-                and exc.detail.get("code") == "CATEGORY_ATTRIBUTE_SCOPE_AMBIGUOUS"
-            ):
-                raise
-            atributos = []
-        except Exception:
-            atributos = []
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "No fue posible resolver atributos efectivos para producto %s",
+                producto_id,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "PRODUCT_ATTRIBUTE_RESOLUTION_FAILED",
+                    "message": "No fue posible resolver los atributos efectivos del producto.",
+                },
+            ) from exc
 
         # Impuestos deben pertenecer al perfil de la empresa resuelta.
         impuestos = []
@@ -1111,27 +1284,44 @@ class ProductoService(BaseService[Producto]):
         bodegas = []
         try:
             bodega_ids = session.exec(
-                select(ProductoBodega.bodega_id)
+                select(ProductoBodega.bodega_id, col(ProductoBodega.cantidad))
                 .where(ProductoBodega.producto_id == producto_id)
             ).all()
-            for bodega_id in bodega_ids:
+            for bodega_id, cantidad in bodega_ids:
                 bodega = session.get(Bodega, bodega_id)
                 if bodega:
                     bodegas.append({
+                        "id": bodega.id,
+                        "bodega_id": bodega.id,
                         "codigo_bodega": bodega.codigo_bodega,
                         "nombre_bodega": bodega.nombre_bodega,
+                        "cantidad": cantidad,
                     })
-        except Exception:
-            bodegas = []
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "PRODUCT_WAREHOUSE_RESOLUTION_FAILED",
+                    "message": "No fue posible resolver las bodegas del producto.",
+                },
+            ) from exc
 
         return {
             "id": producto.id,
             "nombre": producto.nombre,
+            "descripcion": producto.descripcion,
+            "codigo_barras": producto.codigo_barras,
             "tipo": producto.tipo,
             "pvp": producto.pvp,
             "cantidad": producto.cantidad,
             "permite_fracciones": producto.permite_fracciones,
             "casa_comercial": casa_comercial,
+            "categoria_principal": (
+                {"id": categoria_principal.id, "nombre": categoria_principal.nombre}
+                if categoria_principal
+                else None
+            ),
+            "categoria_ruta": categoria_ruta,
             "categorias": categorias,
             "proveedores_persona": proveedores_persona,
             "proveedores_sociedad": proveedores_sociedad,
@@ -1208,6 +1398,14 @@ class ProductoService(BaseService[Producto]):
                 "tipo": producto.tipo,
                 "pvp": producto.pvp,
                 "cantidad": producto.cantidad,
+                "categoria_principal": (
+                    {"id": categoria.id, "nombre": categoria.nombre}
+                    if (categoria := session.get(Categoria, producto.categoria_principal_id))
+                    else None
+                ),
+                "categoria_ruta": self._categoria_ruta(
+                    session, producto.categoria_principal_id
+                ),
                 "categorias": categorias_por_producto.get(producto.id, []),
             }
             for producto in productos

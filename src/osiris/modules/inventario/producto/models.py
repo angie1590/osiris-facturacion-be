@@ -22,6 +22,14 @@ class CategoriaNested(BaseOSModel):
     nombre: str
 
 
+class UnidadAtributoNested(BaseOSModel):
+    id: UUID
+    codigo: str
+    nombre: str
+    simbolo: Optional[str] = None
+    magnitud_codigo: Optional[str] = None
+
+
 class ProveedorPersonaNested(BaseOSModel):
     id: UUID
     nombres: str
@@ -37,13 +45,20 @@ class ProveedorSociedadNested(BaseOSModel):
 
 class AtributoNested(BaseOSModel):
     id: Optional[UUID] = None
+    codigo: Optional[str] = None
     nombre: str
     tipo_dato: Optional[str] = None
+    unidad_id: Optional[UUID] = None
+    unidad: Optional[UnidadAtributoNested] = None
     select_options: Optional[List[str]] = None
     catalog_id: Optional[UUID] = None
     allow_negative: bool = False
     min_value: Optional[Decimal] = None
     max_value: Optional[Decimal] = None
+    restricciones: Optional[dict[str, Any]] = None
+    categoria_origen_id: Optional[UUID] = None
+    categoria_origen: Optional[CategoriaNested] = None
+    heredado: bool = False
 
 
 class AtributoValorNested(BaseOSModel):
@@ -61,8 +76,11 @@ class ImpuestoNested(BaseOSModel):
 
 
 class BodegaNested(BaseOSModel):
+    id: UUID
+    bodega_id: UUID
     codigo_bodega: str
     nombre_bodega: str
+    cantidad: Decimal
 
 
 class ProductoCreate(BaseOSModel):
@@ -270,6 +288,8 @@ class ProductoListadoRead(BaseOSModel):
     tipo: TipoProductoEnum
     pvp: Decimal
     cantidad: Decimal
+    categoria_principal: Optional[CategoriaNested] = None
+    categoria_ruta: List[CategoriaNested] = []
     categorias: List[CategoriaNested] = []
 
 
@@ -277,11 +297,15 @@ class ProductoCompletoRead(BaseOSModel):
     """Contrato de respuesta completa de producto"""
     id: UUID
     nombre: str
+    descripcion: Optional[str] = None
+    codigo_barras: Optional[str] = None
     tipo: TipoProductoEnum
     pvp: Decimal
     cantidad: Decimal
     permite_fracciones: bool
     casa_comercial: Optional[CasaComercialNested] = None
+    categoria_principal: Optional[CategoriaNested] = None
+    categoria_ruta: List[CategoriaNested] = []
     categorias: List[CategoriaNested] = []
     proveedores_persona: List[ProveedorPersonaNested] = []
     proveedores_sociedad: List[ProveedorSociedadNested] = []

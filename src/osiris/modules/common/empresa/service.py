@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-from decimal import Decimal
 from typing import Any, cast
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -11,7 +9,7 @@ from uuid import UUID
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 from osiris.domain.service import BaseService
 from osiris.modules.common.sucursal.entity import Sucursal
-from osiris.modules.sri.impuesto_catalogo.entity import AplicaA, ImpuestoCatalogo, TipoImpuesto
+from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from .entity import Empresa, ModoEmisionEmpresa, RegimenTributario, TipoContribuyenteJuridico
 from .models import EmpresaRegimenModoRules
 from .repository import EmpresaRepository
@@ -85,73 +83,36 @@ class EmpresaService(BaseService[Empresa]):
             ) from exc
 
     @staticmethod
-    def _default_iva_zero_id(session: Session) -> str:
-        today = date.today()
-        matches = list(
-            session.exec(
-                select(ImpuestoCatalogo.id).where(
-                    col(ImpuestoCatalogo.tipo_impuesto) == TipoImpuesto.IVA,
-                    col(ImpuestoCatalogo.codigo_sri) == "0",
-                    col(ImpuestoCatalogo.descripcion) == "IVA 0%",
-                    col(ImpuestoCatalogo.porcentaje_iva) == Decimal("0.00"),
-                    col(ImpuestoCatalogo.clasificacion_iva).is_(None),
-                    col(ImpuestoCatalogo.aplica_a) == AplicaA.AMBOS,
-                    col(ImpuestoCatalogo.activo).is_(True),
-                    col(ImpuestoCatalogo.vigente_desde) <= today,
-                    col(ImpuestoCatalogo.vigente_hasta).is_(None)
-                    | (col(ImpuestoCatalogo.vigente_hasta) >= today),
-                )
-            ).all()
-        )
-        if len(matches) != 1:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "No existe una única opción vigente de IVA 0% en el catálogo. "
-                    "Corrija el catálogo tributario antes de guardar la empresa."
-                ),
-            )
-        return str(matches[0])
-
-    @staticmethod
     def _validate_company_taxes(session: Session, data: dict[str, Any]) -> None:
         if "impuesto_catalogo_ids" not in data:
             return
         raw_ids = data.get("impuesto_catalogo_ids") or []
         normalized = list(dict.fromkeys(str(value) for value in raw_ids))
-        if normalized:
-            try:
-                ids = [UUID(value) for value in normalized]
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail="Existe un impuesto empresarial inválido.") from exc
-            found = list(
-                session.exec(
-                    select(ImpuestoCatalogo.id).where(
-                        col(ImpuestoCatalogo.id).in_(ids),
-                        col(ImpuestoCatalogo.activo).is_(True),
-                    )
-                ).all()
+        if not normalized:
+            raise HTTPException(
+                status_code=400,
+                detail="Debe seleccionar al menos un impuesto para la empresa.",
             )
-            if len(found) != len(ids):
-                raise HTTPException(status_code=400, detail="Uno o más impuestos no existen o están inactivos.")
-            has_iva = session.exec(
+        try:
+            ids = [UUID(value) for value in normalized]
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Existe un impuesto empresarial inválido.",
+            ) from exc
+        found = list(
+            session.exec(
                 select(ImpuestoCatalogo.id).where(
                     col(ImpuestoCatalogo.id).in_(ids),
-                    col(ImpuestoCatalogo.tipo_impuesto) == TipoImpuesto.IVA,
                     col(ImpuestoCatalogo.activo).is_(True),
                 )
-            ).first() is not None
-        else:
-            has_iva = False
-
-        # Unit tests may pass a mocked session without a tax catalog. Runtime requests
-        # always use a real SQLModel Session and must resolve the canonical tax row.
-        if not has_iva and not isinstance(session, Session):
-            data["impuesto_catalogo_ids"] = normalized
-            return
-
-        if not has_iva:
-            normalized.append(EmpresaService._default_iva_zero_id(session))
+            ).all()
+        )
+        if len(found) != len(ids):
+            raise HTTPException(
+                status_code=400,
+                detail="Uno o más impuestos no existen o están inactivos.",
+            )
         data["impuesto_catalogo_ids"] = normalized
 
     def _build_validation_payload(

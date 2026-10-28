@@ -58,6 +58,22 @@ def _json_value(value: Any) -> Any:
     return value
 
 
+def product_category_preview_payload(
+    category_id: UUID,
+    attributes: list[Any] | None,
+) -> dict[str, Any]:
+    return {
+        "categoria_principal_id": str(category_id),
+        "atributos": [
+            {
+                "atributo_id": str(item.atributo_id),
+                "valor": _json_value(item.valor),
+            }
+            for item in (attributes or [])
+        ],
+    }
+
+
 def _category_chain_state(session: Session, category_id: UUID | None) -> list[dict[str, Any]]:
     chain: list[dict[str, Any]] = []
     visited: set[UUID] = set()
@@ -209,7 +225,7 @@ def _active_tax_state(session: Session, product_id: UUID) -> list[dict[str, Any]
     return state
 
 
-def _preview_state(
+def product_category_preview_state(
     session: Session,
     product: Producto,
     current_category_id: UUID | None,
@@ -501,8 +517,11 @@ def preview_product_category_change(
                 )
             )
 
-    payload_data = payload.model_dump(mode="json", exclude_unset=True)
-    state = _preview_state(
+    payload_data = product_category_preview_payload(
+        payload.categoria_principal_id,
+        payload.atributos,
+    )
+    state = product_category_preview_state(
         session,
         product,
         current_category_id,

@@ -24,14 +24,14 @@
 
 - [x] 4.1 Implementar preview firmado por operación, actor, producto, categoría destino, payload, estado y expiración.
 - [x] 4.2 Reportar valores conservados/desactivados, defaults explícitos, nuevos obligatorios y faltantes sin persistir.
-- [ ] 4.3 Confirmar bajo locks compartidos, validar token/estado de nuevo y desactivar EAV no aplicable sin borrar historia.
-- [ ] 4.4 Probar 409 stale, preview faltante, cambios concurrentes de catálogo y rollback total.
+- [x] 4.3 Confirmar bajo locks compartidos, validar token/estado de nuevo y desactivar EAV no aplicable sin borrar historia.
+- [x] 4.4 Probar 409 stale, preview faltante, concurrencia PostgreSQL real de catálogo y rollback total.
 
 ## 5. Gate 7.5 — Lectura canónica
 
-- [ ] 5.1 Alinear detalle/listado con categoría principal y ruta, atributos efectivos por UUID con unidad/origen/metadatos, impuestos y bodegas.
-- [ ] 5.2 Eliminar excepciones silenciosas en resolución crítica y exponer errores diagnósticos estables.
-- [ ] 5.3 Verificar OpenAPI y contratos de respuesta con pruebas BE/FE.
+- [x] 5.1 Alinear detalle/listado con categoría principal y ruta, atributos efectivos por UUID con unidad/origen/metadatos, impuestos y bodegas.
+- [x] 5.2 Eliminar excepciones silenciosas en resolución crítica y exponer errores diagnósticos estables.
+- [x] 5.3 Verificar OpenAPI y contratos de respuesta con pruebas BE/FE.
 
 ## 6. Gate 7.7 — Cutover de autoridad
 
@@ -44,5 +44,5 @@
 
 - [ ] 7.1 Cubrir alta/edición/preview con PostgreSQL, permisos, rollback, concurrencia y auditoría.
 - [ ] 7.2 Ejecutar suite BE completa, Ruff, mypy y pruebas PostgreSQL de migración/concurrencia.
-- [ ] 7.3 Ejecutar E2E real con productos activos y limpiar fixture por UUID restaurando conteos.
+- [x] 7.3 Ejecutar E2E real con productos activos y limpiar fixture por UUID restaurando conteos.
 - [ ] 7.4 Actualizar documentación/runbook/evidencia; verificar que no cambió stock, kardex, compras, ventas, cartera, SRI ni documentos.

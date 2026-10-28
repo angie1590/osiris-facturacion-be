@@ -17,6 +17,20 @@ def _code3() -> str:
 
 
 def crear_empresa_general(client: httpx.Client) -> str:
+    taxes_response = client.get("/api/v1/impuestos/activos-vigentes")
+    assert taxes_response.status_code == 200, taxes_response.text
+    iva_zero = next(
+        (
+            item
+            for item in taxes_response.json()
+            if item.get("tipo_impuesto") == "IVA"
+            and item.get("codigo_sri") == "0"
+            and item.get("descripcion") == "IVA 0%"
+        ),
+        None,
+    )
+    assert iva_zero is not None, "El fixture smoke debe sembrar IVA 0%."
+
     for _ in range(5):
         payload = {
             "ruc": generar_ruc_empresa(),
@@ -28,6 +42,7 @@ def crear_empresa_general(client: httpx.Client) -> str:
             "obligado_contabilidad": False,
             "regimen": "GENERAL",
             "modo_emision": "ELECTRONICO",
+            "impuesto_catalogo_ids": [iva_zero["id"]],
             "usuario_auditoria": "smoke",
         }
         response = client.post("/api/v1/empresas", json=payload)

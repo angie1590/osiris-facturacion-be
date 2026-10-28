@@ -319,7 +319,7 @@ def test_empresa_service_update_not_found_devuelve_none():
     repo.update.assert_not_called()
 
 
-def test_empresa_service_update_found_llama_repo_update():
+def test_empresa_service_update_found_llama_repo_update(monkeypatch):
     repo = MagicMock()
     repo.get.return_value = Empresa(
         razon_social="Empresa",
@@ -335,6 +335,7 @@ def test_empresa_service_update_found_llama_repo_update():
 
     s = EmpresaService()
     s.repo = repo
+    monkeypatch.setattr(EmpresaService, "_validate_company_taxes", staticmethod(lambda _session, _data: None))
 
     out = s.update(MagicMock(), item_id=uuid4(), data={"razon_social": "Y"})
     assert out == "UPDATED"
@@ -385,15 +386,17 @@ def test_empresa_service_create_rechaza_nota_venta_fisica_para_regimen_general()
     assert exc.value.status_code == 400
 
 
-def test_empresa_service_infiere_tipo_juridico_desde_legacy_create_01():
+def test_empresa_service_infiere_tipo_juridico_desde_legacy_create_01(monkeypatch):
     session = MagicMock()
     s = EmpresaService()
+    monkeypatch.setattr(EmpresaService, "_validate_company_taxes", staticmethod(lambda _session, _data: None))
 
     payload = {
         "razon_social": "Empresa",
         "ruc": "1104680138001",
         "direccion_matriz": "Dir",
         "tipo_contribuyente_id": "01",
+        "impuesto_catalogo_ids": [str(uuid4())],
         "usuario_auditoria": "tester",
     }
     s.validate_create(payload, session)
@@ -419,7 +422,7 @@ def test_empresa_service_no_infiere_tipo_juridico_desde_legacy_03():
     assert "tipo de contribuyente jurídico es obligatorio" in str(exc.value.detail).lower()
 
 
-def test_empresa_service_update_normaliza_resolucion_cuando_flag_false():
+def test_empresa_service_update_normaliza_resolucion_cuando_flag_false(monkeypatch):
     repo = MagicMock()
     db_obj = Empresa(
         razon_social="Empresa",
@@ -439,6 +442,7 @@ def test_empresa_service_update_normaliza_resolucion_cuando_flag_false():
 
     s = EmpresaService()
     s.repo = repo
+    monkeypatch.setattr(EmpresaService, "_validate_company_taxes", staticmethod(lambda _session, _data: None))
     session = MagicMock()
     out = s.update(
         session,
@@ -454,7 +458,7 @@ def test_empresa_service_update_normaliza_resolucion_cuando_flag_false():
     assert call_data["contribuyente_especial_resolucion"] is None
 
 
-def test_empresa_service_update_rechaza_tipo_juridico_ausente_no_inferible():
+def test_empresa_service_update_rechaza_tipo_juridico_ausente_no_inferible(monkeypatch):
     repo = MagicMock()
     db_obj = Empresa(
         razon_social="Empresa",
@@ -471,6 +475,7 @@ def test_empresa_service_update_rechaza_tipo_juridico_ausente_no_inferible():
 
     s = EmpresaService()
     s.repo = repo
+    monkeypatch.setattr(EmpresaService, "_validate_company_taxes", staticmethod(lambda _session, _data: None))
 
     with pytest.raises(HTTPException) as exc:
         s.update(MagicMock(), item_id=uuid4(), data={"telefono": "0999999999"})

@@ -68,6 +68,7 @@ from osiris.modules.inventario.producto.entity import (
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
 )
+from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.sri.impuesto_catalogo.entity import AplicaA, ImpuestoCatalogo, TipoImpuesto
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente
 
@@ -114,6 +115,7 @@ def test_engine():
         ProveedorSociedad.__table__,
         Atributo.__table__,
         CategoriaAtributo.__table__,
+        ProductoAtributoValor.__table__,
         MovimientoInventario.__table__,
         MovimientoInventarioDetalle.__table__,
         InventarioStock.__table__,

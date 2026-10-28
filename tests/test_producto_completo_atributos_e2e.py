@@ -24,6 +24,7 @@ from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.router import assign_category_attribute_permission
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
+from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import (
     Producto,
@@ -105,8 +106,11 @@ def _seed_data_for_producto_completo(session: Session):
 
     producto = Producto(
         nombre=f"Producto-{uuid4().hex[:6]}",
+        descripcion="Detalle de prueba",
+        codigo_barras=f"BC-{uuid4().hex[:8]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("99.99"),
+        categoria_principal_id=hija.id,
         usuario_auditoria="test",
     )
 
@@ -136,7 +140,7 @@ def _seed_data_for_producto_completo(session: Session):
                 orden=3,
                 usuario_auditoria="test",
             ),
-            ProductoCategoria(producto_id=producto.id, categoria_id=hija.id),
+                ProductoCategoria(producto_id=producto.id, categoria_id=raiz.id),
             ProductoAtributoValor(
                 producto_id=producto.id,
                 atributo_id=garantia.id,
@@ -147,7 +151,7 @@ def _seed_data_for_producto_completo(session: Session):
     )
     session.commit()
 
-    return producto.id, garantia.id, peso.id
+    return producto.id, garantia.id, peso.id, hija.id, raiz.id
 
 
 def _seed_data_conflicto_herencia_abuelo_padre_hijo(session: Session):
@@ -336,7 +340,7 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
     engine = _build_test_engine()
 
     with Session(engine) as session:
-        producto_id, garantia_id, peso_id = _seed_data_for_producto_completo(session)
+        producto_id, garantia_id, peso_id, categoria_id, raiz_id = _seed_data_for_producto_completo(session)
         company_id, role_id = _seed_company_scope(session, [producto_id])
 
     _install_test_dependencies(engine, role_id)
@@ -347,6 +351,14 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
             body = response.json()
 
             assert "atributos" in body
+            assert body["categoria_principal"]["id"] == str(categoria_id)
+            assert [item["id"] for item in body["categoria_ruta"]] == [str(raiz_id), str(categoria_id)]
+            assert body["categorias"][0]["id"] == str(raiz_id)
+            assert body["descripcion"] == "Detalle de prueba"
+            assert body["codigo_barras"].startswith("BC-")
+            assert body["bodegas"]
+            assert body["bodegas"][0]["bodega_id"] == body["bodegas"][0]["id"]
+            assert "cantidad" in body["bodegas"][0]
             atributos = body["atributos"]
             assert isinstance(atributos, list)
             assert len(atributos) == 2
@@ -358,6 +370,7 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
 
             garantia = by_id[str(garantia_id)]
             assert garantia["atributo"]["tipo_dato"] == "string"
+            assert garantia["atributo"]["categoria_origen"]["id"] == str(categoria_id)
             assert garantia["valor"] == "24 meses"
             assert garantia["obligatorio"] is True  # gana la categoría más cercana
 
@@ -365,6 +378,36 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
             assert peso["atributo"]["tipo_dato"] == "decimal"
             assert peso["valor"] is None
             assert peso["obligatorio"] is False
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
+
+
+def test_get_producto_completo_expone_error_estable_si_falla_resolucion_atributos(monkeypatch):
+    engine = _build_test_engine()
+    with Session(engine) as session:
+        producto_id, *_ = _seed_data_for_producto_completo(session)
+        company_id, role_id = _seed_company_scope(session, [producto_id])
+
+    def fail_attribute_resolution(*_args, **_kwargs):
+        raise RuntimeError("resolver unavailable")
+
+    monkeypatch.setattr(
+        CategoriaService,
+        "get_atributos_heredados_por_categorias",
+        fail_attribute_resolution,
+    )
+    _install_test_dependencies(engine, role_id)
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/api/v1/productos/{producto_id}",
+                headers={"X-Empresa-Id": str(company_id)},
+            )
+
+            assert response.status_code == 500
+            assert response.json()["detail"]["code"] == "PRODUCT_ATTRIBUTE_RESOLUTION_FAILED"
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
@@ -398,7 +441,7 @@ def test_get_producto_detalle_conflicto_herencia_abuelo_padre_hijo_gana_mas_espe
 def test_list_productos_retorna_metadata_basica_sin_detalle_de_atributos():
     engine = _build_test_engine()
     with Session(engine) as session:
-        producto_id, _garantia_id, _peso_id = _seed_data_for_producto_completo(session)
+        producto_id, _garantia_id, _peso_id, categoria_id, _raiz_id = _seed_data_for_producto_completo(session)
         company_id, role_id = _seed_company_scope(session, [producto_id])
 
     _install_test_dependencies(engine, role_id)
@@ -412,12 +455,49 @@ def test_list_productos_retorna_metadata_basica_sin_detalle_de_atributos():
             assert len(payload["items"]) >= 1
             item = payload["items"][0]
 
-            assert set(item.keys()) == {"id", "nombre", "tipo", "pvp", "cantidad", "categorias"}
+            assert {
+                "id",
+                "nombre",
+                "tipo",
+                "pvp",
+                "cantidad",
+                "categoria_principal",
+                "categoria_ruta",
+                "categorias",
+            }.issubset(item)
+            assert item["categoria_principal"]["id"] == item["categoria_ruta"][-1]["id"]
+            assert item["categoria_principal"]["id"] == str(categoria_id)
             assert isinstance(item["categorias"], list)
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
         clear_product_permission_overrides(app)
+
+
+def test_openapi_documenta_categoria_principal_ruta_y_metadatos_efectivos():
+    schemas = app.openapi()["components"]["schemas"]
+
+    assert {"categoria_principal", "categoria_ruta"}.issubset(
+        schemas["ProductoCompletoRead"]["properties"]
+    )
+    assert {"descripcion", "codigo_barras"}.issubset(
+        schemas["ProductoCompletoRead"]["properties"]
+    )
+    assert {"categoria_principal", "categoria_ruta"}.issubset(
+        schemas["ProductoListadoRead"]["properties"]
+    )
+    assert {
+        "codigo",
+        "unidad_id",
+        "unidad",
+        "restricciones",
+        "categoria_origen_id",
+        "categoria_origen",
+        "heredado",
+    }.issubset(schemas["AtributoNested"]["properties"])
+    assert {"id", "bodega_id", "cantidad"}.issubset(
+        schemas["BodegaNested"]["properties"]
+    )
 
 
 def test_contextual_remove_category_attribute_hides_product_and_deactivates_eav():

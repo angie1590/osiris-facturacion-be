@@ -185,7 +185,7 @@ def _iva_cero(*, vigente_desde: date = date(2023, 2, 1)) -> ImpuestoCatalogo:
     )
 
 
-def test_empresa_usa_iva_cero_si_create_omite_impuestos():
+def test_empresa_rechaza_perfil_vacio_si_create_omite_impuestos():
     engine = _engine()
 
     with Session(engine) as session:
@@ -198,12 +198,11 @@ def test_empresa_usa_iva_cero_si_create_omite_impuestos():
             "tipo_contribuyente_id": "01",
             "usuario_auditoria": "tester",
         }
-        EmpresaService().validate_create(payload, session)
+        with pytest.raises(HTTPException, match="al menos un impuesto"):
+            EmpresaService().validate_create(payload, session)
 
-        assert payload["impuesto_catalogo_ids"] == [str(iva_cero.id)]
 
-
-def test_empresa_con_ice_y_sin_iva_agrega_iva_cero():
+def test_empresa_permite_ice_sin_agregar_iva_no_seleccionado():
     engine = _engine()
 
     with Session(engine) as session:
@@ -226,7 +225,7 @@ def test_empresa_con_ice_y_sin_iva_agrega_iva_cero():
         payload = {"impuesto_catalogo_ids": [ice.id]}
         EmpresaService._validate_company_taxes(session, payload)
 
-        assert payload["impuesto_catalogo_ids"] == [str(ice.id), str(iva_cero.id)]
+        assert payload["impuesto_catalogo_ids"] == [str(ice.id)]
 
 
 def test_empresa_preserva_iva_elegido_sin_agregar_iva_cero():
@@ -255,14 +254,14 @@ def test_empresa_preserva_iva_elegido_sin_agregar_iva_cero():
         assert payload["impuesto_catalogo_ids"] == [str(iva_quince.id)]
 
 
-def test_empresa_rechaza_catalogo_sin_iva_cero_vigente():
+def test_empresa_rechaza_perfil_vacio_sin_agregar_iva_cero():
     engine = _engine()
 
     with Session(engine) as session:
         session.add(_iva_cero(vigente_desde=date(2030, 1, 1)))
         session.commit()
 
-        with pytest.raises(HTTPException, match="IVA 0%"):
+        with pytest.raises(HTTPException, match="al menos un impuesto"):
             EmpresaService._validate_company_taxes(
                 session,
                 {"impuesto_catalogo_ids": []},

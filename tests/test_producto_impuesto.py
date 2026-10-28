@@ -387,6 +387,36 @@ def test_resolver_empresa_usa_scope_autenticado(monkeypatch):
     session.exec.assert_not_called()
 
 
+def test_resolver_empresa_infiere_empresa_activa_unica_sin_producto(monkeypatch):
+    empresa_id = uuid4()
+    empresa = type("Company", (), {"id": empresa_id, "activo": True})()
+    session = MagicMock()
+    session.exec.return_value.all.return_value = [empresa_id]
+    session.get.return_value = empresa
+    monkeypatch.setattr(
+        "osiris.modules.inventario.producto_impuesto.scope.resolve_company_scope",
+        lambda: None,
+    )
+
+    assert resolve_product_tax_company(session) is empresa
+    assert session.get.call_args.args[1] == empresa_id
+
+
+def test_resolver_empresa_sin_scope_rechaza_cero_o_multiples_empresas(monkeypatch):
+    monkeypatch.setattr(
+        "osiris.modules.inventario.producto_impuesto.scope.resolve_company_scope",
+        lambda: None,
+    )
+    for company_ids in ([], [uuid4(), uuid4()]):
+        session = MagicMock()
+        session.exec.return_value.all.return_value = company_ids
+
+        with pytest.raises(HTTPException, match="Seleccione una empresa") as error:
+            resolve_product_tax_company(session)
+
+        assert error.value.status_code == 409
+
+
 def test_resolver_empresa_solo_infiere_scope_univoco(monkeypatch):
     empresa_id = uuid4()
     empresa = type("Company", (), {"id": empresa_id, "activo": True})()
@@ -399,6 +429,43 @@ def test_resolver_empresa_solo_infiere_scope_univoco(monkeypatch):
     )
 
     assert resolve_product_tax_company(session, uuid4()) is empresa
+
+
+def test_resolver_empresa_infiere_empresa_desde_impuesto_activo_sin_bodega(monkeypatch):
+    empresa_id = uuid4()
+    product_id = uuid4()
+    empresa = type("Company", (), {"id": empresa_id, "activo": True})()
+    warehouse_result = MagicMock()
+    warehouse_result.all.return_value = []
+    tax_result = MagicMock()
+    tax_result.all.return_value = [empresa_id]
+    session = MagicMock()
+    session.exec.side_effect = [warehouse_result, tax_result]
+    session.get.return_value = empresa
+    monkeypatch.setattr(
+        "osiris.modules.inventario.producto_impuesto.scope.resolve_company_scope",
+        lambda: None,
+    )
+
+    assert resolve_product_tax_company(session, product_id) is empresa
+
+
+def test_resolver_empresa_rechaza_conflicto_entre_bodega_e_impuesto(monkeypatch):
+    warehouse_result = MagicMock()
+    warehouse_result.all.return_value = [uuid4()]
+    tax_result = MagicMock()
+    tax_result.all.return_value = [uuid4()]
+    session = MagicMock()
+    session.exec.side_effect = [warehouse_result, tax_result]
+    monkeypatch.setattr(
+        "osiris.modules.inventario.producto_impuesto.scope.resolve_company_scope",
+        lambda: None,
+    )
+
+    with pytest.raises(HTTPException, match="empresa única") as error:
+        resolve_product_tax_company(session, uuid4())
+
+    assert error.value.status_code == 409
 
 
 def test_resolver_empresa_rechaza_scope_ambiguo(monkeypatch):
