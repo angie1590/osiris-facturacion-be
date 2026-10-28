@@ -79,3 +79,10 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - `tests/test_producto_integral_service.py` fuerza error en bridge, taxes, EAV y auditoría dentro del alta; en los cuatro casos se verifica rollback de Producto, FK/bridge, impuestos, EAV y eventos generados por el alta.
 - La edición same-category también prueba rollback de campos generales, EAV y audit ante valor inválido.
 - Suite BE final: 1312 passed, 80 skipped, 0 failed. Ruff y mypy focales limpios.
+
+## Gate 7.4.1/7.4.2 — Preview de cambio de categoría
+
+- `POST /api/v1/productos/{id}/previsualizar-cambio-categoria` usa `PRODUCTOS.actualizar`, signer `CatalogPreviewSigner` y liga operación, target, actor, payload, FK/bridge, cadenas jerárquicas (incluida hoja/B3), mappings efectivos, EAV activo e impuestos/configuración empresarial.
+- El preview es read-only y expone IDs/nombres/rutas de categorías, conservados, desactivados, defaults explícitos, faltantes, incompatibles y conteos de nuevos obligatorios. Atributos compartidos se relacionan por `atributo_id`; un valor de categoría origen se reporta como desactivado, no como desconocido.
+- `tests/test_producto_integral_service.py` comprueba impacto con shared/removed/default/required, propuesta inválida, `null` obligatorio, token rechazado al cambiar actor o mapping y snapshots sin cambios.
+- Suite focal servicio/RBAC: 123 passed; suite BE completa después del preview: 1313 passed, 80 skipped, 0 failed. Ruff, mypy y strict OpenSpec limpios. La confirmación del cambio de categoría sigue sin habilitarse hasta Gate 7.4.3.

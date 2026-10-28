@@ -18,6 +18,8 @@ from osiris.core.product_permissions import (
 from osiris.domain.schemas import PaginatedResponse
 from osiris.modules.inventario.producto.models import (
     ProductoCompletoRead,
+    ProductoCambioCategoriaPreviewInput,
+    ProductoCambioCategoriaPreviewResponse,
     ProductoCreate,
     ProductoIntegralCreate,
     ProductoIntegralUpdate,
@@ -29,6 +31,9 @@ from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoValorUpsert,
 )
 from osiris.modules.inventario.producto.service import ProductoService
+from osiris.modules.inventario.producto.category_preview import (
+    preview_product_category_change,
+)
 from osiris.modules.inventario.producto_impuesto.service import ProductoImpuestoService
 from osiris.modules.inventario.producto.entity import TipoProducto
 from osiris.modules.sri.impuesto_catalogo.models import ImpuestoCatalogoRead
@@ -121,6 +126,25 @@ def update_producto(
     if not producto:
         raise HTTPException(status_code=404, detail=f"Producto {producto_id} no encontrado")
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto_id))
+
+
+@router.post(
+    "/{producto_id}/previsualizar-cambio-categoria",
+    response_model=ProductoCambioCategoriaPreviewResponse,
+    dependencies=[Depends(update_product_permission)],
+)
+def previsualizar_cambio_categoria_producto(
+    producto_id: UUID,
+    payload: ProductoCambioCategoriaPreviewInput,
+    session: Session = Depends(get_session),
+    usuario: Usuario = Depends(update_product_permission),
+) -> ProductoCambioCategoriaPreviewResponse:
+    return preview_product_category_change(
+        session,
+        producto_id,
+        payload,
+        actor_id=usuario.id,
+    )
 
 
 @router.delete(

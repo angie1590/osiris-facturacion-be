@@ -463,6 +463,18 @@ def test_product_routes_use_effective_product_permissions() -> None:
         (producto_router, "/api/v1/productos/{producto_id}", "DELETE", delete_product_permission),
         (
             producto_router,
+            "/api/v1/productos/{producto_id}/previsualizar-cambio-categoria",
+            "POST",
+            update_product_permission,
+        ),
+        (
+            producto_router,
+            "/api/v1/productos/{producto_id}/previsualizar-cambio-categoria",
+            "POST",
+            update_product_permission,
+        ),
+        (
+            producto_router,
             "/api/v1/productos/{producto_id}/atributos",
             "PUT",
             update_product_permission,

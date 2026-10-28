@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import date
-from typing import Optional, List
+from typing import Any, Optional, List
 from uuid import UUID
 from decimal import Decimal
 from pydantic import StrictBool, StrictInt, StrictStr, field_validator
@@ -212,6 +212,40 @@ class ProductoIntegralUpdate(BaseOSModel):
         if len(attribute_ids) != len(set(attribute_ids)):
             raise ValueError("No se puede repetir un atributo en el payload integral.")
         return values
+
+
+class ProductoCambioCategoriaPreviewInput(BaseOSModel):
+    model_config = {"extra": "forbid"}
+
+    categoria_principal_id: UUID
+    atributos: List[ProductoAtributoIntegralInput] = []
+
+
+class ProductoCambioCategoriaImpacto(BaseOSModel):
+    atributo_id: UUID
+    codigo: str
+    nombre: str
+    valor: Any | None = None
+    motivo: str
+
+
+class ProductoCambioCategoriaPreviewResponse(BaseOSModel):
+    operacion: str
+    producto_id: UUID
+    categoria_actual_id: UUID | None
+    categoria_actual_ruta: str | None
+    categoria_destino_id: UUID
+    categoria_destino_ruta: str
+    resumen: str
+    conteos: dict[str, int]
+    conservados: List[ProductoCambioCategoriaImpacto]
+    desactivados: List[ProductoCambioCategoriaImpacto]
+    defaults: List[ProductoCambioCategoriaImpacto]
+    faltantes: List[ProductoCambioCategoriaImpacto]
+    incompatibles: List[ProductoCambioCategoriaImpacto]
+    requiere_confirmacion: bool
+    acciones_permitidas: List[str]
+    precondicion_preview: str
 
 
 class ProductoRead(BaseOSModel):

@@ -22,8 +22,8 @@
 
 ## 4. Gate 7.4 — Preview de cambio de categoría
 
-- [ ] 4.1 Implementar preview firmado por operación, actor, producto, categoría destino, payload, estado y expiración.
-- [ ] 4.2 Reportar valores conservados/desactivados, defaults explícitos, nuevos obligatorios y faltantes sin persistir.
+- [x] 4.1 Implementar preview firmado por operación, actor, producto, categoría destino, payload, estado y expiración.
+- [x] 4.2 Reportar valores conservados/desactivados, defaults explícitos, nuevos obligatorios y faltantes sin persistir.
 - [ ] 4.3 Confirmar bajo locks compartidos, validar token/estado de nuevo y desactivar EAV no aplicable sin borrar historia.
 - [ ] 4.4 Probar 409 stale, preview faltante, cambios concurrentes de catálogo y rollback total.
 

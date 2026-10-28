@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import func
 from osiris.core.audit import record_domain_change
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -33,7 +34,16 @@ from osiris.modules.inventario.producto.entity import (
 from osiris.modules.inventario.producto.models import ProductoIntegralCreate
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.inventario.producto.service import ProductoService
+from osiris.modules.inventario.producto.category_preview import (
+    OPERATION,
+    _preview_state,
+    preview_product_category_change,
+    product_preview_signer,
+)
 from osiris.modules.inventario.producto.models import ProductoIntegralUpdate
+from osiris.modules.inventario.producto.models import (
+    ProductoCambioCategoriaPreviewInput,
+)
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.modules.sri.impuesto_catalogo.entity import (
     AplicaA,
@@ -490,6 +500,262 @@ def test_update_integral_rolls_back_general_fields_eav_and_audit_on_invalid_valu
         ).one()
         assert value.valor_integer == 1600
         assert set(session.exec(select(AuditLog.id)).all()) == audit_before
+
+
+def test_category_change_preview_reports_impact_and_never_mutates():
+    engine = _engine()
+    with Session(engine) as session:
+        company_id, current_category_id, dpi_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+        current_category = session.get(Categoria, current_category_id)
+        current_category.parent_id = None
+        color = Atributo(
+            nombre="Color",
+            codigo=f"color_{uuid4().hex[:8]}",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        target_category = Categoria(
+            nombre="Teclados",
+            es_padre=False,
+            is_default=False,
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        material = Atributo(
+            nombre="Material",
+            codigo=f"material_{uuid4().hex[:8]}",
+            tipo_dato=TipoDato.STRING,
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        switch_type = Atributo(
+            nombre="Mecánico",
+            codigo=f"mecanico_{uuid4().hex[:8]}",
+            tipo_dato=TipoDato.BOOLEAN,
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        optional_select = Atributo(
+            nombre="Layout",
+            codigo=f"layout_{uuid4().hex[:8]}",
+            tipo_dato=TipoDato.SELECT,
+            select_options=["ANSI", "ISO"],
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        session.add_all([color, target_category, material, switch_type, optional_select])
+        session.flush()
+        session.add_all(
+            [
+                CategoriaAtributo(
+                    categoria_id=current_category_id,
+                    atributo_id=color.id,
+                    obligatorio=False,
+                    usuario_auditoria="fixture",
+                    activo=True,
+                ),
+                CategoriaAtributo(
+                    categoria_id=target_category.id,
+                    atributo_id=dpi_id,
+                    obligatorio=True,
+                    usuario_auditoria="fixture",
+                    activo=True,
+                ),
+                CategoriaAtributo(
+                    categoria_id=target_category.id,
+                    atributo_id=material.id,
+                    obligatorio=True,
+                    valor_default="Acero",
+                    usuario_auditoria="fixture",
+                    activo=True,
+                ),
+                CategoriaAtributo(
+                    categoria_id=target_category.id,
+                    atributo_id=switch_type.id,
+                    obligatorio=True,
+                    usuario_auditoria="fixture",
+                    activo=True,
+                ),
+                CategoriaAtributo(
+                    categoria_id=target_category.id,
+                    atributo_id=optional_select.id,
+                    obligatorio=False,
+                    usuario_auditoria="fixture",
+                    activo=True,
+                ),
+            ]
+        )
+        session.commit()
+        target_category_id = target_category.id
+        color_id = color.id
+        material_id = material.id
+        switch_id = switch_type.id
+        optional_select_id = optional_select.id
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            product = ProductoService().create_integral(
+                session,
+                ProductoIntegralCreate(
+                    nombre=f"Mouse {uuid4().hex[:8]}",
+                    tipo=TipoProducto.BIEN,
+                    pvp=Decimal("10.00"),
+                    categoria_principal_id=current_category_id,
+                    impuesto_catalogo_ids=[tax_id],
+                    atributos=[
+                        {"atributo_id": str(color_id), "valor": "Negro"},
+                    ],
+                ),
+                actor_id=uuid4(),
+            )
+            product_id = product.id
+            before_product = session.get(Producto, product_id).model_dump()
+            before_values = [
+                row.model_dump()
+                for row in session.exec(
+                    select(ProductoAtributoValor).where(
+                        ProductoAtributoValor.producto_id == product_id
+                    )
+                ).all()
+            ]
+            before_audit_count = session.scalar(select(func.count()).select_from(AuditLog))
+            preview_payload = ProductoCambioCategoriaPreviewInput(
+                categoria_principal_id=target_category_id,
+                atributos=[
+                    {"atributo_id": str(color_id), "valor": "Negro"},
+                ],
+            )
+            preview_actor = uuid4()
+            preview = preview_product_category_change(
+                session,
+                product_id,
+                preview_payload,
+                actor_id=preview_actor,
+            )
+
+            assert preview.requiere_confirmacion is True
+            assert preview.categoria_actual_id == current_category_id
+            assert preview.categoria_actual_ruta == "Mouse"
+            assert preview.categoria_destino_id == target_category_id
+            assert preview.categoria_destino_ruta == "Teclados"
+            assert preview.conteos["atributos_conservados"] == 1
+            assert preview.conteos["valores_desactivados"] == 1
+            assert preview.conteos["defaults_disponibles"] == 1
+            assert preview.conteos["nuevos_obligatorios"] == 2
+            assert preview.conteos["faltantes"] == 1
+            assert preview.conservados[0].atributo_id == dpi_id
+            assert preview.desactivados[0].atributo_id == color_id
+            assert preview.defaults[0].atributo_id == material_id
+            assert preview.defaults[0].valor == "Acero"
+            assert preview.faltantes[0].atributo_id == switch_id
+            assert len(preview.precondicion_preview) > 20
+            state = _preview_state(
+                session,
+                session.get(Producto, product_id),
+                current_category_id,
+                target_category_id,
+                [current_category_id],
+            )
+            payload_data = preview_payload.model_dump(mode="json", exclude_unset=True)
+            signer = product_preview_signer()
+            signer.verify(
+                preview.precondicion_preview,
+                operation=OPERATION,
+                target=f"/api/v1/productos/{product_id}/previsualizar-cambio-categoria",
+                actor=str(preview_actor),
+                payload=payload_data,
+                state=state,
+            )
+            with pytest.raises(HTTPException) as stale_actor:
+                signer.verify(
+                    preview.precondicion_preview,
+                    operation=OPERATION,
+                    target=f"/api/v1/productos/{product_id}/previsualizar-cambio-categoria",
+                    actor=str(uuid4()),
+                    payload=payload_data,
+                    state=state,
+                )
+            assert stale_actor.value.status_code == 409
+
+            material_mapping = session.exec(
+                select(CategoriaAtributo).where(
+                    CategoriaAtributo.categoria_id == target_category_id,
+                    CategoriaAtributo.atributo_id == material_id,
+                )
+            ).one()
+            material_mapping.valor_default = "Aluminio"
+            session.add(material_mapping)
+            session.flush()
+            stale_state = _preview_state(
+                session,
+                session.get(Producto, product_id),
+                current_category_id,
+                target_category_id,
+                [current_category_id],
+            )
+            with pytest.raises(HTTPException) as stale_catalog:
+                signer.verify(
+                    preview.precondicion_preview,
+                    operation=OPERATION,
+                    target=f"/api/v1/productos/{product_id}/previsualizar-cambio-categoria",
+                    actor=str(preview_actor),
+                    payload=payload_data,
+                    state=stale_state,
+                )
+            assert stale_catalog.value.status_code == 409
+            assert session.get(Producto, product_id).model_dump() == before_product
+            after_values = [
+                row.model_dump()
+                for row in session.exec(
+                    select(ProductoAtributoValor).where(
+                        ProductoAtributoValor.producto_id == product_id
+                    )
+                ).all()
+            ]
+            assert after_values == before_values
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == before_audit_count
+
+            invalid_preview = preview_product_category_change(
+                session,
+                product_id,
+                ProductoCambioCategoriaPreviewInput(
+                    categoria_principal_id=target_category_id,
+                    atributos=[
+                        {"atributo_id": str(switch_id), "valor": "maybe"},
+                        {"atributo_id": str(optional_select_id), "valor": "invalid"},
+                    ],
+                ),
+                actor_id=uuid4(),
+            )
+            assert invalid_preview.conteos["incompatibles"] == 2
+            assert invalid_preview.conteos["faltantes"] == 0
+            assert invalid_preview.incompatibles[0].atributo_id == switch_id
+            assert optional_select_id in {
+                item.atributo_id for item in invalid_preview.incompatibles
+            }
+
+            null_required_preview = preview_product_category_change(
+                session,
+                product_id,
+                ProductoCambioCategoriaPreviewInput(
+                    categoria_principal_id=target_category_id,
+                    atributos=[
+                        {"atributo_id": str(material_id), "valor": None},
+                    ],
+                ),
+                actor_id=uuid4(),
+            )
+            assert null_required_preview.conteos["defaults_disponibles"] == 0
+            assert null_required_preview.conteos["faltantes"] == 2
+            assert material_id in {
+                item.atributo_id for item in null_required_preview.faltantes
+            }
+    finally:
+        reset_current_company_id(company_token)
 
 
 @pytest.mark.parametrize("failure_point", ["bridge", "tax", "eav", "audit"])
