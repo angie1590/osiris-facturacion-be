@@ -73,3 +73,9 @@ Fecha: 2026-10-27. Entorno: PostgreSQL local de desarrollo en `127.0.0.1:5435`. 
 - `scripts/seed_data_structure.yaml` incluye la misma matriz para instalaciones nuevas. `RolModuloPermisoService` entrega también PRODUCTOS al administrador.
 - `tests/test_product_permissions_migration.py` e `tests/test_catalog_permissions.py`: 112 passed; suite BE completa tras actualizar fixtures de auth: 1308 passed, 80 skipped. Ruff/mypy limpios.
 - Las rutas de `producto_bodega` quedan como subflujo separado de inventario; no se modificaron reglas ni datos de stock en esta entrega.
+
+## Gate 7.3.5 — Rollback integral
+
+- `tests/test_producto_integral_service.py` fuerza error en bridge, taxes, EAV y auditoría dentro del alta; en los cuatro casos se verifica rollback de Producto, FK/bridge, impuestos, EAV y eventos generados por el alta.
+- La edición same-category también prueba rollback de campos generales, EAV y audit ante valor inválido.
+- Suite BE final: 1312 passed, 80 skipped, 0 failed. Ruff y mypy focales limpios.

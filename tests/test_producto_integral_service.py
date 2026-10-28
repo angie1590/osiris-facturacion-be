@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
+from osiris.core.audit import record_domain_change
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -488,3 +490,83 @@ def test_update_integral_rolls_back_general_fields_eav_and_audit_on_invalid_valu
         ).one()
         assert value.valor_integer == 1600
         assert set(session.exec(select(AuditLog.id)).all()) == audit_before
+
+
+@pytest.mark.parametrize("failure_point", ["bridge", "tax", "eav", "audit"])
+def test_create_integral_rolls_back_every_table_when_persistence_step_fails(
+    failure_point: str,
+):
+    engine = _engine()
+    with Session(engine) as session:
+        company_id, category_id, attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+
+    if failure_point in {"bridge", "tax"}:
+        table_name = (
+            "tbl_producto_categoria"
+            if failure_point == "bridge"
+            else "tbl_producto_impuesto"
+        )
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"CREATE TRIGGER reject_integral_{failure_point} "
+                f"BEFORE INSERT ON {table_name} "
+                "BEGIN SELECT RAISE(ABORT, 'forced persistence failure'); END"
+            )
+
+    values = (
+        [{"atributo_id": str(attribute_id), "valor": "not-an-integer"}]
+        if failure_point == "eav"
+        else []
+    )
+    payload = ProductoIntegralCreate.model_validate(
+        {
+            **_payload(category_id, tax_id).model_dump(),
+            "atributos": values,
+        }
+    )
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            def fail_tax_audit(audit_session, **kwargs):
+                if kwargs.get("action") == "CREATE_PRODUCT_TAX_PROFILE":
+                    raise RuntimeError("forced audit failure")
+                return record_domain_change(audit_session, **kwargs)
+
+            try:
+                if failure_point == "audit":
+                    with patch(
+                        "osiris.modules.inventario.producto.service.record_domain_change",
+                        side_effect=fail_tax_audit,
+                    ):
+                        with pytest.raises(Exception):
+                            ProductoService().create_integral(
+                                session, payload, actor_id=uuid4()
+                            )
+                else:
+                    with pytest.raises(Exception):
+                        ProductoService().create_integral(
+                            session, payload, actor_id=uuid4()
+                        )
+                assert not session.in_transaction()
+            except Exception:
+                raise
+    finally:
+        reset_current_company_id(company_token)
+
+    with Session(engine) as session:
+        assert session.exec(select(Producto)).all() == []
+        assert session.exec(select(ProductoCategoria)).all() == []
+        assert session.exec(select(ProductoImpuesto)).all() == []
+        assert session.exec(select(ProductoAtributoValor)).all() == []
+        assert session.exec(
+            select(AuditLog).where(AuditLog.accion.in_(
+                [
+                    "CREATE_PRODUCT_INTEGRAL",
+                    "SET_PRODUCT_PRIMARY_CATEGORY",
+                    "CREATE_PRODUCT_TAX_PROFILE",
+                    "UPSERT_PRODUCT_ATTRIBUTE_VALUE",
+                ]
+            ))
+        ).all() == []
