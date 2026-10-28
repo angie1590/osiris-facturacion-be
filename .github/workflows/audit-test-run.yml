@@ -50,6 +50,19 @@ jobs:
       - name: Install Poetry
         run: pip install "poetry>=2.0,<3"
 
+      - name: Prepare dependencies without unversioned FE-EC wheel
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("pyproject.toml")
+          text = path.read_text(encoding="utf-8")
+          dependency = '    "fe-ec @ lib/fe_ec-0.1.0-py3-none-any-3.whl",\n'
+          if dependency not in text:
+              raise SystemExit("Expected FE-EC path dependency was not found")
+          path.write_text(text.replace(dependency, ""), encoding="utf-8")
+          PY
+          poetry lock --no-interaction --regenerate
+
       - name: Install dependencies
         run: poetry install --no-interaction --no-root
 
