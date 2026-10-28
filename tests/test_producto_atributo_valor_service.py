@@ -235,6 +235,8 @@ def test_required_attribute_default_is_saved_when_upsert_omits_value():
         )
         session.add(category)
         session.flush()
+        product.categoria_principal_id = category.id
+        session.add(product)
         session.add_all(
             [
                 ProductoCategoria(producto_id=product.id, categoria_id=category.id),
@@ -275,6 +277,8 @@ def test_required_attribute_without_default_rejects_missing_value():
         )
         session.add(category)
         session.flush()
+        product.categoria_principal_id = category.id
+        session.add(product)
         session.add_all(
             [
                 ProductoCategoria(producto_id=product.id, categoria_id=category.id),
@@ -313,6 +317,8 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
         session.add(categoria)
         session.commit()
         session.refresh(categoria)
+        producto.categoria_principal_id = categoria.id
+        session.add(producto)
         session.add(
             ProductoCategoria(
                 producto_id=producto.id,
@@ -407,6 +413,8 @@ def test_upsert_valores_producto_rechaza_atributo_no_aplicable():
         session.refresh(categoria_motos)
         session.refresh(atributo_ram)
         session.refresh(atributo_cilindrada)
+        producto.categoria_principal_id = categoria_laptop.id
+        session.add(producto)
 
         session.add(
             ProductoCategoria(

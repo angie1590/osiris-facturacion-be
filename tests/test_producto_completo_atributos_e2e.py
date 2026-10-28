@@ -164,6 +164,7 @@ def _seed_data_conflicto_herencia_abuelo_padre_hijo(session: Session):
         nombre=f"Producto-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("55.00"),
+        categoria_principal_id=hijo.id,
         usuario_auditoria="test",
     )
 
@@ -200,6 +201,7 @@ def _seed_data_soft_delete_categoria_atributo(session: Session):
         nombre=f"Producto-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("49.90"),
+        categoria_principal_id=categoria.id,
         usuario_auditoria="test",
     )
 
@@ -240,6 +242,7 @@ def _seed_data_cambio_familia_producto(session: Session):
         nombre=f"Producto-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("799.00"),
+        categoria_principal_id=categoria_a.id,
         usuario_auditoria="test",
     )
 
@@ -353,7 +356,7 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
             assert "atributos" in body
             assert body["categoria_principal"]["id"] == str(categoria_id)
             assert [item["id"] for item in body["categoria_ruta"]] == [str(raiz_id), str(categoria_id)]
-            assert body["categorias"][0]["id"] == str(raiz_id)
+            assert [item["id"] for item in body["categorias"]] == [str(categoria_id)]
             assert body["descripcion"] == "Detalle de prueba"
             assert body["codigo_barras"].startswith("BC-")
             assert body["bodegas"]
@@ -378,6 +381,47 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
             assert peso["atributo"]["tipo_dato"] == "decimal"
             assert peso["valor"] is None
             assert peso["obligatorio"] is False
+
+            list_response = client.get(
+                "/api/v1/productos",
+                headers={"X-Empresa-Id": str(company_id)},
+            )
+            assert list_response.status_code == 200
+            listed = list_response.json()["items"]
+            assert len(listed) == 1
+            assert [item["id"] for item in listed[0]["categorias"]] == [str(categoria_id)]
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_current_usuario, None)
+        clear_product_permission_overrides(app)
+
+
+def test_get_producto_completo_rechaza_fk_ausente_aunque_exista_bridge_legacy():
+    engine = _build_test_engine()
+    with Session(engine) as session:
+        producto_id, *_ = _seed_data_for_producto_completo(session)
+        product = session.get(Producto, producto_id)
+        assert product is not None
+        product.categoria_principal_id = None
+        session.add(product)
+        session.commit()
+        assert session.exec(
+            select(ProductoCategoria).where(
+                ProductoCategoria.producto_id == producto_id
+            )
+        ).first() is not None
+        company_id, role_id = _seed_company_scope(session, [producto_id])
+
+    _install_test_dependencies(engine, role_id)
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/api/v1/productos/{producto_id}",
+                headers={"X-Empresa-Id": str(company_id)},
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "PRODUCT_CATEGORY_REQUIRED"
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)

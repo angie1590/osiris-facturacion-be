@@ -65,38 +65,74 @@ def test_producto_service_rechaza_categoria_temporal_o_inactiva(categoria, expec
         assert expected_message in str(error.value.detail)
 
 
-def test_producto_service_create_ok_y_asocia_multiples():
+def test_producto_service_create_rechaza_multiples_categorias_legacy():
     session = MagicMock()
     service = ProductoService()
     repo = MagicMock()
     service.repo = repo
+    categories = [uuid4(), uuid4()]
 
-    # Categorías hojas (sin hijos)
-    category_queries = []
-    for _ in range(2):
-        category_query = MagicMock()
-        category_query.first.return_value = _active_leaf_category()
-        category_queries.extend([category_query, _mock_exec_with_child_exists(False)])
-    session.exec.side_effect = category_queries
+    with pytest.raises(HTTPException) as error:
+        service.create(
+            session,
+            {
+                "nombre": f"Prod-{uuid4().hex[:8]}",
+                "categoria_ids": categories,
+            },
+        )
 
-    created_obj = Producto(nombre="X", usuario_auditoria="tester")
-    created_obj.id = uuid4()
-    repo.create.return_value = created_obj
+    assert error.value.status_code == 422
+    assert error.value.detail["code"] == "PRODUCT_MULTIPLE_CATEGORIES_NOT_SUPPORTED"
+    repo.create.assert_not_called()
 
-    categorias = [uuid4(), uuid4()]
-    attrs = [uuid4(), uuid4()]
 
-    data = {
-        "nombre": f"Prod-{uuid4().hex[:8]}",
-        "categoria_ids": categorias,
-        "atributo_ids": attrs,
-    }
+def test_producto_service_create_requiere_categoria_legacy():
+    session = MagicMock()
+    service = ProductoService()
+    service.repo = MagicMock()
 
-    out = service.create(session, data)
+    with pytest.raises(HTTPException) as error:
+        service.create(session, {"nombre": "Sin categoría"})
 
-    assert out is created_obj
-    repo.set_categorias.assert_called_once()
-    # Proveedores se gestionan vía triggers post-compra; no se setean aquí
+    assert error.value.status_code == 422
+    assert error.value.detail["code"] == "PRODUCT_CATEGORY_REQUIRED"
+    service.repo.create.assert_not_called()
+
+
+def test_producto_service_update_no_permite_vaciar_categoria_legacy():
+    session = MagicMock()
+    service = ProductoService()
+    service.repo = MagicMock()
+
+    with pytest.raises(HTTPException) as error:
+        service.update(session, uuid4(), {"categoria_ids": []})
+
+    assert error.value.status_code == 422
+    assert error.value.detail["code"] == "PRODUCT_CATEGORY_REQUIRED"
+    service.repo.update.assert_not_called()
+
+
+def test_producto_service_create_legacy_single_category_sets_fk_and_bridge():
+    session = MagicMock()
+    service = ProductoService()
+    repo = MagicMock()
+    service.repo = repo
+    category_id = uuid4()
+    category_query = MagicMock()
+    category_query.first.return_value = _active_leaf_category()
+    session.exec.side_effect = [category_query, _mock_exec_with_child_exists(False)]
+    created = Producto(nombre="Producto", usuario_auditoria="test")
+    created.id = uuid4()
+    repo.create.return_value = created
+
+    service.create(
+        session,
+        {"nombre": "Producto", "categoria_ids": [category_id]},
+    )
+
+    persisted_data = repo.create.call_args.args[1]
+    assert persisted_data["categoria_principal_id"] == category_id
+    repo.set_categorias.assert_called_once_with(session, created.id, [category_id])
 
 
 def test_producto_service_update_valida_hoja():
@@ -118,14 +154,16 @@ def test_producto_service_update_valida_hoja():
         service.update(session, db_obj.id, {"categoria_ids": [uuid4()]})
 
     # Caso válido: hoja
+    category_id = uuid4()
     category_query = MagicMock()
     category_query.first.return_value = _active_leaf_category()
     empty_children = _mock_exec_with_child_exists(False)
     previous_categories = MagicMock()
     previous_categories.all.return_value = []
     session.exec.side_effect = [category_query, empty_children, previous_categories]
-    service.update(session, db_obj.id, {"categoria_ids": [uuid4()]})
+    service.update(session, db_obj.id, {"categoria_ids": [category_id]})
     repo.set_categorias.assert_called()
+    assert repo.update.call_args.args[2]["categoria_principal_id"] == category_id
 
 
 def test_producto_cantidad_es_readonly_en_create():
@@ -135,7 +173,10 @@ def test_producto_cantidad_es_readonly_en_create():
     repo = MagicMock()
     service.repo = repo
 
-    session.exec.return_value = _mock_exec_with_child_exists(False)
+    category_id = uuid4()
+    category_query = MagicMock()
+    category_query.first.return_value = _active_leaf_category()
+    session.exec.side_effect = [category_query, _mock_exec_with_child_exists(False)]
 
     created_obj = Producto(nombre="Test", usuario_auditoria="tester", cantidad=0)
     created_obj.id = uuid4()
@@ -144,6 +185,7 @@ def test_producto_cantidad_es_readonly_en_create():
     # El usuario intenta pasar cantidad=100 pero el DTO no debe aceptarlo
     data = {
         "nombre": f"Prod-{uuid4().hex[:8]}",
+        "categoria_ids": [category_id],
         "cantidad": 100,  # Este campo debe ser ignorado
     }
 

@@ -14,7 +14,6 @@ from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.common.catalogo.entity import CatalogoValor
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.producto.entity import Producto
-from osiris.modules.inventario.producto.entity import ProductoCategoria
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoValor,
     ProductoAtributoValorUpsert,
@@ -238,11 +237,15 @@ class ProductoAtributoValorService:
         if not producto or not producto.activo:
             raise HTTPException(status_code=404, detail=f"Producto {producto_id} no encontrado")
 
-        categoria_ids = list(
-            session.exec(
-                select(ProductoCategoria.categoria_id).where(ProductoCategoria.producto_id == producto_id)
-            ).all()
-        )
+        if producto.categoria_principal_id is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "PRODUCT_CATEGORY_REQUIRED",
+                    "message": "El producto activo no tiene una categoría principal.",
+                },
+            )
+        categoria_ids = [producto.categoria_principal_id]
         atributos_aplicables = CategoriaService().get_atributos_heredados_por_categorias(session, categoria_ids)
         atributo_ids_aplicables = {item["atributo_id"] for item in atributos_aplicables}
         if len({item.atributo_id for item in valores}) != len(valores):

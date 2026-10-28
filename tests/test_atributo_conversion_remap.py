@@ -86,6 +86,9 @@ def test_type_change_converts_valid_values_and_preserves_invalid_values_for_rema
         )
         session.add(category)
         session.flush()
+        valid_product.categoria_principal_id = category.id
+        invalid_product.categoria_principal_id = category.id
+        session.add_all([valid_product, invalid_product])
         session.add_all(
             [
                 ProductoCategoria(
@@ -172,6 +175,7 @@ def test_required_attribute_conversion_blocks_incompatible_values_before_remap()
             nombre=f"Product-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=category.id,
             activo=True,
         )
         session.add_all([category, attribute, product])

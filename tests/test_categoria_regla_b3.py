@@ -196,6 +196,7 @@ def _seed_categoria_hoja_con_dos_productos(
         nombre=f"P1-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("10.00"),
+        categoria_principal_id=categoria_a.id,
         usuario_auditoria="test",
         activo=True,
     )
@@ -203,6 +204,7 @@ def _seed_categoria_hoja_con_dos_productos(
         nombre=f"P2-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("20.00"),
+        categoria_principal_id=categoria_a.id,
         usuario_auditoria="test",
         activo=True,
     )
@@ -269,6 +271,8 @@ def test_regla_b3_migra_productos_a_sin_clasificar_hermana_al_crear_hija():
         ).all()
         assert len(rows_unclassified) == 2
         assert {row.producto_id for row in rows_unclassified} == set(producto_ids)
+        products = session.exec(select(Producto).where(Producto.id.in_(producto_ids))).all()
+        assert {product.categoria_principal_id for product in products} == {sin_clasificar.id}
 
 
 def test_regla_b3_requires_confirmation_before_reclassifying_products():
@@ -495,6 +499,7 @@ def test_bucket_sin_clasificar_se_desactiva_al_quedar_sin_productos_activos():
             nombre=f"P-{uuid4().hex[:6]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=bucket.id,
             usuario_auditoria="test",
             activo=True,
         )

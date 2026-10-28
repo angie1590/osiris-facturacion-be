@@ -41,6 +41,8 @@ def test_light_product_listing_includes_categories_for_bulk_selection():
         session.add(category)
         session.add(product)
         session.flush()
+        product.categoria_principal_id = category.id
+        session.add(product)
         session.add(ProductoCategoria(producto_id=product.id, categoria_id=category.id))
         session.commit()
 

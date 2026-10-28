@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy import Column, Table
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from osiris.core.db import get_session
 from osiris.core.auth import get_current_usuario
@@ -103,6 +103,7 @@ def _seed_flujo_exito(session: Session):
         nombre=f"Producto-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("999.00"),
+        categoria_principal_id=hijo.id,
         usuario_auditoria="test",
     )
 
@@ -160,6 +161,7 @@ def _seed_flujo_rechazo(session: Session):
         nombre=f"Producto-{uuid4().hex[:6]}",
         tipo=TipoProducto.BIEN,
         pvp=Decimal("499.00"),
+        categoria_principal_id=hijo_a.id,
         usuario_auditoria="test",
     )
 
@@ -185,13 +187,17 @@ def _seed_flujo_rechazo(session: Session):
         ]
     )
     session.commit()
-    return producto.id, cilindrada.id, cilindrada.nombre
+    return producto.id, cilindrada.id, cilindrada.nombre, hijo_b.id
 
 
 def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
     engine = _build_test_engine()
     with Session(engine) as session:
         producto_id, garantia_id, color_id, pulgadas_id = _seed_flujo_exito(session)
+        bridge = session.exec(
+            select(ProductoCategoria).where(ProductoCategoria.producto_id == producto_id)
+        ).one()
+        session.delete(bridge)
         session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
         company = Empresa(
             razon_social="Empresa Test",
@@ -266,7 +272,12 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
 def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
     engine = _build_test_engine()
     with Session(engine) as session:
-        producto_id, cilindrada_id, cilindrada_nombre = _seed_flujo_rechazo(session)
+        producto_id, cilindrada_id, cilindrada_nombre, other_category_id = _seed_flujo_rechazo(session)
+        bridge = session.exec(
+            select(ProductoCategoria).where(ProductoCategoria.producto_id == producto_id)
+        ).one()
+        bridge.categoria_id = other_category_id
+        session.add(bridge)
         session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
         company = Empresa(
             razon_social="Empresa Test",

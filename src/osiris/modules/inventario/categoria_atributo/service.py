@@ -34,11 +34,10 @@ from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.categoria.resolver import (
-    ambiguous_product_category_scopes,
     get_effective_attributes_by_category,
     resolve_unambiguous_category_scope,
 )
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria
+from osiris.modules.inventario.producto.entity import Producto
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,
@@ -351,36 +350,11 @@ class CategoriaAtributoService:
                 ),
             )
         )
-        more_specific_assignment = aliased(
-            ProductoCategoria, name="backfill_more_specific_assignment"
-        )
-        has_more_specific_category = (
-            select(literal(1))
-            .select_from(more_specific_assignment)
-            .join(
-                descendants,
-                col(more_specific_assignment.categoria_id)
-                == descendants.c.descendant_id,
-            )
-            .where(
-                col(more_specific_assignment.producto_id)
-                == col(ProductoCategoria.producto_id),
-                descendants.c.source_category_id
-                == col(ProductoCategoria.categoria_id),
-                descendants.c.depth > 0,
-            )
-            .exists()
-        )
         eligible_products = (
-            select(col(ProductoCategoria.producto_id).label("producto_id"))
-            .join(
-                Producto,
-                col(Producto.id) == col(ProductoCategoria.producto_id),
-            )
+            select(col(Producto.id).label("producto_id"))
             .where(
-                col(ProductoCategoria.categoria_id).in_(effective_category_ids),
+                col(Producto.categoria_principal_id).in_(effective_category_ids),
                 col(Producto.activo).is_(True),
-                ~has_more_specific_category,
             )
             .distinct()
             .subquery()
@@ -390,34 +364,6 @@ class CategoriaAtributoService:
                 select(eligible_products.c.producto_id)
             ).all()
         )
-        product_category_rows = session.exec(
-            select(
-                col(ProductoCategoria.producto_id),
-                col(ProductoCategoria.categoria_id),
-            )
-            .join(Producto, col(Producto.id) == col(ProductoCategoria.producto_id))
-            .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
-            .where(
-                col(ProductoCategoria.producto_id).in_(candidate_product_ids),
-                col(Producto.activo).is_(True),
-                col(Categoria.activo).is_(True),
-            )
-        ).all()
-        ambiguous_products = ambiguous_product_category_scopes(
-            session, product_category_rows
-        )
-        if ambiguous_products:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "CATEGORY_ATTRIBUTE_SCOPE_AMBIGUOUS",
-                    "message": "El backfill no combinará categorías activas de ramas distintas.",
-                    "affected_ids": [str(product_id) for product_id in ambiguous_products],
-                    "acciones_permitidas": ["revisar_categorias"],
-                    "conteos": {"productos": len(ambiguous_products)},
-                },
-            )
-
         attribute = session.get(Atributo, categoria_atributo.atributo_id)
         existing_rows = session.exec(
             select(ProductoAtributoValor)
@@ -664,10 +610,9 @@ class CategoriaAtributoService:
         )
         candidate_ids = list(
             session.exec(
-                select(col(ProductoCategoria.producto_id))
-                .join(Producto, col(Producto.id) == col(ProductoCategoria.producto_id))
+                select(col(Producto.id))
                 .where(
-                    col(ProductoCategoria.categoria_id).in_(descendant_ids),
+                    col(Producto.categoria_principal_id).in_(descendant_ids),
                     col(Producto.activo).is_(True),
                 )
                 .distinct()
@@ -691,32 +636,21 @@ class CategoriaAtributoService:
 
         category_rows = session.exec(
             select(
-                col(ProductoCategoria.producto_id),
-                col(ProductoCategoria.categoria_id),
+                col(Producto.id),
+                col(Producto.categoria_principal_id),
             )
-            .join(Producto, col(Producto.id) == col(ProductoCategoria.producto_id))
-            .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
+            .join(Categoria, col(Categoria.id) == col(Producto.categoria_principal_id))
             .where(
-                col(ProductoCategoria.producto_id).in_(candidate_ids),
+                col(Producto.id).in_(candidate_ids),
                 col(Producto.activo).is_(True),
                 col(Categoria.activo).is_(True),
             )
         ).all()
-        ambiguous = ambiguous_product_category_scopes(session, category_rows)
-        if ambiguous:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "CATEGORY_ATTRIBUTE_SCOPE_AMBIGUOUS",
-                    "message": "La operación no combinará categorías activas de ramas distintas.",
-                    "affected_ids": [str(product_id) for product_id in ambiguous],
-                    "conteos": {"productos": len(ambiguous)},
-                    "acciones_permitidas": ["revisar_categorias"],
-                },
-            )
 
         categories_by_product: dict[UUID, set[UUID]] = defaultdict(set)
         for product_id, category_id in category_rows:
+            if category_id is None:
+                continue
             categories_by_product[product_id].add(category_id)
         effective_product_ids: list[UUID] = []
         for product_id, category_ids in categories_by_product.items():
@@ -1154,19 +1088,20 @@ class CategoriaAtributoService:
 
         category_rows = session.exec(
             select(
-                col(ProductoCategoria.producto_id),
-                col(ProductoCategoria.categoria_id),
+                col(Producto.id),
+                col(Producto.categoria_principal_id),
             )
-            .join(Producto, col(Producto.id) == col(ProductoCategoria.producto_id))
-            .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
+            .join(Categoria, col(Categoria.id) == col(Producto.categoria_principal_id))
             .where(
-                col(ProductoCategoria.producto_id).in_(affected_ids),
+                col(Producto.id).in_(affected_ids),
                 col(Producto.activo).is_(True),
                 col(Categoria.activo).is_(True),
             )
         ).all()
         categories_by_product: dict[UUID, set[UUID]] = defaultdict(set)
         for product_id, category_id in category_rows:
+            if category_id is None:
+                continue
             categories_by_product[product_id].add(category_id)
         category_scopes = {
             product_id: resolve_unambiguous_category_scope(

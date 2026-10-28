@@ -495,6 +495,7 @@ def test_categoria_atributo_create_backfill_requires_explicit_opt_in(
             nombre=f"Producto-1-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=categoria.id,
             activo=True,
             usuario_auditoria="test",
         )
@@ -502,6 +503,7 @@ def test_categoria_atributo_create_backfill_requires_explicit_opt_in(
             nombre=f"Producto-2-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("11.00"),
+            categoria_principal_id=categoria.id,
             activo=True,
             usuario_auditoria="test",
         )
@@ -585,6 +587,7 @@ def test_required_attribute_impact_reports_only_products_without_valid_eav():
                 nombre=f"Cámara {index}-{uuid4().hex[:6]}",
                 tipo=TipoProducto.BIEN,
                 pvp=Decimal("20.00"),
+                categoria_principal_id=category.id,
                 activo=True,
                 usuario_auditoria="test",
             )
@@ -640,12 +643,14 @@ def test_proposed_local_override_respects_more_specific_descendant_mapping():
             nombre=f"Laptop-{uuid4().hex[:6]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=target.id,
             activo=True,
         )
         deeper_product = Producto(
             nombre=f"Gaming-{uuid4().hex[:6]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=deeper.id,
             activo=True,
         )
         session.add_all(
@@ -713,6 +718,7 @@ def test_backfill_only_targets_products_where_mapping_is_effective():
             nombre=f"Parent-product-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=parent.id,
             activo=True,
             usuario_auditoria="test",
         )
@@ -720,6 +726,7 @@ def test_backfill_only_targets_products_where_mapping_is_effective():
             nombre=f"Child-product-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=child.id,
             activo=True,
             usuario_auditoria="test",
         )
@@ -727,6 +734,7 @@ def test_backfill_only_targets_products_where_mapping_is_effective():
             nombre=f"Inactive-product-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=parent.id,
             activo=False,
             usuario_auditoria="test",
         )
@@ -783,6 +791,7 @@ def test_backfill_reactivates_valid_inactive_eav_identity_without_overwriting_va
                 nombre=f"Device-{index}-{uuid4().hex[:6]}",
                 tipo=TipoProducto.BIEN,
                 pvp=Decimal("15.00"),
+                categoria_principal_id=category.id,
                 activo=True,
             )
             for index in range(2)
@@ -848,6 +857,7 @@ def test_local_removal_preserves_values_still_applicable_and_deactivates_displac
             nombre=f"Laptop-{uuid4().hex[:6]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=child.id,
             activo=True,
         )
         session.add_all([root, child, inherited_attribute, local_attribute, product])
@@ -929,7 +939,7 @@ def test_local_removal_preserves_values_still_applicable_and_deactivates_displac
     engine.dispose()
 
 
-def test_backfill_rejects_products_with_ambiguous_active_categories():
+def test_backfill_uses_primary_fk_when_legacy_bridge_is_ambiguous():
     engine = _build_test_engine()
     service = CategoriaAtributoService()
 
@@ -951,6 +961,7 @@ def test_backfill_rejects_products_with_ambiguous_active_categories():
             nombre=f"Ambiguous-product-{uuid4().hex[:8]}",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=sibling.id,
             activo=True,
             usuario_auditoria="test",
         )
@@ -979,14 +990,9 @@ def test_backfill_rejects_products_with_ambiguous_active_categories():
         )
         session.commit()
 
-        with pytest.raises(HTTPException) as error:
-            service._ejecutar_backfill_atributo(
-                session, parent_mapping, attribute.tipo_dato
-            )
-
-        assert error.value.status_code == 409
-        assert error.value.detail["code"] == "CATEGORY_ATTRIBUTE_SCOPE_AMBIGUOUS"
-        assert error.value.detail["affected_ids"] == [str(product.id)]
+        service._ejecutar_backfill_atributo(
+            session, parent_mapping, attribute.tipo_dato
+        )
         assert session.exec(
             select(ProductoAtributoValor).where(
                 ProductoAtributoValor.atributo_id == attribute.id
@@ -1020,6 +1026,7 @@ def test_update_optional_assignment_can_backfill_only_missing_product_values(
                 nombre=f"Producto-default-{index}-{uuid4().hex[:8]}",
                 tipo=TipoProducto.BIEN,
                 pvp=Decimal("10"),
+                categoria_principal_id=category.id,
                 activo=True,
                 usuario_auditoria="test",
             )

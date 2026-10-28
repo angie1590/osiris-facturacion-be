@@ -35,14 +35,14 @@
 
 ## 6. Gate 7.7 — Cutover de autoridad
 
-- [ ] 6.1 Ejecutar preflight en el entorno objetivo y resolver manualmente todos los conflictos accionables.
-- [ ] 6.2 Activar lectura FK y escritura única sincronizada; medir/validar que no existan divergencias bridge.
-- [ ] 6.3 Tras pruebas FE/E2E, rechazar múltiples `categoria_ids`, retirar fallback y activar restricción de producto activo con categoría.
+- [x] 6.1 Ejecutar preflight en el entorno objetivo y resolver manualmente todos los conflictos accionables.
+- [x] 6.2 Activar lectura FK y escritura única sincronizada; medir/validar que no existan divergencias bridge.
+- [x] 6.3 Tras pruebas FE/E2E, rechazar múltiples `categoria_ids`, retirar fallback y activar restricción de producto activo con categoría.
 - [ ] 6.4 Retirar bridge y GET legacy únicamente cuando inventario de consumidores y postflight confirmen cero usos.
 
 ## 7. Gate 7.8 — Verificación y cierre
 
 - [ ] 7.1 Cubrir alta/edición/preview con PostgreSQL, permisos, rollback, concurrencia y auditoría.
-- [ ] 7.2 Ejecutar suite BE completa, Ruff, mypy y pruebas PostgreSQL de migración/concurrencia.
+- [x] 7.2 Ejecutar suite BE completa, Ruff, mypy y pruebas PostgreSQL de migración/concurrencia.
 - [x] 7.3 Ejecutar E2E real con productos activos y limpiar fixture por UUID restaurando conteos.
 - [ ] 7.4 Actualizar documentación/runbook/evidencia; verificar que no cambió stock, kardex, compras, ventas, cartera, SRI ni documentos.

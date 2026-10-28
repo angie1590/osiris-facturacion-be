@@ -9,7 +9,7 @@ from sqlmodel import Session, col, select
 from osiris.core.db import SOFT_DELETE_INCLUDE_INACTIVE_OPTION
 from osiris.core.settings import get_settings
 from osiris.modules.inventario.categoria.entity import Categoria
-from osiris.modules.inventario.producto.entity import ProductoCategoria
+from osiris.modules.inventario.producto.entity import Producto
 from osiris.utils.catalog_preview import CatalogPreviewSigner
 
 
@@ -36,9 +36,9 @@ def b3_preview_state(
         ).first() is not None
         direct_product_ids = sorted(
             session.exec(
-                select(col(ProductoCategoria.producto_id))
-                .where(col(ProductoCategoria.categoria_id) == parent_id)
-                .order_by(col(ProductoCategoria.producto_id))
+                select(col(Producto.id))
+                .where(col(Producto.categoria_principal_id) == parent_id)
+                .order_by(col(Producto.id))
             ).all(),
             key=str,
         )

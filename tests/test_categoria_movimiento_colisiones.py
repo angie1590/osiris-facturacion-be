@@ -53,7 +53,7 @@ def _seed_collision(session: Session):
     moving.parent_id = old_parent.id
     source_attribute = Atributo(nombre="Color", codigo="color_source", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
     inherited_attribute = Atributo(nombre="color", codigo="color_destination", tipo_dato=TipoDato.STRING, usuario_auditoria="test", activo=True)
-    product = Producto(nombre=f"P-{uuid4().hex[:6]}", tipo=TipoProducto.BIEN, pvp=Decimal("10.00"), usuario_auditoria="test", activo=True)
+    product = Producto(nombre=f"P-{uuid4().hex[:6]}", tipo=TipoProducto.BIEN, pvp=Decimal("10.00"), categoria_principal_id=moving.id, usuario_auditoria="test", activo=True)
     session.add_all([source_attribute, inherited_attribute, product])
     session.flush()
     session.add_all(

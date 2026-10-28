@@ -119,7 +119,7 @@ class CategoriaService(BaseService[Categoria]):
         """
         if hasattr(session, "_mock_methods"):
             return
-        from osiris.modules.inventario.producto.entity import ProductoCategoria
+        from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria
 
         parent = session.exec(
             select(Categoria).where(col(Categoria.id) == parent_id).with_for_update()
@@ -170,6 +170,11 @@ class CategoriaService(BaseService[Categoria]):
             .where(col(ProductoCategoria.categoria_id) == parent_id)
             .values(categoria_id=sin_clasificar.id)
         )
+        session.exec(
+            update(Producto)
+            .where(col(Producto.categoria_principal_id) == parent_id)
+            .values(categoria_principal_id=sin_clasificar.id)
+        )
         session.flush()
         if isinstance(session, Session) and not hasattr(session, "_mock_methods"):
             record_domain_change(
@@ -193,13 +198,11 @@ class CategoriaService(BaseService[Categoria]):
 
     @staticmethod
     def _direct_product_ids(session: Session, parent_id: UUID) -> list[UUID]:
-        from osiris.modules.inventario.producto.entity import ProductoCategoria
+        from osiris.modules.inventario.producto.entity import Producto
 
         return list(
             session.exec(
-                select(ProductoCategoria.producto_id).where(
-                    col(ProductoCategoria.categoria_id) == parent_id
-                )
+                select(Producto.id).where(col(Producto.categoria_principal_id) == parent_id)
             ).all()
         )
 
@@ -223,7 +226,6 @@ class CategoriaService(BaseService[Categoria]):
         self.acquire_hierarchy_mutation_lock(session)
         from osiris.modules.inventario.producto.entity import (
             Producto,
-            ProductoCategoria,
         )
 
         for categoria_id in categoria_ids:
@@ -233,12 +235,8 @@ class CategoriaService(BaseService[Categoria]):
 
             producto_activo = session.exec(
                 select(Producto.id)
-                .join(
-                    ProductoCategoria,
-                    col(ProductoCategoria.producto_id) == col(Producto.id),
-                )
                 .where(
-                    col(ProductoCategoria.categoria_id) == categoria_id,
+                    col(Producto.categoria_principal_id) == categoria_id,
                     col(Producto.activo).is_(True),
                 )
                 .limit(1)
@@ -593,7 +591,7 @@ class CategoriaService(BaseService[Categoria]):
 
                 if collision_names and confirmar_limpieza_colision:
                     from osiris.modules.inventario.producto.entity import (
-                        ProductoCategoria,
+                        Producto,
                     )
                     from osiris.modules.inventario.producto.models_atributos import (
                         ProductoAtributoValor,
@@ -601,8 +599,8 @@ class CategoriaService(BaseService[Categoria]):
 
                     product_ids = set(
                         session.exec(
-                            select(ProductoCategoria.producto_id)
-                            .where(col(ProductoCategoria.categoria_id).in_(subtree_ids))
+                            select(Producto.id)
+                            .where(col(Producto.categoria_principal_id).in_(subtree_ids))
                             .distinct()
                         ).all()
                     )
@@ -724,7 +722,6 @@ class CategoriaService(BaseService[Categoria]):
         from osiris.modules.inventario.movimientos.models import InventarioStock
         from osiris.modules.inventario.producto.entity import (
             Producto,
-            ProductoCategoria,
         )
 
         try:
@@ -755,12 +752,8 @@ class CategoriaService(BaseService[Categoria]):
             productos = list(
                 session.exec(
                     select(Producto)
-                    .join(
-                        ProductoCategoria,
-                        col(ProductoCategoria.producto_id) == col(Producto.id),
-                    )
                     .where(
-                        col(ProductoCategoria.categoria_id) == item_id,
+                        col(Producto.categoria_principal_id) == item_id,
                         col(Producto.activo).is_(True),
                     )
                 ).all()
@@ -834,7 +827,6 @@ class CategoriaService(BaseService[Categoria]):
         from osiris.modules.inventario.producto.entity import (
             Producto,
             ProductoBodega,
-            ProductoCategoria,
         )
 
         empresa_id = resolve_company_scope()
@@ -853,11 +845,7 @@ class CategoriaService(BaseService[Categoria]):
         statement = (
             select(func.count(func.distinct(col(Producto.id))))
             .select_from(Producto)
-            .join(
-                ProductoCategoria,
-                col(ProductoCategoria.producto_id) == col(Producto.id),
-            )
-            .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
+            .join(Categoria, col(Categoria.id) == col(Producto.categoria_principal_id))
             .join(ProductoBodega, col(ProductoBodega.producto_id) == col(Producto.id))
             .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
             .where(
@@ -877,7 +865,6 @@ class CategoriaService(BaseService[Categoria]):
         from osiris.modules.inventario.producto.entity import (
             Producto,
             ProductoBodega,
-            ProductoCategoria,
         )
 
         empresa_id = resolve_company_scope()
@@ -896,10 +883,9 @@ class CategoriaService(BaseService[Categoria]):
         rows = session.exec(
             select(Producto, Categoria)
             .join(
-                ProductoCategoria,
-                col(ProductoCategoria.producto_id) == col(Producto.id),
+                Categoria,
+                col(Categoria.id) == col(Producto.categoria_principal_id),
             )
-            .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
             .join(ProductoBodega, col(ProductoBodega.producto_id) == col(Producto.id))
             .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
             .where(
@@ -1026,12 +1012,8 @@ class CategoriaService(BaseService[Categoria]):
 
                 temporary_categories = session.exec(
                     select(Categoria)
-                    .join(
-                        ProductoCategoria,
-                        col(ProductoCategoria.categoria_id) == col(Categoria.id),
-                    )
                     .where(
-                        col(ProductoCategoria.producto_id) == producto.id,
+                        col(Categoria.id) == producto.categoria_principal_id,
                         col(Categoria.is_default).is_(True),
                         col(Categoria.activo).is_(True),
                     )
@@ -1053,15 +1035,9 @@ class CategoriaService(BaseService[Categoria]):
                         detail="El producto no está pendiente dentro de la rama de la categoría destino.",
                     )
 
-                existing_ids = set(
-                    session.exec(
-                        select(ProductoCategoria.categoria_id).where(
-                            col(ProductoCategoria.producto_id) == producto.id
-                        )
-                    ).all()
-                )
-                existing_ids.discard(source.id)
-                existing_ids.add(target.id)
+                existing_ids = {target.id}
+                producto.categoria_principal_id = target.id
+                session.add(producto)
                 session.exec(
                     delete(ProductoCategoria).where(
                         col(ProductoCategoria.producto_id) == producto.id

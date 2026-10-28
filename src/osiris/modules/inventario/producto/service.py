@@ -204,10 +204,29 @@ class ProductoService(BaseService[Producto]):
                         return None
                 return getattr(obj, key, None)
 
-            categoria_ids: Optional[Iterable[UUID]] = _val(data, "categoria_ids")
+            raw_category_ids: Optional[Iterable[UUID]] = _val(data, "categoria_ids")
+            categoria_ids = list(raw_category_ids) if raw_category_ids is not None else None
+            if not categoria_ids:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_CATEGORY_REQUIRED",
+                        "message": "Debe seleccionar una categoría principal.",
+                    },
+                )
+            if categoria_ids is not None and len(categoria_ids) > 1:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_MULTIPLE_CATEGORIES_NOT_SUPPORTED",
+                        "message": "Un producto solo puede tener una categoría principal.",
+                    },
+                )
             if categoria_ids:
                 CategoriaService.acquire_hierarchy_mutation_lock(session)
             self._validate_leaf_categories(session, categoria_ids or [])
+            if categoria_ids:
+                data["categoria_principal_id"] = categoria_ids[0]
 
             # Validar impuestos antes de crear el producto
             impuesto_ids: Optional[Iterable[UUID]] = _val(data, "impuesto_catalogo_ids")
@@ -535,9 +554,15 @@ class ProductoService(BaseService[Producto]):
                         "message": "La categoría principal y la proyección legacy no coinciden.",
                     },
                 )
-            previous_category_id = product.categoria_principal_id or (
-                bridge_category_ids[0] if bridge_category_ids else None
-            )
+            previous_category_id = product.categoria_principal_id
+            if product.activo and previous_category_id is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "PRODUCT_CATEGORY_REQUIRED",
+                        "message": "El producto activo no tiene una categoría principal.",
+                    },
+                )
             category_changed = previous_category_id != payload.categoria_principal_id
             preview_input = None
             if category_changed:
@@ -817,6 +842,9 @@ class ProductoService(BaseService[Producto]):
         try:
             self._asegurar_producto_en_scope(session, item_id)
             product_before = session.get(Producto, item_id) if isinstance(session, Session) else None
+            previous_primary_category_id = (
+                product_before.categoria_principal_id if product_before is not None else None
+            )
             before_state = (
                 {
                     "nombre": product_before.nombre,
@@ -838,10 +866,28 @@ class ProductoService(BaseService[Producto]):
                         return None
                 return getattr(obj, key, None)
 
-            categoria_ids = _val(data, "categoria_ids")
+            raw_category_ids = _val(data, "categoria_ids")
+            categoria_ids = list(raw_category_ids) if raw_category_ids is not None else None
+            if categoria_ids == []:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_CATEGORY_REQUIRED",
+                        "message": "Un producto activo debe conservar una categoría principal.",
+                    },
+                )
+            if categoria_ids is not None and len(categoria_ids) > 1:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "PRODUCT_MULTIPLE_CATEGORIES_NOT_SUPPORTED",
+                        "message": "Un producto solo puede tener una categoría principal.",
+                    },
+                )
             if categoria_ids is not None:
                 CategoriaService.acquire_hierarchy_mutation_lock(session)
                 self._validate_leaf_categories(session, categoria_ids)
+                data["categoria_principal_id"] = categoria_ids[0] if categoria_ids else None
 
             tipo_producto = _val(data, "tipo")
             impuesto_ids = _val(data, "impuesto_catalogo_ids")
@@ -875,12 +921,10 @@ class ProductoService(BaseService[Producto]):
                 return None
             # asociaciones
             if categoria_ids is not None:
-                previous_category_ids = set(
-                    session.exec(
-                        select(ProductoCategoria.categoria_id).where(
-                            ProductoCategoria.producto_id == item_id
-                        )
-                    ).all()
+                previous_category_ids = (
+                    {previous_primary_category_id}
+                    if previous_primary_category_id is not None
+                    else set()
                 )
                 self.repo.set_categorias(session, item_id, categoria_ids)
                 if isinstance(session, Session):
@@ -985,12 +1029,10 @@ class ProductoService(BaseService[Producto]):
                     },
                 )
 
-            category_ids = set(
-                session.exec(
-                    select(ProductoCategoria.categoria_id).where(
-                        col(ProductoCategoria.producto_id) == item_id
-                    )
-                ).all()
+            category_ids = (
+                {product.categoria_principal_id}
+                if product.categoria_principal_id is not None
+                else set()
             )
             tax_ids = list(
                 session.exec(
@@ -1170,27 +1212,26 @@ class ProductoService(BaseService[Producto]):
             if casa:
                 casa_comercial = {"nombre": casa.nombre}
 
-        # Categorías con ruta
-        categorias = []
-        cat_ids = session.exec(
-            select(ProductoCategoria.categoria_id)
-            .where(ProductoCategoria.producto_id == producto_id)
-        ).all()
-        for cat_id in cat_ids:
-            cat = session.get(Categoria, cat_id)
-            if cat:
-                categorias.append({
-                    "id": cat.id,
-                    "nombre": cat.nombre,
-                })
-
         categoria_principal_id = producto.categoria_principal_id
+        if producto.activo and categoria_principal_id is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "PRODUCT_CATEGORY_REQUIRED",
+                    "message": "El producto activo no tiene una categoría principal.",
+                },
+            )
         categoria_principal = (
             session.get(Categoria, categoria_principal_id) if categoria_principal_id else None
         )
+        categorias = (
+            [{"id": categoria_principal.id, "nombre": categoria_principal.nombre}]
+            if categoria_principal is not None
+            else []
+        )
         categoria_ruta = self._categoria_ruta(session, categoria_principal_id)
         categoria_ids_efectivas = (
-            [categoria_principal_id] if categoria_principal_id else list(cat_ids)
+            [categoria_principal_id] if categoria_principal_id else []
         )
 
         # Proveedores persona
@@ -1376,15 +1417,20 @@ class ProductoService(BaseService[Producto]):
         productos = list(session.exec(stmt_base.offset(offset).limit(limit)).all())
         product_ids = [producto.id for producto in productos]
         categorias_por_producto: dict[UUID, list[dict[str, object]]] = {}
-        if product_ids:
+        primary_category_ids = {
+            producto.categoria_principal_id
+            for producto in productos
+            if producto.categoria_principal_id is not None
+        }
+        if primary_category_ids:
             categoria_rows = session.exec(
-                select(ProductoCategoria.producto_id, Categoria.id, Categoria.nombre)
-                .join(Categoria, col(Categoria.id) == col(ProductoCategoria.categoria_id))
+                select(Producto.id, Categoria.id, Categoria.nombre)
+                .join(Categoria, col(Categoria.id) == col(Producto.categoria_principal_id))
                 .where(
-                    col(ProductoCategoria.producto_id).in_(product_ids),
+                    col(Producto.id).in_(product_ids),
+                    col(Producto.categoria_principal_id).in_(primary_category_ids),
                     col(Categoria.activo).is_(True),
                 )
-                .order_by(col(Categoria.nombre).asc())
             ).all()
             for producto_id, categoria_id, categoria_nombre in categoria_rows:
                 categorias_por_producto.setdefault(producto_id, []).append(

@@ -50,6 +50,7 @@ def _category_product(session: Session, *, stock: Decimal = Decimal("0")):
         tipo=TipoProducto.BIEN,
         pvp=Decimal("10.00"),
         cantidad=stock,
+        categoria_principal_id=category.id,
         usuario_auditoria="test",
         activo=True,
     )

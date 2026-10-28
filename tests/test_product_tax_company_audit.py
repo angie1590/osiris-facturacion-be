@@ -203,8 +203,8 @@ def test_pending_recategorization_count_is_scoped_to_authenticated_company():
             usuario_auditoria="test",
             activo=True,
         )
-        pending_product = Producto(nombre="Pendiente A", tipo=TipoProducto.BIEN, usuario_auditoria="test", activo=True)
-        regular_product = Producto(nombre="Regular B", tipo=TipoProducto.BIEN, usuario_auditoria="test", activo=True)
+        pending_product = Producto(nombre="Pendiente A", tipo=TipoProducto.BIEN, categoria_principal_id=bucket.id, usuario_auditoria="test", activo=True)
+        regular_product = Producto(nombre="Regular B", tipo=TipoProducto.BIEN, categoria_principal_id=regular.id, usuario_auditoria="test", activo=True)
         session.add_all([warehouse_a, warehouse_b, bucket, regular, pending_product, regular_product])
         session.flush()
         session.add_all(
@@ -274,7 +274,7 @@ def test_recategorize_moves_company_product_and_deactivates_empty_bucket():
             usuario_auditoria="test",
             activo=True,
         )
-        product = Producto(nombre="Equipo A", tipo=TipoProducto.BIEN, usuario_auditoria="test", activo=True)
+        product = Producto(nombre="Equipo A", tipo=TipoProducto.BIEN, categoria_principal_id=bucket.id, usuario_auditoria="test", activo=True)
         session.add_all([bucket, target, product])
         session.flush()
         session.add_all(
@@ -305,6 +305,8 @@ def test_recategorize_moves_company_product_and_deactivates_empty_bucket():
         ).all()
         assert bucket.activo is False
         assert category_ids == [target.id]
+        session.refresh(product)
+        assert product.categoria_principal_id == target.id
 
 
 def test_purchase_and_sale_snapshots_read_only_the_selected_company_profile():

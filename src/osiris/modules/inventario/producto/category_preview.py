@@ -280,9 +280,15 @@ def preview_product_category_change(
             .order_by(col(ProductoCategoria.categoria_id))
         ).all()
     )
-    current_category_id = product.categoria_principal_id or (
-        bridge_category_ids[0] if len(bridge_category_ids) == 1 else None
-    )
+    current_category_id = product.categoria_principal_id
+    if product.activo and current_category_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "PRODUCT_CATEGORY_REQUIRED",
+                "message": "El producto activo no tiene una categoría principal.",
+            },
+        )
     if len(bridge_category_ids) > 1 or (
         product.categoria_principal_id is not None
         and bridge_category_ids != [product.categoria_principal_id]

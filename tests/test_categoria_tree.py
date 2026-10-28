@@ -272,6 +272,7 @@ def test_required_attribute_preview_reports_missing_and_rejects_stale_confirmati
             nombre="Cámara sin sensor",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=category.id,
             activo=True,
         )
         session.add_all([category, attribute, product])
@@ -374,6 +375,7 @@ def test_required_assignment_needs_opt_in_backfill_to_create_missing_values() ->
             nombre="Monitor sin panel",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=category.id,
             activo=True,
         )
         session.add_all([category, attribute, product])
@@ -447,6 +449,7 @@ def test_local_removal_preview_and_delete_preserve_ancestral_eav_value() -> None
             nombre="Laptop 16GB",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=child.id,
             activo=True,
         )
         session.add_all([child, attribute, product])
@@ -526,6 +529,7 @@ def test_local_removal_with_pending_remap_is_blocked_without_mutation() -> None:
             nombre="Cámara remapeo",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=category.id,
             activo=True,
         )
         session.add_all([category, attribute, product])
@@ -1117,6 +1121,7 @@ def test_b3_confirmation_rejects_changed_product_classification() -> None:
             nombre="Concurrent product",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=parent.id,
             activo=True,
         )
         session.add(added_product)

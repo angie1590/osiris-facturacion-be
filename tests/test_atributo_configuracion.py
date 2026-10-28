@@ -221,6 +221,7 @@ def test_new_required_attribute_preview_is_read_only_and_backfill_is_atomic():
             nombre="Televisor pendiente",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("20.00"),
+            categoria_principal_id=category.id,
             activo=True,
         )
         session.add_all([category, product])
