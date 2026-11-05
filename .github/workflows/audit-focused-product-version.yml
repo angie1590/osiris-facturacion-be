@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENVIRONMENT: test
+      DATABASE_URL: sqlite:///./audit-test.db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: osiris_test
       SRI_MODO_EMISION: NO_ELECTRONICO
       FEEC_TIPO_EMISION: "1"
       FEEC_REGIMEN: GENERAL
