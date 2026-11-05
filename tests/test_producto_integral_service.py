@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from time import monotonic
+from typing import Any
 from uuid import uuid4
 from unittest.mock import patch
 
@@ -498,6 +499,74 @@ def test_update_integral_preserves_attributes_when_collection_is_omitted():
             )
         ).one()
         assert value.valor_integer == 1600
+
+
+@pytest.mark.parametrize("change_kind", ["eav", "tax"])
+def test_integral_related_only_change_advances_product_timestamp(change_kind: str):
+    engine = _engine()
+    with Session(engine) as session:
+        company_id, category_id, attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+        replacement_tax_id = None
+        if change_kind == "tax":
+            replacement_tax = ImpuestoCatalogo(
+                tipo_impuesto=TipoImpuesto.IVA,
+                codigo_tipo_impuesto="2",
+                codigo_sri="4",
+                descripcion=f"IVA 15 {uuid4().hex[:8]}",
+                vigente_desde=date.today(),
+                aplica_a=AplicaA.BIEN,
+                porcentaje_iva=Decimal("15"),
+                usuario_auditoria="fixture",
+                activo=True,
+            )
+            session.add(replacement_tax)
+            session.flush()
+            company = session.get(Empresa, company_id)
+            assert company is not None
+            company.impuesto_catalogo_ids = [str(tax_id), str(replacement_tax.id)]
+            replacement_tax_id = replacement_tax.id
+        session.commit()
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            product = ProductoService().create_integral(
+                session, _payload(category_id, tax_id), actor_id=uuid4()
+            )
+            product_id = product.id
+            old_version = datetime(2026, 1, 1)
+            session.execute(
+                sa.update(Producto)
+                .where(Producto.id == product_id)
+                .values(actualizado_en=old_version)
+            )
+            session.commit()
+
+        update_data: dict[str, Any] = {
+            "categoria_principal_id": category_id,
+            "expected_updated_at": old_version,
+        }
+        if change_kind == "eav":
+            update_data["atributos"] = [
+                {"atributo_id": str(attribute_id), "valor": 2400}
+            ]
+        else:
+            assert replacement_tax_id is not None
+            update_data["impuesto_catalogo_ids"] = [replacement_tax_id]
+
+        with Session(engine) as session:
+            updated = ProductoService().update_integral(
+                session,
+                product_id,
+                ProductoIntegralUpdate(**update_data),
+                actor_id=uuid4(),
+            )
+            assert updated is not None
+            assert updated.actualizado_en > old_version
+    finally:
+        reset_current_company_id(company_token)
 
 
 def test_integral_update_rejects_stale_product_version_without_mutation_or_audit():
