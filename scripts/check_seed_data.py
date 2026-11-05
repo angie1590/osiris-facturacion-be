@@ -12,7 +12,6 @@ from osiris.modules.inventario.producto.entity import Producto
 from osiris.modules.inventario.bodega.entity import Bodega
 from osiris.modules.common.empresa.entity import Empresa
 from osiris.modules.common.sucursal.entity import Sucursal
-from osiris.modules.inventario.producto.entity import ProductoCategoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.inventario.categoria.entity import Categoria
@@ -59,7 +58,9 @@ def main():
     sucursales = session.exec(select(func.count(Sucursal.id))).first()
     bodegas = session.exec(select(func.count(Bodega.id))).first()
     productos = session.exec(select(func.count(Producto.id))).first()
-    producto_categorias = session.exec(select(func.count(ProductoCategoria.id))).first()
+    productos_con_categoria = session.exec(
+        select(func.count(Producto.id)).where(Producto.categoria_principal_id.is_not(None))
+    ).first()
     categoria_atributos = session.exec(select(func.count(CategoriaAtributo.id))).first()
     categoria_atributos_activos = session.exec(
         select(func.count(CategoriaAtributo.id)).where(CategoriaAtributo.activo.is_(True))
@@ -71,7 +72,7 @@ def main():
     print(f"  - Sucursales: {sucursales}")
     print(f"  - Bodegas: {bodegas}")
     print(f"  - Productos: {productos}")
-    print(f"  - ProductoCategoria: {producto_categorias}")
+    print(f"  - Productos con categoría principal: {productos_con_categoria}")
     print(f"  - CategoriaAtributo: {categoria_atributos} (activos={categoria_atributos_activos})")
     print(f"  - ProductoAtributoValor: {producto_atributo_valores}")
 

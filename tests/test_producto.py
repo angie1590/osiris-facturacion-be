@@ -112,7 +112,7 @@ def test_producto_service_update_no_permite_vaciar_categoria_legacy():
     service.repo.update.assert_not_called()
 
 
-def test_producto_service_create_legacy_single_category_sets_fk_and_bridge():
+def test_producto_service_create_legacy_single_category_sets_fk_only():
     session = MagicMock()
     service = ProductoService()
     repo = MagicMock()
@@ -132,7 +132,7 @@ def test_producto_service_create_legacy_single_category_sets_fk_and_bridge():
 
     persisted_data = repo.create.call_args.args[1]
     assert persisted_data["categoria_principal_id"] == category_id
-    repo.set_categorias.assert_called_once_with(session, created.id, [category_id])
+    repo.set_categorias.assert_not_called()
 
 
 def test_producto_service_update_valida_hoja():
@@ -158,11 +158,9 @@ def test_producto_service_update_valida_hoja():
     category_query = MagicMock()
     category_query.first.return_value = _active_leaf_category()
     empty_children = _mock_exec_with_child_exists(False)
-    previous_categories = MagicMock()
-    previous_categories.all.return_value = []
-    session.exec.side_effect = [category_query, empty_children, previous_categories]
+    session.exec.side_effect = [category_query, empty_children]
     service.update(session, db_obj.id, {"categoria_ids": [category_id]})
-    repo.set_categorias.assert_called()
+    repo.set_categorias.assert_not_called()
     assert repo.update.call_args.args[2]["categoria_principal_id"] == category_id
 
 

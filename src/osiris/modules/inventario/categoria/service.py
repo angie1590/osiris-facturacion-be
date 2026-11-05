@@ -119,7 +119,7 @@ class CategoriaService(BaseService[Categoria]):
         """
         if hasattr(session, "_mock_methods"):
             return
-        from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria
+        from osiris.modules.inventario.producto.entity import Producto
 
         parent = session.exec(
             select(Categoria).where(col(Categoria.id) == parent_id).with_for_update()
@@ -165,11 +165,6 @@ class CategoriaService(BaseService[Categoria]):
                 after={"activo": True},
             )
 
-        session.exec(
-            update(ProductoCategoria)
-            .where(col(ProductoCategoria.categoria_id) == parent_id)
-            .values(categoria_id=sin_clasificar.id)
-        )
         session.exec(
             update(Producto)
             .where(col(Producto.categoria_principal_id) == parent_id)
@@ -935,11 +930,9 @@ class CategoriaService(BaseService[Categoria]):
     def recategorizar_productos(
         self, session: Session, assignments: list[Any]
     ) -> dict[str, int]:
-        from sqlalchemy import delete
         from osiris.modules.inventario.producto.entity import (
             Producto,
             ProductoBodega,
-            ProductoCategoria,
         )
 
         empresa_id = resolve_company_scope()
@@ -1038,20 +1031,9 @@ class CategoriaService(BaseService[Categoria]):
                 existing_ids = {target.id}
                 producto.categoria_principal_id = target.id
                 session.add(producto)
-                session.exec(
-                    delete(ProductoCategoria).where(
-                        col(ProductoCategoria.producto_id) == producto.id
-                    )
-                )
-                for categoria_id in existing_ids:
-                    session.add(
-                        ProductoCategoria(
-                            producto_id=producto.id, categoria_id=categoria_id
-                        )
-                    )
                 record_domain_change(
                     session,
-                    entity="tbl_producto_categoria",
+                    entity="tbl_producto",
                     entity_id=producto.id,
                     action="RECATEGORIZE_PRODUCT",
                     before={

@@ -19,7 +19,6 @@ from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtribut
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.producto.entity import (
     Producto,
-    ProductoCategoria,
     TipoProducto,
 )
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
@@ -41,7 +40,6 @@ def _build_test_engine() -> Engine:
             Categoria.__table__,
             CategoriaAtributo.__table__,
             Producto.__table__,
-            ProductoCategoria.__table__,
             ImpuestoCatalogo.__table__,
         ],
     )
@@ -126,25 +124,23 @@ def test_reactivate_category_preserves_identity_and_independent_product_states()
             nombre="Producto independiente",
             tipo=TipoProducto.BIEN,
             pvp=Decimal("10.00"),
+            categoria_principal_id=category.id,
             activo=False,
         )
         session.add_all([category, product])
-        session.flush()
-        assignment = ProductoCategoria(
-            producto_id=product.id, categoria_id=category.id
-        )
-        session.add(assignment)
         session.commit()
         category_id = category.id
-        assignment_id = assignment.id
+        product_id = product.id
 
         reactivated = CategoriaService().reactivate(session, category_id)
 
         assert reactivated is not None
         assert reactivated.id == category_id
         assert reactivated.activo is True
-        assert session.get(Producto, product.id).activo is False
-        assert session.get(ProductoCategoria, assignment_id) is not None
+        persisted_product = session.get(Producto, product_id)
+        assert persisted_product is not None
+        assert persisted_product.activo is False
+        assert persisted_product.categoria_principal_id == category_id
         events = session.exec(
             select(AuditLog).where(AuditLog.accion == "REACTIVATE_CATEGORY")
         ).all()
@@ -210,14 +206,6 @@ def _seed_categoria_hoja_con_dos_productos(
     )
 
     session.add_all([categoria_a, producto_1, producto_2])
-    session.flush()
-
-    session.add_all(
-        [
-            ProductoCategoria(producto_id=producto_1.id, categoria_id=categoria_a.id),
-            ProductoCategoria(producto_id=producto_2.id, categoria_id=categoria_a.id),
-        ]
-    )
     session.commit()
     session.refresh(categoria_a)
     return categoria_a, [producto_1.id, producto_2.id]
@@ -257,20 +245,6 @@ def test_regla_b3_migra_productos_a_sin_clasificar_hermana_al_crear_hija():
         assert sin_clasificar.is_default is True
         assert categoria_b.parent_id == sin_clasificar.parent_id
 
-        rows_parent = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == categoria_a.id
-            )
-        ).all()
-        assert len(rows_parent) == 0
-
-        rows_unclassified = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == sin_clasificar.id
-            )
-        ).all()
-        assert len(rows_unclassified) == 2
-        assert {row.producto_id for row in rows_unclassified} == set(producto_ids)
         products = session.exec(select(Producto).where(Producto.id.in_(producto_ids))).all()
         assert {product.categoria_principal_id for product in products} == {sin_clasificar.id}
 
@@ -291,12 +265,8 @@ def test_regla_b3_requires_confirmation_before_reclassifying_products():
         assert not session.exec(
             select(Categoria).where(Categoria.parent_id == parent.id)
         ).all()
-        assignments = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.producto_id.in_(product_ids)
-            )
-        ).all()
-        assert all(assignment.categoria_id == parent.id for assignment in assignments)
+        products = session.exec(select(Producto).where(Producto.id.in_(product_ids))).all()
+        assert {product.categoria_principal_id for product in products} == {parent.id}
 
 
 def test_regla_b3_reutiliza_sin_clasificar_en_siguiente_hija():
@@ -304,7 +274,7 @@ def test_regla_b3_reutiliza_sin_clasificar_en_siguiente_hija():
     service = CategoriaService()
 
     with Session(engine) as session:
-        categoria_a, _ = _seed_categoria_hoja_con_dos_productos(session)
+        categoria_a, product_ids = _seed_categoria_hoja_con_dos_productos(session)
 
         service.create(
             session,
@@ -335,12 +305,8 @@ def test_regla_b3_reutiliza_sin_clasificar_en_siguiente_hija():
         assert len(defaults) == 1
         assert defaults[0].nombre == "Sin clasificar"
 
-        rows_parent = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == categoria_a.id
-            )
-        ).all()
-        assert len(rows_parent) == 0
+        products = session.exec(select(Producto).where(Producto.id.in_(product_ids))).all()
+        assert {product.categoria_principal_id for product in products} == {defaults[0].id}
 
 
 @pytest.mark.parametrize("operation", ["create", "move"])
@@ -386,10 +352,8 @@ def test_regla_b3_reutiliza_bucket_inactivo_y_respeta_unidad_de_trabajo(operatio
         ).all()
         assert [(row.id, row.activo) for row in defaults] == [(bucket_id, True)]
         assert defaults[0].created_by == "original"
-        links = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.categoria_id == bucket_id)
-        ).all()
-        assert {link.producto_id for link in links} == set(product_ids)
+        products = session.exec(select(Producto).where(Producto.id.in_(product_ids))).all()
+        assert {product.categoria_principal_id for product in products} == {bucket_id}
         events = session.exec(
             select(AuditLog).where(AuditLog.accion == "CATEGORY_B3_REACTIVATE")
         ).all()
@@ -412,10 +376,8 @@ def test_regla_b3_reutiliza_bucket_inactivo_y_respeta_unidad_de_trabajo(operatio
                 assert session.get(Categoria, child_id) is None
             else:
                 assert session.get(Categoria, candidate_id).parent_id is None
-            links = session.exec(
-                select(ProductoCategoria).where(ProductoCategoria.categoria_id == parent_id)
-            ).all()
-            assert {link.producto_id for link in links} == set(product_ids)
+            products = session.exec(select(Producto).where(Producto.id.in_(product_ids))).all()
+            assert {product.categoria_principal_id for product in products} == {parent_id}
             assert {row.id for row in session.exec(select(AuditLog)).all()} == original_audit_ids
 
 
@@ -460,20 +422,8 @@ def test_regla_b3_update_mueve_categoria_bajo_hoja_con_productos_y_migra_a_sin_c
         assert sin_clasificar is not None
         assert sin_clasificar.parent_id == updated.parent_id
 
-        rows_x = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == categoria_x.id
-            )
-        ).all()
-        assert len(rows_x) == 0
-
-        rows_unclassified = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == sin_clasificar.id
-            )
-        ).all()
-        assert len(rows_unclassified) == 2
-        assert {row.producto_id for row in rows_unclassified} == set(producto_ids)
+        products = session.exec(select(Producto).where(Producto.id.in_(producto_ids))).all()
+        assert {product.categoria_principal_id for product in products} == {sin_clasificar.id}
 
 
 def test_bucket_sin_clasificar_se_desactiva_al_quedar_sin_productos_activos():
@@ -505,7 +455,6 @@ def test_bucket_sin_clasificar_se_desactiva_al_quedar_sin_productos_activos():
         )
         session.add_all([parent, bucket, product])
         session.flush()
-        session.add(ProductoCategoria(producto_id=product.id, categoria_id=bucket.id))
         session.commit()
 
         service.desactivar_defaults_vacios(session, {bucket.id})

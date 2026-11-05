@@ -13,7 +13,7 @@ from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.movimientos.models import InventarioStock
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 
 
@@ -30,7 +30,6 @@ def _engine():
             CasaComercial.__table__,
             Categoria.__table__,
             Producto.__table__,
-            ProductoCategoria.__table__,
             InventarioStock.__table__,
             ImpuestoCatalogo.__table__,
         ],
@@ -56,7 +55,6 @@ def _category_product(session: Session, *, stock: Decimal = Decimal("0")):
     )
     session.add_all([category, product])
     session.flush()
-    session.add(ProductoCategoria(producto_id=product.id, categoria_id=category.id))
     session.commit()
     return category, product
 

@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from osiris.core.db import get_session
 from osiris.modules.inventario.producto.entity import (
     Producto,
-    ProductoCategoria,
     ProductoImpuesto,
     ProductoBodega,
 )
@@ -61,17 +60,17 @@ def main():
     print(f"   Descripción: {producto.descripcion[:60] if producto.descripcion else 'Sin descripción'}...")
 
     # Categorías
-    cat_rels = session.exec(
-        select(ProductoCategoria).where(ProductoCategoria.producto_id == producto.id)
-    ).all()
-
-    print(f"\n📁 Categorías asignadas: {len(cat_rels)}")
-    categoria_ids = []
-    for rel in cat_rels:
-        cat = session.get(Categoria, rel.categoria_id)
-        if cat:
-            categoria_ids.append(cat.id)
-            print(f"   • {cat.nombre} (es_padre={cat.es_padre})")
+    categoria_ids = (
+        [producto.categoria_principal_id]
+        if producto.categoria_principal_id is not None
+        else []
+    )
+    categoria = (
+        session.get(Categoria, producto.categoria_principal_id)
+        if producto.categoria_principal_id is not None
+        else None
+    )
+    print(f"\n📁 Categoría principal: {categoria.nombre if categoria else 'Sin categoría'}")
 
     # CategoriaAtributo (directo) por cada categoria del producto
     print("\n🧩 CategoriaAtributo directos por categoría:")

@@ -33,9 +33,9 @@ from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.router import router as categoria_router
 from osiris.modules.inventario.producto.entity import (
     Producto,
-    ProductoCategoria,
     TipoProducto,
 )
+from tests.utils.legacy_product_category import ProductoCategoria
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,
@@ -417,13 +417,15 @@ def test_categoria_atributo_service_list_paginated():
     session.exec.assert_called_once()
 
 
-def test_legacy_category_attribute_write_routes_return_gone_and_get_is_deprecated():
+def test_legacy_category_attribute_routes_return_gone():
     app = FastAPI()
     app.include_router(categoria_atributo_router)
     mapping_id = uuid4()
 
     with TestClient(app) as client:
         responses = [
+            client.get("/api/v1/categorias-atributos"),
+            client.get(f"/api/v1/categorias-atributos/{mapping_id}"),
             client.post("/api/v1/categorias-atributos", json={"legacy": True}),
             client.put(
                 f"/api/v1/categorias-atributos/{mapping_id}",
@@ -432,7 +434,13 @@ def test_legacy_category_attribute_write_routes_return_gone_and_get_is_deprecate
             client.delete(f"/api/v1/categorias-atributos/{mapping_id}"),
         ]
 
-    for response in responses:
+    for response in responses[:2]:
+        assert response.status_code == 410
+        assert response.json() == {
+            "code": "LEGACY_CATEGORY_ATTRIBUTE_READ_DISABLED",
+            "message": "Utilice las rutas contextuales de categorías y atributos.",
+        }
+    for response in responses[2:]:
         assert response.status_code == 410
         assert response.json() == {
             "code": "LEGACY_CATEGORY_ATTRIBUTE_WRITE_DISABLED",
@@ -442,6 +450,7 @@ def test_legacy_category_attribute_write_routes_return_gone_and_get_is_deprecate
     openapi = build_gold_standard_openapi(app)["paths"]
     for path in ("/api/v1/categorias-atributos", "/api/v1/categorias-atributos/{id}"):
         assert openapi[path]["get"]["deprecated"] is True
+        assert openapi[path]["get"]["responses"]["410"]
     assert openapi["/api/v1/categorias-atributos"]["post"]["responses"]["410"]
     assert openapi["/api/v1/categorias-atributos/{id}"]["put"]["responses"]["410"]
     assert openapi["/api/v1/categorias-atributos/{id}"]["delete"]["responses"]["410"]

@@ -17,7 +17,6 @@ from osiris.modules.inventario.atributo.entity import Atributo
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.producto.entity import (
     Producto,
-    ProductoCategoria,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
 )
@@ -340,20 +339,16 @@ def seed():
                 tipo="BIEN",
                 pvp=Decimal("2999.00"),
                 casa_comercial_id=casa.id,
+                categoria_ids=[laptop.id],
                 impuesto_catalogo_ids=[iva.id, ice.id],  # OBLIGATORIO: incluir impuestos
                 usuario_auditoria=USUARIO,
             )
             producto = prod_service.create(session, producto_data)
+        elif producto.categoria_principal_id is None:
+            producto.categoria_principal_id = laptop.id
+            session.add(producto)
+            session.commit()
         created = producto is not None
-
-        # Asociaciones categorías (solo laptop hoja)
-        if not session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.producto_id == producto.id,
-                ProductoCategoria.categoria_id == laptop.id,
-            )
-        ).first():
-            session.add(ProductoCategoria(producto_id=producto.id, categoria_id=laptop.id))
 
         # Asociaciones proveedores persona
         for pid in proveedores_persona_ids:

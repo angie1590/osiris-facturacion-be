@@ -8,7 +8,7 @@ from sqlmodel import SQLModel, Session, create_engine
 from osiris.modules.common.audit_log.entity import AuditLog
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.inventario.producto.service import ProductoService
 
 
@@ -25,7 +25,6 @@ def test_light_product_listing_includes_categories_for_bulk_selection():
             CasaComercial.__table__,
             Categoria.__table__,
             Producto.__table__,
-            ProductoCategoria.__table__,
         ],
     )
 
@@ -43,7 +42,6 @@ def test_light_product_listing_includes_categories_for_bulk_selection():
         session.flush()
         product.categoria_principal_id = category.id
         session.add(product)
-        session.add(ProductoCategoria(producto_id=product.id, categoria_id=category.id))
         session.commit()
 
         rows, meta = ProductoService().list_paginated_completo(

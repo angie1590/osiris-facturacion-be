@@ -65,9 +65,7 @@ def build_report(session: Session, *, today: date | None = None) -> dict[str, An
     totals: Counter[str] = Counter()
     for assignment, product, tax in assignment_rows:
         company_ids = sorted(companies_by_product.get(product.id, set()), key=str)
-        if not assignment.activo:
-            status = "INACTIVE_ASSIGNMENT"
-        elif not company_ids:
+        if not company_ids:
             status = "NO_ACTIVE_WAREHOUSE_SCOPE"
         elif len(company_ids) > 1:
             status = "MULTIPLE_COMPANY_SCOPE"
@@ -76,10 +74,16 @@ def build_report(session: Session, *, today: date | None = None) -> dict[str, An
             configured_ids = {str(value) for value in (company.impuesto_catalogo_ids or [])} if company else set()
             if not company or not company.activo:
                 status = "COMPANY_MISSING_OR_INACTIVE"
-            elif not _is_tax_current(tax, as_of):
-                status = "TAX_INACTIVE_OR_OUT_OF_DATE"
+            elif not tax.activo:
+                status = "INACTIVE_TAX"
+            elif tax.vigente_desde > as_of or (
+                tax.vigente_hasta is not None and tax.vigente_hasta < as_of
+            ):
+                status = "EXPIRED_TAX"
             elif str(tax.id) not in configured_ids:
                 status = "TAX_NOT_CONFIGURED_FOR_COMPANY"
+            elif not assignment.activo:
+                status = "INACTIVE_ASSIGNMENT"
             elif not _is_compatible(product.tipo, tax.aplica_a):
                 status = "TAX_PRODUCT_TYPE_MISMATCH"
             else:

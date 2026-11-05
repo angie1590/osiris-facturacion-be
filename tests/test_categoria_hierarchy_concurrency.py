@@ -13,18 +13,12 @@ from sqlmodel import Session, col, select
 
 from osiris.core.catalog_lock import CATALOG_MUTATION_LOCK_KEY
 from osiris.modules.common.audit_log.entity import AuditLog
+from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.service import CategoriaService
-from osiris.modules.inventario.producto.entity import ProductoCategoria
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
+from tests.utils.legacy_product_category import ProductoCategoria
 from osiris.modules.inventario.producto.service import ProductoService
-
-
-def _product_stub(metadata: sa.MetaData) -> sa.Table:
-    return sa.Table(
-        "tbl_producto",
-        metadata,
-        sa.Column("id", sa.Uuid(), primary_key=True),
-    )
 
 
 @pytest.fixture
@@ -45,8 +39,7 @@ def postgresql_catalog_engine() -> Iterator[sa.Engine]:
         connection.execute(sa.schema.CreateSchema(schema))
     engine = admin.execution_options(schema_translate_map={None: schema})
     metadata = sa.MetaData()
-    _product_stub(metadata)
-    for model in (Categoria, ProductoCategoria, AuditLog):
+    for model in (Categoria, CasaComercial, Producto, ProductoCategoria, AuditLog):
         source = sa.inspect(model).local_table
         assert isinstance(source, sa.Table)
         source.to_metadata(metadata)
@@ -129,8 +122,15 @@ def test_postgres_concurrent_children_reactivate_one_historical_b3_bucket(
         session.add_all([parent, bucket])
         session.flush()
         bucket.parent_id = parent.id
-        product_id = uuid4()
-        session.execute(_product_stub(sa.MetaData()).insert().values(id=product_id))
+        product = Producto(
+            nombre="B3 temporary product",
+            tipo=TipoProducto.BIEN,
+            categoria_principal_id=parent.id,
+            activo=True,
+        )
+        session.add(product)
+        session.flush()
+        product_id = product.id
         session.add(ProductoCategoria(producto_id=product_id, categoria_id=parent.id))
         session.commit()
         parent_id, bucket_id = parent.id, bucket.id
@@ -161,7 +161,6 @@ def test_postgres_concurrent_children_reactivate_one_historical_b3_bucket(
         ).all()
         assert len(buckets) == 1
         assert buckets[0].id == bucket_id and buckets[0].activo is True
-        relation = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.producto_id == product_id)
-        ).one()
-        assert relation.categoria_id == bucket_id
+        product = session.get(Producto, product_id)
+        assert product is not None
+        assert product.categoria_principal_id == bucket_id

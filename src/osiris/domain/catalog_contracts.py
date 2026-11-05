@@ -122,6 +122,8 @@ class SelectableCategory(CategoryRead):
     tiene_hijos: Literal[False]
     is_default: Literal[False]
     activo: Literal[True]
+    ruta: list[CategoryOrigin]
+    ruta_texto: Text
 
 
 class CategoryCreate(ContractModel):
@@ -475,7 +477,15 @@ def create_contract_app() -> FastAPI:
     register("GET", "/categorias/arbol", list[CategoryTreeNode],
              example=[{**CATEGORY_EXAMPLE, "hijos": []}])
     register("GET", "/categorias/seleccionables", list[SelectableCategory],
-             example=[{**CATEGORY_EXAMPLE, "activo": True}])
+             example=[{
+                 **CATEGORY_EXAMPLE,
+                 "activo": True,
+                 "ruta": [{
+                     "id": CATEGORY_EXAMPLE["id"],
+                     "nombre": CATEGORY_EXAMPLE["nombre"],
+                 }],
+                 "ruta_texto": CATEGORY_EXAMPLE["nombre"],
+             }])
     register("POST", "/categorias/previsualizar", PreviewResponse,
              PreviewInput[CategoryCreate], example=PREVIEW_EXAMPLE)
     register("POST", "/categorias", CategoryRead,

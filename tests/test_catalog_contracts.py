@@ -277,7 +277,9 @@ def test_confirmation_preserves_exact_payload_and_opaque_token() -> None:
 def test_selectable_category_excludes_parents_and_temporary_nodes() -> None:
     payload = {"id": IDENTITY, "nombre": "Laptop", "parent_id": None,
                "tiene_hijos": False, "is_default": False, "activo": True,
-               "atributos_propios_count": 0, "atributos_efectivos_count": 1}
+               "atributos_propios_count": 0, "atributos_efectivos_count": 1,
+               "ruta": [{"id": IDENTITY, "nombre": "Laptop"}],
+               "ruta_texto": "Laptop"}
     SelectableCategory.model_validate_json(json.dumps(payload))
     for field, value in (("tiene_hijos", True), ("is_default", True), ("activo", False)):
         with pytest.raises(ValidationError):

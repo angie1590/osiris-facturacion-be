@@ -33,7 +33,6 @@ from fastapi import HTTPException
 from .repository import ProductoRepository
 from .entity import (
     Producto,
-    ProductoCategoria,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
     ProductoBodega,
@@ -253,9 +252,8 @@ class ProductoService(BaseService[Producto]):
                     },
                 )
 
-            # asociaciones
+            # La categoria principal se persiste directamente en Producto.
             if categoria_ids:
-                self.repo.set_categorias(session, pid, categoria_ids)
                 if isinstance(session, Session):
                     from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
 
@@ -443,10 +441,6 @@ class ProductoService(BaseService[Producto]):
                 },
             )
 
-            session.add(
-                ProductoCategoria(producto_id=product.id, categoria_id=category_id)
-            )
-            session.flush()
             record_domain_change(
                 session,
                 entity="tbl_producto",
@@ -535,25 +529,65 @@ class ProductoService(BaseService[Producto]):
             if product is None:
                 raise HTTPException(status_code=404, detail="Producto no encontrado.")
             self._asegurar_producto_en_scope(session, producto_id)
-
-            bridge_category_ids = list(
-                session.exec(
-                    select(ProductoCategoria.categoria_id).where(
-                        col(ProductoCategoria.producto_id) == producto_id
-                    )
-                ).all()
-            )
-            if len(bridge_category_ids) > 1 or (
-                product.categoria_principal_id is not None
-                and bridge_category_ids != [product.categoria_principal_id]
-            ):
+            if product.actualizado_en != payload.expected_updated_at:
                 raise HTTPException(
                     status_code=409,
                     detail={
-                        "code": "PRODUCT_PRIMARY_CATEGORY_CONFLICT",
-                        "message": "La categoría principal y la proyección legacy no coinciden.",
+                        "code": "PRODUCT_STATE_CHANGED",
+                        "message": "El producto fue modificado por otra operación.",
+                        "acciones_permitidas": ["recargar", "cancelar"],
                     },
                 )
+
+            def integral_snapshot(product_to_snapshot: Producto) -> dict[str, Any]:
+                tax_ids = session.exec(
+                    select(ProductoImpuesto.impuesto_catalogo_id).where(
+                        col(ProductoImpuesto.producto_id) == producto_id,
+                        col(ProductoImpuesto.activo).is_(True),
+                    )
+                ).all()
+                active_values = session.exec(
+                    select(ProductoAtributoValor).where(
+                        col(ProductoAtributoValor.producto_id) == producto_id,
+                        col(ProductoAtributoValor.activo).is_(True),
+                    )
+                ).all()
+                attributes = []
+                for item in active_values:
+                    raw_value = next(
+                        (
+                            getattr(item, field)
+                            for field in (
+                                "valor_string",
+                                "valor_integer",
+                                "valor_decimal",
+                                "valor_boolean",
+                                "valor_date",
+                            )
+                            if getattr(item, field) is not None
+                        ),
+                        None,
+                    )
+                    if isinstance(raw_value, Decimal):
+                        raw_value = str(raw_value)
+                    elif raw_value is not None and hasattr(raw_value, "isoformat"):
+                        raw_value = raw_value.isoformat()
+                    attributes.append(
+                        {"atributo_id": str(item.atributo_id), "valor": raw_value}
+                    )
+                return {
+                    "nombre": product_to_snapshot.nombre,
+                    "categoria_principal_id": (
+                        str(product_to_snapshot.categoria_principal_id)
+                        if product_to_snapshot.categoria_principal_id
+                        else None
+                    ),
+                    "impuesto_catalogo_ids": sorted(str(tax_id) for tax_id in tax_ids),
+                    "atributos": sorted(attributes, key=lambda item: item["atributo_id"]),
+                }
+
+            before_integral = integral_snapshot(product)
+
             previous_category_id = product.categoria_principal_id
             if product.activo and previous_category_id is None:
                 raise HTTPException(
@@ -598,7 +632,6 @@ class ProductoService(BaseService[Producto]):
                     product,
                     previous_category_id,
                     payload.categoria_principal_id,
-                    bridge_category_ids,
                 )
                 product_preview_signer().verify(
                     payload.precondicion_preview,
@@ -643,7 +676,12 @@ class ProductoService(BaseService[Producto]):
                         },
                     )
 
-            self._validate_leaf_categories(session, [payload.categoria_principal_id])
+            if category_changed or previous_category_id is None:
+                self._validate_leaf_categories(session, [payload.categoria_principal_id])
+            else:
+                current_category = session.get(Categoria, previous_category_id)
+                if current_category is None or not current_category.is_default:
+                    self._validate_leaf_categories(session, [payload.categoria_principal_id])
             effective_attributes = CategoriaService().get_atributos_heredados_por_categoria(
                 session, payload.categoria_principal_id
             )
@@ -697,12 +735,6 @@ class ProductoService(BaseService[Producto]):
                 raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
             if category_changed:
-                self.repo.set_categorias(
-                    session,
-                    producto_id,
-                    [payload.categoria_principal_id],
-                )
-                session.flush()
                 record_domain_change(
                     session,
                     entity="tbl_producto",
@@ -822,6 +854,14 @@ class ProductoService(BaseService[Producto]):
                     },
                 ) from exc
 
+            record_domain_change(
+                session,
+                entity="tbl_producto",
+                entity_id=producto_id,
+                action="UPDATE_PRODUCT_INTEGRAL",
+                before=before_integral,
+                after=integral_snapshot(updated),
+            )
             if commit:
                 session.commit()
                 session.refresh(updated)
@@ -926,7 +966,6 @@ class ProductoService(BaseService[Producto]):
                     if previous_primary_category_id is not None
                     else set()
                 )
-                self.repo.set_categorias(session, item_id, categoria_ids)
                 if isinstance(session, Session):
                     from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
 
@@ -1324,15 +1363,19 @@ class ProductoService(BaseService[Producto]):
 
         bodegas = []
         try:
-            bodega_ids = session.exec(
-                select(ProductoBodega.bodega_id, col(ProductoBodega.cantidad))
+            bodega_rows = session.exec(
+                select(
+                    ProductoBodega.id,
+                    ProductoBodega.bodega_id,
+                    col(ProductoBodega.cantidad),
+                )
                 .where(ProductoBodega.producto_id == producto_id)
             ).all()
-            for bodega_id, cantidad in bodega_ids:
+            for relacion_id, bodega_id, cantidad in bodega_rows:
                 bodega = session.get(Bodega, bodega_id)
                 if bodega:
                     bodegas.append({
-                        "id": bodega.id,
+                        "id": relacion_id,
                         "bodega_id": bodega.id,
                         "codigo_bodega": bodega.codigo_bodega,
                         "nombre_bodega": bodega.nombre_bodega,
@@ -1355,12 +1398,17 @@ class ProductoService(BaseService[Producto]):
             "tipo": producto.tipo,
             "pvp": producto.pvp,
             "cantidad": producto.cantidad,
+            "actualizado_en": producto.actualizado_en,
             "permite_fracciones": producto.permite_fracciones,
+            "activo": producto.activo,
             "casa_comercial": casa_comercial,
             "categoria_principal": (
                 {"id": categoria_principal.id, "nombre": categoria_principal.nombre}
                 if categoria_principal
                 else None
+            ),
+            "categoria_principal_temporal": bool(
+                categoria_principal and categoria_principal.is_default
             ),
             "categoria_ruta": categoria_ruta,
             "categorias": categorias,
@@ -1383,22 +1431,6 @@ class ProductoService(BaseService[Producto]):
         La resolución de jerarquía de atributos se reserva para GET /productos/{id}.
         """
         stmt_base = select(Producto)
-        empresa_scope = self._empresa_scope()
-        if empresa_scope is not None:
-            stmt_base = (
-                stmt_base
-                .join(
-                    ProductoBodega,
-                    col(ProductoBodega.producto_id) == col(Producto.id),
-                )
-                .join(Bodega, col(Bodega.id) == col(ProductoBodega.bodega_id))
-                .where(
-                    col(ProductoBodega.activo).is_(True),
-                    col(Bodega.activo).is_(True),
-                    col(Bodega.empresa_id) == empresa_scope,
-                )
-                .distinct()
-            )
         if only_active is not None and hasattr(Producto, "activo"):
             stmt_base = stmt_base.where(Producto.activo == only_active)
         if hasattr(Producto, "activo") and only_active in {None, False}:
@@ -1417,6 +1449,7 @@ class ProductoService(BaseService[Producto]):
         productos = list(session.exec(stmt_base.offset(offset).limit(limit)).all())
         product_ids = [producto.id for producto in productos]
         categorias_por_producto: dict[UUID, list[dict[str, object]]] = {}
+        categoria_principal_por_producto: dict[UUID, dict[str, object]] = {}
         primary_category_ids = {
             producto.categoria_principal_id
             for producto in productos
@@ -1433,9 +1466,11 @@ class ProductoService(BaseService[Producto]):
                 )
             ).all()
             for producto_id, categoria_id, categoria_nombre in categoria_rows:
+                category = {"id": categoria_id, "nombre": categoria_nombre}
                 categorias_por_producto.setdefault(producto_id, []).append(
-                    {"id": categoria_id, "nombre": categoria_nombre}
+                    category
                 )
+                categoria_principal_por_producto[producto_id] = category
 
         items = [
             {
@@ -1444,11 +1479,7 @@ class ProductoService(BaseService[Producto]):
                 "tipo": producto.tipo,
                 "pvp": producto.pvp,
                 "cantidad": producto.cantidad,
-                "categoria_principal": (
-                    {"id": categoria.id, "nombre": categoria.nombre}
-                    if (categoria := session.get(Categoria, producto.categoria_principal_id))
-                    else None
-                ),
+                "categoria_principal": categoria_principal_por_producto.get(producto.id),
                 "categoria_ruta": self._categoria_ruta(
                     session, producto.categoria_principal_id
                 ),

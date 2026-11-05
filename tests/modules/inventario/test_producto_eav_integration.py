@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy import Column, Table
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
 from osiris.core.db import get_session
 from osiris.core.auth import get_current_usuario
@@ -26,7 +26,6 @@ from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoBodega,
-    ProductoCategoria,
     ProductoImpuesto,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
@@ -81,7 +80,6 @@ def _build_test_engine():
             ProductoBodega.__table__,
             ImpuestoCatalogo.__table__,
             ProductoImpuesto.__table__,
-            ProductoCategoria.__table__,
             ProductoProveedorPersona.__table__,
             ProductoProveedorSociedad.__table__,
             ProductoAtributoValor.__table__,
@@ -140,7 +138,6 @@ def _seed_flujo_exito(session: Session):
                 orden=3,
                 usuario_auditoria="test",
             ),
-            ProductoCategoria(producto_id=producto.id, categoria_id=hijo.id),
         ]
     )
     session.commit()
@@ -183,7 +180,6 @@ def _seed_flujo_rechazo(session: Session):
                 orden=1,
                 usuario_auditoria="test",
             ),
-            ProductoCategoria(producto_id=producto.id, categoria_id=hijo_a.id),
         ]
     )
     session.commit()
@@ -194,10 +190,6 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
     engine = _build_test_engine()
     with Session(engine) as session:
         producto_id, garantia_id, color_id, pulgadas_id = _seed_flujo_exito(session)
-        bridge = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.producto_id == producto_id)
-        ).one()
-        session.delete(bridge)
         session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
         company = Empresa(
             razon_social="Empresa Test",
@@ -217,6 +209,31 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
         session.add(warehouse)
         session.flush()
         session.add(ProductoBodega(producto_id=producto_id, bodega_id=warehouse.id, cantidad=Decimal("0"), usuario_auditoria="test", activo=True))
+        session.add_all(
+            [
+                ProductoAtributoValor(
+                    producto_id=producto_id,
+                    atributo_id=garantia_id,
+                    valor_string="24 meses",
+                    usuario_auditoria="test",
+                    activo=True,
+                ),
+                ProductoAtributoValor(
+                    producto_id=producto_id,
+                    atributo_id=color_id,
+                    valor_string="Negro",
+                    usuario_auditoria="test",
+                    activo=True,
+                ),
+                ProductoAtributoValor(
+                    producto_id=producto_id,
+                    atributo_id=pulgadas_id,
+                    valor_integer=55,
+                    usuario_auditoria="test",
+                    activo=True,
+                ),
+            ]
+        )
         session.commit()
         company_id = str(company.id)
         role_id = role.id
@@ -239,9 +256,8 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
                 ],
                 headers={"X-Empresa-Id": company_id},
             )
-            assert put_resp.status_code == 200
-            saved = put_resp.json()
-            assert len(saved) == 3
+            assert put_resp.status_code == 410
+            assert put_resp.json()["detail"]["code"] == "LEGACY_PRODUCT_WRITE_DISABLED"
 
             get_resp = client.get(f"/api/v1/productos/{producto_id}", headers={"X-Empresa-Id": company_id})
             assert get_resp.status_code == 200
@@ -272,12 +288,7 @@ def test_producto_eav_flujo_exito_heredar_validar_guardar_merge():
 def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
     engine = _build_test_engine()
     with Session(engine) as session:
-        producto_id, cilindrada_id, cilindrada_nombre, other_category_id = _seed_flujo_rechazo(session)
-        bridge = session.exec(
-            select(ProductoCategoria).where(ProductoCategoria.producto_id == producto_id)
-        ).one()
-        bridge.categoria_id = other_category_id
-        session.add(bridge)
+        producto_id, cilindrada_id, cilindrada_nombre, _ = _seed_flujo_rechazo(session)
         session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
         company = Empresa(
             razon_social="Empresa Test",
@@ -315,11 +326,8 @@ def test_producto_eav_flujo_rechazo_frontal_atributo_otra_rama():
                 json=[{"atributo_id": str(cilindrada_id), "valor": "150"}],
                 headers={"X-Empresa-Id": company_id},
             )
-            assert resp.status_code == 400
-            detail = resp.json().get("detail", "")
-            assert cilindrada_nombre in detail
-            assert str(cilindrada_id) in detail
-            assert "no aplica a las categorias actuales del producto" in detail
+            assert resp.status_code == 410
+            assert resp.json()["detail"]["code"] == "LEGACY_PRODUCT_WRITE_DISABLED"
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)

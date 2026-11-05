@@ -1,0 +1,62 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: osiris_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d osiris_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ENVIRONMENT: ci
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/osiris_test
+      DB_URL_ALEMBIC: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/osiris_test
+      CATALOG_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/osiris_test
+      DIRECTORY_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/osiris_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: osiris_test
+      SRI_MODO_EMISION: NO_ELECTRONICO
+      FEEC_TIPO_EMISION: "1"
+      FEEC_REGIMEN: GENERAL
+      RUN_LIVE_SMOKE: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: poetry
+      - name: Install Poetry
+        run: python -m pip install "poetry==2.1.1"
+      - name: Download and verify private fe_ec wheel
+        env:
+          FE_EC_WHEEL_URL: ${{ secrets.FE_EC_WHEEL_URL }}
+          FE_EC_WHEEL_SHA256: ${{ secrets.FE_EC_WHEEL_SHA256 }}
+          FE_EC_WHEEL_TOKEN: ${{ secrets.FE_EC_WHEEL_TOKEN }}
+        run: bash scripts/bootstrap_fe_ec_wheel.sh
+      - name: Install locked dependencies
+        run: poetry install --no-interaction --no-root
+      - name: Ruff
+        run: poetry run ruff check src tests
+      - name: Mypy
+        run: poetry run mypy src
+      - name: Pytest with PostgreSQL
+        run: poetry run pytest -q -rs

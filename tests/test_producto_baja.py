@@ -20,7 +20,6 @@ from osiris.modules.inventario.movimientos.models import InventarioStock
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoBodega,
-    ProductoCategoria,
     ProductoImpuesto,
     TipoProducto,
 )
@@ -44,7 +43,6 @@ def _engine():
             Categoria.__table__,
             Atributo.__table__,
             Producto.__table__,
-            ProductoCategoria.__table__,
             ProductoBodega.__table__,
             ProductoImpuesto.__table__,
             ProductoAtributoValorRow.__table__,

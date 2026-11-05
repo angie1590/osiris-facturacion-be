@@ -63,11 +63,11 @@ from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtribut
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoBodega,
-    ProductoCategoria,
     ProductoImpuesto,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
 )
+from tests.utils.legacy_product_category import ProductoCategoria
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.sri.impuesto_catalogo.entity import AplicaA, ImpuestoCatalogo, TipoImpuesto
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente

@@ -45,10 +45,8 @@ from osiris.modules.common.rol_modulo_permiso.entity import RolModuloPermiso
 from osiris.modules.common.rol_modulo_permiso.service import RolModuloPermisoService
 from osiris.modules.common.usuario.entity import Usuario
 from osiris.modules.inventario.categoria_atributo.router import (
-    read_category_attributes_permission,
     router as categoria_atributo_router,
 )
-from osiris.modules.inventario.categoria_atributo.service import CategoriaAtributoService
 from osiris.modules.inventario.atributo.router import (
     read_attribute_remaps_permission,
     resolve_attribute_remaps_permission,
@@ -363,31 +361,20 @@ def test_non_admin_with_permission_is_allowed(catalog: CatalogFixture) -> None:
     )
 
 
-def test_legacy_category_attribute_get_requires_effective_attribute_read(
-    catalog: CatalogFixture,
-) -> None:
+def test_legacy_category_attribute_get_routes_return_gone(catalog: CatalogFixture) -> None:
     app = FastAPI()
     app.include_router(categoria_atributo_router)
     app.dependency_overrides[get_session] = lambda: catalog.session
     app.dependency_overrides[get_current_usuario] = lambda: catalog.user
 
-    with patch.object(CategoriaAtributoService, "list_paginated", return_value=[]):
-        with TestClient(app) as client:
-            denied = client.get("/api/v1/categorias-atributos")
-            assert denied.status_code == 403
-
-            catalog.grant(EXPECTED["read_attributes"])
-            allowed = client.get("/api/v1/categorias-atributos")
-            assert allowed.status_code == 200
-            assert allowed.json() == []
-
-    route = next(
-        route
-        for route in categoria_atributo_router.routes
-        if getattr(route, "path", None) == "/api/v1/categorias-atributos"
-        and "GET" in getattr(route, "methods", set())
-    )
-    assert route.dependant.dependencies[0].call is read_category_attributes_permission
+    with TestClient(app) as client:
+        responses = [
+            client.get("/api/v1/categorias-atributos"),
+            client.get(f"/api/v1/categorias-atributos/{uuid4()}"),
+        ]
+    for response in responses:
+        assert response.status_code == 410
+        assert response.json()["code"] == "LEGACY_CATEGORY_ATTRIBUTE_READ_DISABLED"
 
 
 def test_remap_and_b3_routes_use_effective_catalog_permissions() -> None:

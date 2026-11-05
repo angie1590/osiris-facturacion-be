@@ -15,7 +15,7 @@ from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 
 
@@ -34,7 +34,6 @@ def _engine():
             Categoria.__table__,
             CategoriaAtributo.__table__,
             Producto.__table__,
-            ProductoCategoria.__table__,
             ProductoAtributoValor.__table__,
         ],
     )
@@ -60,7 +59,6 @@ def _seed_collision(session: Session):
         [
             CategoriaAtributo(categoria_id=moving.id, atributo_id=source_attribute.id, usuario_auditoria="test", activo=True),
             CategoriaAtributo(categoria_id=destination.id, atributo_id=inherited_attribute.id, usuario_auditoria="test", activo=True),
-            ProductoCategoria(producto_id=product.id, categoria_id=moving.id),
             ProductoAtributoValor(producto_id=product.id, atributo_id=inherited_attribute.id, valor_string="Azul", usuario_auditoria="test", activo=True),
             ProductoAtributoValor(producto_id=product.id, atributo_id=source_attribute.id, valor_string="Rojo", usuario_auditoria="test", activo=True),
         ]

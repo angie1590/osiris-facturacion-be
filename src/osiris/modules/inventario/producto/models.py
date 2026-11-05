@@ -199,6 +199,7 @@ class ProductoIntegralUpdate(BaseOSModel):
     permite_fracciones: Optional[bool] = None
     casa_comercial_id: Optional[UUID] = None
     categoria_principal_id: UUID
+    expected_updated_at: datetime
     impuesto_catalogo_ids: Optional[List[UUID]] = None
     atributos: Optional[List[ProductoAtributoIntegralInput]] = None
     precondicion_preview: Optional[str] = None
@@ -237,6 +238,16 @@ class ProductoCambioCategoriaPreviewInput(BaseOSModel):
 
     categoria_principal_id: UUID
     atributos: List[ProductoAtributoIntegralInput] = []
+
+    @field_validator("atributos")
+    @classmethod
+    def require_unique_preview_attributes(
+        cls, values: List[ProductoAtributoIntegralInput]
+    ) -> List[ProductoAtributoIntegralInput]:
+        attribute_ids = [item.atributo_id for item in values]
+        if len(attribute_ids) != len(set(attribute_ids)):
+            raise ValueError("No se puede repetir un atributo en el preview.")
+        return values
 
 
 class ProductoCambioCategoriaImpacto(BaseOSModel):
@@ -302,9 +313,12 @@ class ProductoCompletoRead(BaseOSModel):
     tipo: TipoProductoEnum
     pvp: Decimal
     cantidad: Decimal
+    actualizado_en: datetime
     permite_fracciones: bool
+    activo: bool
     casa_comercial: Optional[CasaComercialNested] = None
     categoria_principal: Optional[CategoriaNested] = None
+    categoria_principal_temporal: bool = False
     categoria_ruta: List[CategoriaNested] = []
     categorias: List[CategoriaNested] = []
     proveedores_persona: List[ProveedorPersonaNested] = []

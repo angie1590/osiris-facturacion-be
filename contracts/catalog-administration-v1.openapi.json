@@ -1699,6 +1699,19 @@
             ],
             "title": "Parent Id"
           },
+          "ruta": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryOrigin"
+            },
+            "title": "Ruta",
+            "type": "array"
+          },
+          "ruta_texto": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Ruta Texto",
+            "type": "string"
+          },
           "tiene_hijos": {
             "const": false,
             "title": "Tiene Hijos",
@@ -1713,7 +1726,9 @@
           "is_default",
           "atributos_propios_count",
           "atributos_efectivos_count",
-          "activo"
+          "activo",
+          "ruta",
+          "ruta_texto"
         ],
         "title": "SelectableCategory",
         "type": "object"
@@ -3841,6 +3856,13 @@
                     "is_default": false,
                     "nombre": "Computadores",
                     "parent_id": null,
+                    "ruta": [
+                      {
+                        "id": "11111111-1111-4111-8111-111111111111",
+                        "nombre": "Computadores"
+                      }
+                    ],
+                    "ruta_texto": "Computadores",
                     "tiene_hijos": false
                   }
                 ],

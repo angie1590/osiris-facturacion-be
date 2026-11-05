@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from osiris.modules.inventario.producto.entity import TipoProducto
 from osiris.modules.inventario.producto.models import (
+    ProductoCambioCategoriaPreviewInput,
     ProductoIntegralCreate,
     ProductoIntegralUpdate,
 )
@@ -87,6 +88,7 @@ def test_integral_dtos_reject_legacy_category_lists_and_client_audit_actor() -> 
         ProductoIntegralUpdate.model_validate(
             {
                 "categoria_principal_id": str(uuid4()),
+                "expected_updated_at": datetime(2026, 10, 28),
                 "usuario_auditoria": "cliente",
             }
         )
@@ -97,7 +99,11 @@ def test_integral_update_requires_category_and_preserves_omitted_attribute_colle
         ProductoIntegralUpdate.model_validate({"nombre": "Mouse M720"})
 
     payload = ProductoIntegralUpdate.model_validate(
-        {"categoria_principal_id": str(uuid4()), "nombre": "Mouse M720"}
+        {
+            "categoria_principal_id": str(uuid4()),
+            "expected_updated_at": datetime(2026, 10, 28),
+            "nombre": "Mouse M720",
+        }
     )
     assert payload.atributos is None
     assert payload.impuesto_catalogo_ids is None
@@ -107,14 +113,34 @@ def test_integral_update_requires_category_and_preserves_omitted_attribute_colle
 def test_integral_update_accepts_explicit_preview_and_rejects_empty_tax_profile() -> None:
     with pytest.raises(ValidationError, match="no puede quedar vacío"):
         ProductoIntegralUpdate.model_validate(
-            {"categoria_principal_id": str(uuid4()), "impuesto_catalogo_ids": []}
+            {
+                "categoria_principal_id": str(uuid4()),
+                "expected_updated_at": datetime(2026, 10, 28),
+                "impuesto_catalogo_ids": [],
+            }
         )
 
     payload = ProductoIntegralUpdate.model_validate(
         {
             "categoria_principal_id": str(uuid4()),
+            "expected_updated_at": datetime(2026, 10, 28),
             "impuesto_catalogo_ids": [str(uuid4())],
             "precondicion_preview": "opaque-preview-token",
         }
     )
     assert payload.precondicion_preview == "opaque-preview-token"
+    assert payload.expected_updated_at == datetime(2026, 10, 28)
+
+
+def test_category_change_preview_rejects_duplicate_attributes() -> None:
+    attribute_id = uuid4()
+    with pytest.raises(ValidationError, match="repetir un atributo"):
+        ProductoCambioCategoriaPreviewInput.model_validate(
+            {
+                "categoria_principal_id": str(uuid4()),
+                "atributos": [
+                    {"atributo_id": str(attribute_id), "valor": 1},
+                    {"atributo_id": str(attribute_id), "valor": 2},
+                ],
+            }
+        )

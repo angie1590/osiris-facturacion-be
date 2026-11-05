@@ -28,11 +28,11 @@ from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.producto.entity import (
     Producto,
-    ProductoCategoria,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
     TipoProducto,
 )
+from tests.utils.legacy_product_category import ProductoCategoria
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,
@@ -355,12 +355,23 @@ def test_get_producto_completo_incluye_atributos_heredados_y_valores_persistidos
 
             assert "atributos" in body
             assert body["categoria_principal"]["id"] == str(categoria_id)
+            assert body["categoria_principal_temporal"] is False
             assert [item["id"] for item in body["categoria_ruta"]] == [str(raiz_id), str(categoria_id)]
             assert [item["id"] for item in body["categorias"]] == [str(categoria_id)]
             assert body["descripcion"] == "Detalle de prueba"
             assert body["codigo_barras"].startswith("BC-")
+            assert body["activo"] is True
+            assert body["actualizado_en"]
             assert body["bodegas"]
-            assert body["bodegas"][0]["bodega_id"] == body["bodegas"][0]["id"]
+            with Session(engine) as verify_session:
+                product_warehouse = verify_session.exec(
+                    select(ProductoBodega).where(
+                        ProductoBodega.producto_id == producto_id
+                    )
+                ).one()
+            assert body["bodegas"][0]["id"] == str(product_warehouse.id)
+            assert body["bodegas"][0]["bodega_id"] == str(product_warehouse.bodega_id)
+            assert body["bodegas"][0]["id"] != body["bodegas"][0]["bodega_id"]
             assert "cantidad" in body["bodegas"][0]
             atributos = body["atributos"]
             assert isinstance(atributos, list)
@@ -635,9 +646,23 @@ def test_cambio_categoria_oculta_atributo_huerfano_pero_conserva_historico_eav()
             assert str(atributo_x_id) in by_id_before
             assert by_id_before[str(atributo_x_id)]["valor"] == "Hola"
 
+            preview = client.post(
+                f"/api/v1/productos/{producto_id}/previsualizar-cambio-categoria",
+                json={
+                    "categoria_principal_id": str(categoria_b_id),
+                    "atributos": [],
+                },
+                headers=headers,
+            )
+            assert preview.status_code == 200, preview.text
             update_resp = client.put(
                 f"/api/v1/productos/{producto_id}",
-                json={"categoria_ids": [str(categoria_b_id)]},
+                json={
+                    "categoria_principal_id": str(categoria_b_id),
+                    "expected_updated_at": before.json()["actualizado_en"],
+                    "precondicion_preview": preview.json()["precondicion_preview"],
+                    "atributos": [],
+                },
                 headers=headers,
             )
             assert update_resp.status_code == 200
@@ -656,9 +681,11 @@ def test_cambio_categoria_oculta_atributo_huerfano_pero_conserva_historico_eav()
                 select(ProductoAtributoValor)
                 .where(ProductoAtributoValor.producto_id == producto_id)
                 .where(ProductoAtributoValor.atributo_id == atributo_x_id)
+                .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
             ).first()
             assert eav_x is not None
             assert eav_x.valor_string == "Hola"
+            assert eav_x.activo is False
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)

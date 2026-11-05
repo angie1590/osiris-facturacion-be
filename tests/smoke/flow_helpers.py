@@ -165,9 +165,9 @@ def crear_producto_minimo(client: httpx.Client, categoria_id: str, pvp: str = "1
         "descripcion": "Producto smoke",
         "tipo": "BIEN",
         "pvp": pvp,
-        "categoria_ids": [categoria_id],
+        "categoria_principal_id": categoria_id,
         "impuesto_catalogo_ids": [iva_id],
-        "usuario_auditoria": "smoke",
+        "atributos": [],
     }
     response = client.post("/api/v1/productos", json=payload)
     assert response.status_code == 201, response.text

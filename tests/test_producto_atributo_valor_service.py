@@ -21,7 +21,7 @@ from osiris.modules.inventario.atributo.entity import Atributo, TipoDato
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoValor,
     ProductoAtributoValorUpsert,
@@ -49,7 +49,6 @@ def _build_test_engine():
             Producto.__table__,
             Categoria.__table__,
             CategoriaAtributo.__table__,
-            ProductoCategoria.__table__,
             Atributo.__table__,
             Catalogo.__table__,
             CatalogoValor.__table__,
@@ -239,7 +238,6 @@ def test_required_attribute_default_is_saved_when_upsert_omits_value():
         session.add(product)
         session.add_all(
             [
-                ProductoCategoria(producto_id=product.id, categoria_id=category.id),
                 CategoriaAtributo(
                     categoria_id=category.id,
                     atributo_id=attribute.id,
@@ -281,7 +279,6 @@ def test_required_attribute_without_default_rejects_missing_value():
         session.add(product)
         session.add_all(
             [
-                ProductoCategoria(producto_id=product.id, categoria_id=category.id),
                 CategoriaAtributo(
                     categoria_id=category.id,
                     atributo_id=attribute.id,
@@ -298,7 +295,7 @@ def test_required_attribute_without_default_rejects_missing_value():
             service.upsert_valores_producto_validando_aplicabilidad(session, product.id, [])
 
 
-def test_endpoint_upsert_producto_atributos_e2e_ok():
+def test_endpoint_upsert_producto_atributos_is_disabled():
     engine = _build_test_engine()
     with Session(engine) as session:
         admin_role = Rol(nombre="admin", usuario_auditoria="tester", activo=True)
@@ -319,12 +316,6 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
         session.refresh(categoria)
         producto.categoria_principal_id = categoria.id
         session.add(producto)
-        session.add(
-            ProductoCategoria(
-                producto_id=producto.id,
-                categoria_id=categoria.id,
-            )
-        )
         session.add(
             CategoriaAtributo(
                 categoria_id=categoria.id,
@@ -351,11 +342,8 @@ def test_endpoint_upsert_producto_atributos_e2e_ok():
                 f"/api/v1/productos/{producto_id}/atributos",
                 json=[{"atributo_id": atributo_id, "valor": "77"}],
             )
-            assert response.status_code == 200
-            body = response.json()
-            assert isinstance(body, list)
-            assert body[0]["atributo_id"] == atributo_id
-            assert body[0]["valor_integer"] == 77
+            assert response.status_code == 410
+            assert response.json()["detail"]["code"] == "LEGACY_PRODUCT_WRITE_DISABLED"
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
@@ -416,12 +404,6 @@ def test_upsert_valores_producto_rechaza_atributo_no_aplicable():
         producto.categoria_principal_id = categoria_laptop.id
         session.add(producto)
 
-        session.add(
-            ProductoCategoria(
-                producto_id=producto.id,
-                categoria_id=categoria_laptop.id,
-            )
-        )
         session.add(
             CategoriaAtributo(
                 categoria_id=categoria_laptop.id,

@@ -21,7 +21,8 @@ from osiris.modules.inventario.atributo.service import AtributoService
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria
+from osiris.modules.inventario.producto.entity import Producto
+from tests.utils.legacy_product_category import ProductoCategoria
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,

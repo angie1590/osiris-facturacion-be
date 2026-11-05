@@ -261,6 +261,11 @@ make bootstrap-zero BOOTSTRAP_RETRIES=60 BOOTSTRAP_RETRY_SLEEP=3
 make validate
 
 # 1. Instalar dependencias localmente (opcional, útil para IDE)
+export FE_EC_WHEEL_URL="<URL privada del artefacto fe_ec 0.1.0>"
+export FE_EC_WHEEL_SHA256="<SHA-256 aprobado del artefacto>"
+# Opcional si el servidor no usa URL firmada:
+export FE_EC_WHEEL_TOKEN="<token de descarga>"
+bash scripts/bootstrap_fe_ec_wheel.sh
 poetry install
 
 # 2. Iniciar contenedores

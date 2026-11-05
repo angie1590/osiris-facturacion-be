@@ -31,7 +31,8 @@ from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.service import CategoriaService
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.common.unidad.entity import Unidad
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
+from tests.utils.legacy_product_category import ProductoCategoria
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,

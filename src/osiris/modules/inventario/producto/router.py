@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel import Session
@@ -20,15 +20,9 @@ from osiris.modules.inventario.producto.models import (
     ProductoCompletoRead,
     ProductoCambioCategoriaPreviewInput,
     ProductoCambioCategoriaPreviewResponse,
-    ProductoCreate,
     ProductoIntegralCreate,
     ProductoIntegralUpdate,
     ProductoListadoRead,
-    ProductoUpdate,
-)
-from osiris.modules.inventario.producto.models_atributos import (
-    ProductoAtributoValorRead,
-    ProductoAtributoValorUpsert,
 )
 from osiris.modules.inventario.producto.service import ProductoService
 from osiris.modules.inventario.producto.category_preview import (
@@ -37,7 +31,6 @@ from osiris.modules.inventario.producto.category_preview import (
 from osiris.modules.inventario.producto_impuesto.service import ProductoImpuestoService
 from osiris.modules.inventario.producto.entity import TipoProducto
 from osiris.modules.sri.impuesto_catalogo.models import ImpuestoCatalogoRead
-from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
 from osiris.modules.common.proveedor_persona.entity import ProveedorPersona
 from osiris.modules.common.proveedor_sociedad.entity import ProveedorSociedad
 from osiris.modules.common.usuario.entity import Usuario
@@ -45,7 +38,6 @@ from osiris.modules.common.usuario.entity import Usuario
 
 router = APIRouter(prefix="/api/v1/productos", tags=["Productos"])
 service = ProductoService()
-atributo_valor_service = ProductoAtributoValorService()
 producto_impuesto_service = ProductoImpuestoService()
 
 
@@ -92,37 +84,27 @@ def get_producto(producto_id: UUID, session: Session = Depends(get_session)) -> 
 
 @router.post("", response_model=ProductoCompletoRead, status_code=201)
 def create_producto(
-    payload: ProductoIntegralCreate | ProductoCreate,
+    payload: ProductoIntegralCreate,
     session: Session = Depends(get_session),
     usuario: Usuario = Depends(create_product_permission),
 ) -> ProductoCompletoRead:
-    if isinstance(payload, ProductoIntegralCreate):
-        producto = service.create_integral(session, payload, actor_id=usuario.id)
-    else:
-        legacy_payload = payload.model_dump(exclude_unset=True)
-        legacy_payload["usuario_auditoria"] = str(usuario.id)
-        producto = service.create(session, legacy_payload)
+    producto = service.create_integral(session, payload, actor_id=usuario.id)
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto.id))
 
 
 @router.put("/{producto_id}", response_model=ProductoCompletoRead)
 def update_producto(
     producto_id: UUID,
-    payload: ProductoIntegralUpdate | ProductoUpdate,
+    payload: ProductoIntegralUpdate,
     session: Session = Depends(get_session),
     usuario: Usuario = Depends(update_product_permission),
 ) -> ProductoCompletoRead:
-    if isinstance(payload, ProductoIntegralUpdate):
-        producto = service.update_integral(
-            session,
-            producto_id,
-            payload,
-            actor_id=usuario.id,
-        )
-    else:
-        legacy_payload = payload.model_dump(exclude_unset=True)
-        legacy_payload["usuario_auditoria"] = str(usuario.id)
-        producto = service.update(session, producto_id, legacy_payload)
+    producto = service.update_integral(
+        session,
+        producto_id,
+        payload,
+        actor_id=usuario.id,
+    )
     if not producto:
         raise HTTPException(status_code=404, detail=f"Producto {producto_id} no encontrado")
     return ProductoCompletoRead.model_validate(service.get_producto_completo(session, producto_id))
@@ -159,26 +141,20 @@ def delete_producto(producto_id: UUID, session: Session = Depends(get_session)) 
 
 @router.put(
     "/{producto_id}/atributos",
-    response_model=list[ProductoAtributoValorRead],
-    status_code=200,
+    status_code=410,
     dependencies=[Depends(update_product_permission)],
-    responses={
-        400: {
-            "description": (
-                "Error de validacion de aplicabilidad o tipo de dato. "
-                "Ejemplos: atributo no aplicable a la categoria actual, "
-                "o valor incompatible con el tipo esperado."
-            )
-        }
-    },
 )
-def upsert_producto_atributos(
+def legacy_upsert_producto_atributos(
     producto_id: UUID,
-    payload: list[ProductoAtributoValorUpsert],
-    session: Session = Depends(get_session),
-) -> list[ProductoAtributoValorRead]:
-    entities = atributo_valor_service.upsert_valores_producto_validando_aplicabilidad(session, producto_id, payload)
-    return [ProductoAtributoValorRead.model_validate(item) for item in entities]
+    payload: Any = Body(...),
+) -> None:
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "code": "LEGACY_PRODUCT_WRITE_DISABLED",
+            "message": "Utilice el contrato integral de Producto.",
+        },
+    )
 
 
 def _set_proveedores(

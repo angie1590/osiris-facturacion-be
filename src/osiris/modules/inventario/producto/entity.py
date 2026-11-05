@@ -41,25 +41,9 @@ class Producto(BaseTable, AuditMixin, SoftDeleteMixin, table=True):
         index=True,
     )
 
-    # Relaciones de lectura para evitar N+1 en listados completos.
-    producto_categorias: list[ProductoCategoria] = Relationship(
-        sa_relationship=relationship("ProductoCategoria", back_populates="producto")
-    )
     producto_impuestos: list[ProductoImpuesto] = Relationship(
         sa_relationship=relationship("ProductoImpuesto", back_populates="producto")
     )
-
-# Puente: Producto-Categoría (solo nodos hoja)
-class ProductoCategoria(BaseTable, table=True):
-    __tablename__ = "tbl_producto_categoria"
-
-    producto_id: UUID = Field(foreign_key="tbl_producto.id", index=True, nullable=False)
-    categoria_id: UUID = Field(foreign_key="tbl_categoria.id", index=True, nullable=False)
-
-    producto: object = Relationship(
-        sa_relationship=relationship("Producto", back_populates="producto_categorias")
-    )
-    categoria: object = Relationship(sa_relationship=relationship("Categoria"))
 
 # Puente: Producto-Proveedor Persona
 class ProductoProveedorPersona(BaseTable, table=True):

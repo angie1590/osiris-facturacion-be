@@ -27,7 +27,7 @@ from osiris.modules.inventario.categoria.router import (
 from osiris.modules.inventario.categoria.tree import get_category_tree
 from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtributo
 from osiris.modules.inventario.categoria_atributo.models import CategoriaAtributoUpdate
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, TipoProducto
+from osiris.modules.inventario.producto.entity import Producto, TipoProducto
 from osiris.modules.inventario.producto.models_atributos import (
     ProductoAtributoRemapeo,
     ProductoAtributoValor,
@@ -146,6 +146,16 @@ def test_category_tree_is_ordered_derived_and_counts_effective_overrides() -> No
         ]
         assert all(item["tiene_hijos"] is False for item in selectable_response.json())
         assert all(item["is_default"] is False for item in selectable_response.json())
+        selectable_by_name = {
+            item["nombre"]: item for item in selectable_response.json()
+        }
+        assert selectable_by_name["Leaf"]["ruta_texto"] == "Alpha / Child / Leaf"
+        assert [item["nombre"] for item in selectable_by_name["Leaf"]["ruta"]] == [
+            "Alpha",
+            "Child",
+            "Leaf",
+        ]
+        assert selectable_by_name["Zulu"]["ruta_texto"] == "Zulu"
     engine.dispose()
 
 
@@ -284,7 +294,7 @@ def test_required_attribute_preview_reports_missing_and_rejects_stale_confirmati
             activo=True,
         )
         session.add_all(
-            [mapping, ProductoCategoria(producto_id=product.id, categoria_id=category.id)]
+            [mapping]
         )
         session.commit()
 
@@ -380,7 +390,6 @@ def test_required_assignment_needs_opt_in_backfill_to_create_missing_values() ->
         )
         session.add_all([category, attribute, product])
         session.flush()
-        session.add(ProductoCategoria(producto_id=product.id, categoria_id=category.id))
         session.commit()
         client = _client(session, actor)
 
@@ -477,7 +486,6 @@ def test_local_removal_preview_and_delete_preserve_ancestral_eav_value() -> None
                 ancestor,
                 local,
                 value,
-                ProductoCategoria(producto_id=product.id, categoria_id=child.id),
             ]
         )
         session.commit()
@@ -549,9 +557,7 @@ def test_local_removal_with_pending_remap_is_blocked_without_mutation() -> None:
             motivo="invalid integer",
             activo=True,
         )
-        session.add_all(
-            [mapping, remap, ProductoCategoria(producto_id=product.id, categoria_id=category.id)]
-        )
+        session.add_all([mapping, remap])
         session.commit()
         client = _client(session, actor)
         preview = client.post(
@@ -1098,12 +1104,10 @@ def test_b3_preview_requires_confirmation_and_reclassifies_only_after_valid_toke
             .where(Categoria.parent_id == parent.id)
             .where(Categoria.is_default.is_(True))
         ).one()
-        moved = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == bucket.id
-            )
+        moved_products = session.exec(
+            select(Producto).where(Producto.id.in_(product_ids))
         ).all()
-        assert {item.producto_id for item in moved} == set(product_ids)
+        assert {item.categoria_principal_id for item in moved_products} == {bucket.id}
     engine.dispose()
 
 
@@ -1126,12 +1130,6 @@ def test_b3_confirmation_rejects_changed_product_classification() -> None:
         )
         session.add(added_product)
         session.flush()
-        session.add(
-            ProductoCategoria(
-                producto_id=added_product.id,
-                categoria_id=parent.id,
-            )
-        )
         session.commit()
 
         response = client.post(
@@ -1185,10 +1183,8 @@ def test_moving_category_to_product_parent_uses_b3_preview_confirmation() -> Non
             .where(Categoria.is_default.is_(True))
         ).all()
         assert len(buckets) == 1
-        assignments = session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.categoria_id == buckets[0].id
-            )
+        assigned_products = session.exec(
+            select(Producto).where(Producto.id.in_(product_ids))
         ).all()
-        assert {item.producto_id for item in assignments} == set(product_ids)
+        assert {item.categoria_principal_id for item in assigned_products} == {buckets[0].id}
     engine.dispose()

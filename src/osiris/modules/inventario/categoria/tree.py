@@ -107,10 +107,22 @@ def _category_nodes(session: Session) -> tuple[list[dict[str, Any]], list[dict[s
                 "acciones_permitidas": [],
             },
         )
+
+    def category_path(category: Categoria) -> list[dict[str, Any]]:
+        path: list[dict[str, Any]] = []
+        current: Categoria | None = category
+        while current is not None:
+            path.append({"id": current.id, "nombre": current.nombre})
+            current = by_id.get(current.parent_id) if current.parent_id else None
+        path.reverse()
+        return path
+
     selectable = [
         {
             "id": category.id,
             "nombre": category.nombre,
+            "ruta": category_path(category),
+            "ruta_texto": " / ".join(item["nombre"] for item in category_path(category)),
             "parent_id": category.parent_id,
             "tiene_hijos": False,
             "is_default": False,

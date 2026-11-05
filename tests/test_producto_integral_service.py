@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -37,13 +37,13 @@ from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtribut
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoBodega,
-    ProductoCategoria,
     ProductoImpuesto,
     TipoProducto,
 )
 from osiris.modules.inventario.producto.models import ProductoIntegralCreate
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.inventario.producto.service import ProductoService
+from osiris.modules.inventario.producto.service_atributos import ProductoAtributoValorService
 from osiris.modules.inventario.producto.router import router as producto_router
 from osiris.modules.inventario.producto.category_preview import (
     OPERATION,
@@ -90,7 +90,6 @@ def _engine():
             Producto.__table__,
             Bodega.__table__,
             ProductoBodega.__table__,
-            ProductoCategoria.__table__,
             ProductoAtributoValor.__table__,
             ImpuestoCatalogo.__table__,
             ProductoImpuesto.__table__,
@@ -134,7 +133,6 @@ def postgresql_product_engine() -> Iterator[Engine]:
                 Producto.__table__,
                 Bodega.__table__,
                 ProductoBodega.__table__,
-                ProductoCategoria.__table__,
                 ProductoAtributoValor.__table__,
                 ImpuestoCatalogo.__table__,
                 ProductoImpuesto.__table__,
@@ -237,12 +235,6 @@ def test_create_integral_commits_product_category_tax_required_default_and_audit
         product = session.get(Producto, product_id)
         assert product is not None
         assert product.categoria_principal_id == category_id
-        assert session.exec(
-            select(ProductoCategoria).where(
-                ProductoCategoria.producto_id == product_id,
-                ProductoCategoria.categoria_id == category_id,
-            )
-        ).first() is not None
         assert session.exec(
             select(ProductoImpuesto).where(
                 ProductoImpuesto.producto_id == product_id,
@@ -375,7 +367,41 @@ def test_create_integral_rolls_back_product_bridge_tax_and_audit_when_required_m
 
     with Session(engine) as session:
         assert session.exec(select(Producto)).all() == []
-        assert session.exec(select(ProductoCategoria)).all() == []
+        assert session.exec(select(ProductoImpuesto)).all() == []
+        assert session.exec(select(ProductoAtributoValor)).all() == []
+        assert set(session.exec(select(AuditLog.id)).all()) == audit_before
+
+
+def test_postgresql_create_integral_rolls_back_all_rows_when_eav_write_fails(
+    postgresql_product_engine: Engine,
+) -> None:
+    engine = postgresql_product_engine
+    with Session(engine) as session:
+        company_id, category_id, _attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+        audit_before = set(session.exec(select(AuditLog.id)).all())
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            with patch.object(
+                ProductoAtributoValorService,
+                "upsert_valores_producto_validando_aplicabilidad",
+                side_effect=RuntimeError("forced PostgreSQL EAV failure"),
+            ):
+                with pytest.raises(RuntimeError, match="forced PostgreSQL EAV failure"):
+                    ProductoService().create_integral(
+                        session,
+                        _payload(category_id, tax_id),
+                        actor_id=uuid4(),
+                    )
+            assert not session.in_transaction()
+    finally:
+        reset_current_company_id(company_token)
+
+    with Session(engine) as session:
+        assert session.exec(select(Producto)).all() == []
         assert session.exec(select(ProductoImpuesto)).all() == []
         assert session.exec(select(ProductoAtributoValor)).all() == []
         assert set(session.exec(select(AuditLog.id)).all()) == audit_before
@@ -407,7 +433,6 @@ def test_create_integral_rejects_non_applicable_attribute_before_persisting():
 
     with Session(engine) as session:
         assert session.exec(select(Producto)).all() == []
-        assert session.exec(select(ProductoCategoria)).all() == []
         assert session.exec(select(ProductoImpuesto)).all() == []
         assert session.exec(select(ProductoAtributoValor)).all() == []
 
@@ -433,7 +458,6 @@ def test_create_integral_rejects_unavailable_tax_profile_before_persisting():
 
     with Session(engine) as session:
         assert session.exec(select(Producto)).all() == []
-        assert session.exec(select(ProductoCategoria)).all() == []
         assert session.exec(select(ProductoImpuesto)).all() == []
         assert session.exec(select(ProductoAtributoValor)).all() == []
 
@@ -456,6 +480,7 @@ def test_update_integral_preserves_attributes_when_collection_is_omitted():
                 product_id,
                 ProductoIntegralUpdate(
                     categoria_principal_id=category_id,
+                    expected_updated_at=product.actualizado_en,
                     nombre="Mouse renombrado",
                 ),
                 actor_id=uuid4(),
@@ -473,6 +498,71 @@ def test_update_integral_preserves_attributes_when_collection_is_omitted():
             )
         ).one()
         assert value.valor_integer == 1600
+
+
+def test_integral_update_rejects_stale_product_version_without_mutation_or_audit():
+    engine = _engine()
+    with Session(engine) as session:
+        company_id, category_id, _attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            product = ProductoService().create_integral(
+                session, _payload(category_id, tax_id), actor_id=uuid4()
+            )
+            product_id = product.id
+            expected_version = datetime(2026, 1, 1)
+            session.execute(
+                sa.update(Producto)
+                .where(Producto.id == product_id)
+                .values(actualizado_en=expected_version)
+            )
+            session.commit()
+
+        with Session(engine) as session:
+            current = session.get(Producto, product_id)
+            assert current is not None
+            assert current.actualizado_en == expected_version
+            first_update = ProductoService().update_integral(
+                session,
+                product_id,
+                ProductoIntegralUpdate(
+                    categoria_principal_id=category_id,
+                    expected_updated_at=expected_version,
+                    nombre="Edición A",
+                ),
+                actor_id=uuid4(),
+            )
+            assert first_update is not None
+            assert first_update.actualizado_en != expected_version
+
+        with Session(engine) as session:
+            audit_before = session.scalar(select(func.count()).select_from(AuditLog))
+            with pytest.raises(HTTPException) as stale:
+                ProductoService().update_integral(
+                    session,
+                    product_id,
+                    ProductoIntegralUpdate(
+                        categoria_principal_id=category_id,
+                        expected_updated_at=expected_version,
+                        nombre="Edición B obsoleta",
+                    ),
+                    actor_id=uuid4(),
+                )
+            assert stale.value.status_code == 409
+            assert stale.value.detail["code"] == "PRODUCT_STATE_CHANGED"
+            assert stale.value.detail["acciones_permitidas"] == ["recargar", "cancelar"]
+
+        with Session(engine) as session:
+            current = session.get(Producto, product_id)
+            assert current is not None
+            assert current.nombre == "Edición A"
+            assert session.scalar(select(func.count()).select_from(AuditLog)) == audit_before
+    finally:
+        reset_current_company_id(company_token)
 
 
 def test_update_integral_null_deactivates_only_optional_and_preserves_history():
@@ -525,6 +615,7 @@ def test_update_integral_null_deactivates_only_optional_and_preserves_history():
                 product_id,
                 ProductoIntegralUpdate(
                     categoria_principal_id=category_id,
+                    expected_updated_at=product.actualizado_en,
                     atributos=[
                         {"atributo_id": str(required_attribute_id), "valor": 2400},
                         {"atributo_id": str(optional_attribute_id), "valor": None},
@@ -581,7 +672,10 @@ def test_update_integral_rejects_category_change_without_preview():
                 ProductoService().update_integral(
                     session,
                     product_id,
-                    ProductoIntegralUpdate(categoria_principal_id=target_category_id),
+                    ProductoIntegralUpdate(
+                        categoria_principal_id=target_category_id,
+                        expected_updated_at=product.actualizado_en,
+                    ),
                     actor_id=uuid4(),
                 )
             assert error.value.status_code == 409
@@ -616,6 +710,7 @@ def test_update_integral_rolls_back_general_fields_eav_and_audit_on_invalid_valu
                     product_id,
                     ProductoIntegralUpdate(
                         categoria_principal_id=category_id,
+                        expected_updated_at=product.actualizado_en,
                         nombre="No debe persistir",
                         atributos=[
                             {"atributo_id": str(attribute_id), "valor": "no-entero"}
@@ -772,11 +867,22 @@ def test_category_change_preview_reports_impact_and_never_mutates():
                 ).all()
             ]
             before_audit_count = session.scalar(select(func.count()).select_from(AuditLog))
+            with pytest.raises(HTTPException) as source_only_attribute:
+                preview_product_category_change(
+                    session,
+                    product_id,
+                    ProductoCambioCategoriaPreviewInput(
+                        categoria_principal_id=target_category_id,
+                        atributos=[{"atributo_id": str(color_id), "valor": "Negro"}],
+                    ),
+                    actor_id=uuid4(),
+                )
+            assert source_only_attribute.value.status_code == 422
+            assert source_only_attribute.value.detail["code"] == "PRODUCT_ATTRIBUTE_NOT_APPLICABLE"
+
             preview_payload = ProductoCambioCategoriaPreviewInput(
                 categoria_principal_id=target_category_id,
-                atributos=[
-                    {"atributo_id": str(color_id), "valor": "Negro"},
-                ],
+                atributos=[],
             )
             preview_actor = uuid4()
             preview = preview_product_category_change(
@@ -796,6 +902,7 @@ def test_category_change_preview_reports_impact_and_never_mutates():
             assert preview.conteos["defaults_disponibles"] == 1
             assert preview.conteos["nuevos_obligatorios"] == 2
             assert preview.conteos["faltantes"] == 1
+            assert preview.acciones_permitidas == ["proporcionar_valores", "cancelar"]
             assert preview.conservados[0].atributo_id == dpi_id
             assert preview.desactivados[0].atributo_id == color_id
             assert preview.defaults[0].atributo_id == material_id
@@ -807,7 +914,6 @@ def test_category_change_preview_reports_impact_and_never_mutates():
                 session.get(Producto, product_id),
                 current_category_id,
                 target_category_id,
-                [current_category_id],
             )
             payload_data = product_category_preview_payload(
                 preview_payload.categoria_principal_id,
@@ -847,7 +953,6 @@ def test_category_change_preview_reports_impact_and_never_mutates():
                 session.get(Producto, product_id),
                 current_category_id,
                 target_category_id,
-                [current_category_id],
             )
             with pytest.raises(HTTPException) as stale_catalog:
                 signer.verify(
@@ -885,6 +990,7 @@ def test_category_change_preview_reports_impact_and_never_mutates():
             )
             assert invalid_preview.conteos["incompatibles"] == 2
             assert invalid_preview.conteos["faltantes"] == 0
+            assert invalid_preview.acciones_permitidas == ["proporcionar_valores", "cancelar"]
             assert invalid_preview.incompatibles[0].atributo_id == switch_id
             assert optional_select_id in {
                 item.atributo_id for item in invalid_preview.incompatibles
@@ -906,6 +1012,197 @@ def test_category_change_preview_reports_impact_and_never_mutates():
             assert material_id in {
                 item.atributo_id for item in null_required_preview.faltantes
             }
+    finally:
+        reset_current_company_id(company_token)
+
+
+@pytest.mark.parametrize("with_prior_eav", [False, True])
+def test_category_change_preview_accepts_provided_new_required_attribute(with_prior_eav):
+    engine = _engine()
+    with Session(engine) as session:
+        company_id, current_category_id, source_attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+        source_mapping = session.exec(
+            select(CategoriaAtributo).where(
+                CategoriaAtributo.categoria_id == current_category_id,
+                CategoriaAtributo.atributo_id == source_attribute_id,
+            )
+        ).one()
+        source_mapping.activo = False
+        target_category = Categoria(
+            nombre=f"Target-{uuid4().hex[:8]}",
+            es_padre=False,
+            is_default=False,
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        ram = Atributo(
+            nombre="RAM",
+            codigo=f"ram_{uuid4().hex[:8]}",
+            tipo_dato=TipoDato.INTEGER,
+            usuario_auditoria="fixture",
+            activo=True,
+        )
+        session.add_all([target_category, ram])
+        session.flush()
+        session.add(
+            CategoriaAtributo(
+                categoria_id=target_category.id,
+                atributo_id=ram.id,
+                obligatorio=True,
+                valor_default=None,
+                usuario_auditoria="fixture",
+                activo=True,
+            )
+        )
+        session.commit()
+        target_category_id = target_category.id
+        ram_id = ram.id
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            product = ProductoService().create_integral(
+                session,
+                _payload(current_category_id, tax_id),
+                actor_id=uuid4(),
+            )
+            product_id = product.id
+            product_version = product.actualizado_en
+            prior_attribute_id = uuid4()
+            if with_prior_eav:
+                session.add(
+                    ProductoAtributoValor(
+                        producto_id=product_id,
+                        atributo_id=prior_attribute_id,
+                        valor_string="Negro",
+                        usuario_auditoria="fixture",
+                        activo=True,
+                    )
+                )
+                session.commit()
+
+        actor_id = uuid4()
+        preview_input = ProductoCambioCategoriaPreviewInput(
+            categoria_principal_id=target_category_id,
+            atributos=[{"atributo_id": str(ram_id), "valor": 16}],
+        )
+        with Session(engine) as session:
+            preview = preview_product_category_change(
+                session, product_id, preview_input, actor_id=actor_id
+            )
+
+        assert preview.faltantes == []
+        assert preview.incompatibles == []
+        assert preview.acciones_permitidas == ["confirmar", "cancelar"]
+        if with_prior_eav:
+            assert [item.atributo_id for item in preview.desactivados] == [prior_attribute_id]
+
+        with Session(engine) as session:
+            updated = ProductoService().update_integral(
+                session,
+                product_id,
+                ProductoIntegralUpdate(
+                    categoria_principal_id=target_category_id,
+                    expected_updated_at=product_version,
+                    atributos=preview_input.atributos,
+                    precondicion_preview=preview.precondicion_preview,
+                ),
+                actor_id=actor_id,
+            )
+            assert updated is not None
+            saved_ram = session.exec(
+                select(ProductoAtributoValor).where(
+                    ProductoAtributoValor.producto_id == product_id,
+                    ProductoAtributoValor.atributo_id == ram_id,
+                    ProductoAtributoValor.activo.is_(True),
+                )
+            ).one()
+            assert saved_ram.valor_integer == 16
+            if with_prior_eav:
+                prior = session.exec(
+                    select(ProductoAtributoValor)
+                    .where(
+                        ProductoAtributoValor.producto_id == product_id,
+                        ProductoAtributoValor.atributo_id == prior_attribute_id,
+                    )
+                    .execution_options(**{SOFT_DELETE_INCLUDE_INACTIVE_OPTION: True})
+                ).one()
+                assert prior.activo is False
+    finally:
+        reset_current_company_id(company_token)
+
+
+def test_integral_update_allows_general_edits_in_current_b3_bucket():
+    engine = _engine()
+    with Session(engine) as session:
+        company_id, category_id, _attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            product = ProductoService().create_integral(
+                session, _payload(category_id, tax_id), actor_id=uuid4()
+            )
+            product_id = product.id
+            child = CategoriaService().create(
+                session,
+                {"nombre": f"Child-{uuid4().hex[:8]}", "parent_id": category_id},
+                confirmar_b3=True,
+            )
+            bucket = session.exec(
+                select(Categoria).where(
+                    Categoria.parent_id == category_id,
+                    Categoria.is_default.is_(True),
+                )
+            ).one()
+            product = session.get(Producto, product_id)
+            assert product is not None
+            assert product.categoria_principal_id == bucket.id
+            bucket_version = product.actualizado_en
+
+            updated = ProductoService().update_integral(
+                session,
+                product_id,
+                ProductoIntegralUpdate(
+                    nombre="Producto B3 actualizado",
+                    pvp=Decimal("12.50"),
+                    categoria_principal_id=bucket.id,
+                    expected_updated_at=bucket_version,
+                ),
+                actor_id=uuid4(),
+            )
+
+            assert updated is not None
+            assert updated.nombre == "Producto B3 actualizado"
+            assert updated.pvp == Decimal("12.50")
+            assert updated.categoria_principal_id == bucket.id
+
+            preview_input = ProductoCambioCategoriaPreviewInput(
+                categoria_principal_id=child.id,
+                atributos=[],
+            )
+            actor_id = uuid4()
+            preview = preview_product_category_change(
+                session, product_id, preview_input, actor_id=actor_id
+            )
+            assert preview.requiere_confirmacion is True
+            recategorized = ProductoService().update_integral(
+                session,
+                product_id,
+                ProductoIntegralUpdate(
+                    categoria_principal_id=child.id,
+                    expected_updated_at=updated.actualizado_en,
+                    atributos=[],
+                    precondicion_preview=preview.precondicion_preview,
+                ),
+                actor_id=actor_id,
+            )
+            assert recategorized is not None
+            assert recategorized.categoria_principal_id == child.id
     finally:
         reset_current_company_id(company_token)
 
@@ -988,6 +1285,7 @@ def test_category_change_confirmation_rejects_stale_then_commits_exact_preview()
                 actor_id=uuid4(),
             )
             product_id = product.id
+            product_version = product.actualizado_en
 
         actor_id = uuid4()
         preview_payload = ProductoCambioCategoriaPreviewInput(
@@ -1003,6 +1301,7 @@ def test_category_change_confirmation_rejects_stale_then_commits_exact_preview()
             ]
         valid_payload = ProductoIntegralUpdate(
             categoria_principal_id=target_category_id,
+            expected_updated_at=product_version,
             atributos=[{"atributo_id": str(dpi_id), "valor": 2200}],
             precondicion_preview=preview.precondicion_preview,
         )
@@ -1014,6 +1313,7 @@ def test_category_change_confirmation_rejects_stale_then_commits_exact_preview()
                     product_id,
                     ProductoIntegralUpdate(
                         categoria_principal_id=target_category_id,
+                        expected_updated_at=product_version,
                         atributos=[{"atributo_id": str(dpi_id), "valor": 2300}],
                         precondicion_preview=preview.precondicion_preview,
                     ),
@@ -1026,12 +1326,6 @@ def test_category_change_confirmation_rejects_stale_then_commits_exact_preview()
             product_before = session.get(Producto, product_id)
             assert product_before is not None
             assert product_before.categoria_principal_id == current_category_id
-            assert session.exec(
-                select(ProductoCategoria).where(
-                    ProductoCategoria.producto_id == product_id,
-                    ProductoCategoria.categoria_id == current_category_id,
-                )
-            ).first() is not None
 
             updated = ProductoService().update_integral(
                 session,
@@ -1043,12 +1337,23 @@ def test_category_change_confirmation_rejects_stale_then_commits_exact_preview()
             assert updated.categoria_principal_id == target_category_id
 
         with Session(engine) as session:
-            active_categories = session.exec(
-                select(ProductoCategoria.categoria_id).where(
-                    ProductoCategoria.producto_id == product_id
+            summary_event = session.exec(
+                select(AuditLog).where(
+                    AuditLog.entidad_id == product_id,
+                    AuditLog.accion == "UPDATE_PRODUCT_INTEGRAL",
                 )
-            ).all()
-            assert active_categories == [target_category_id]
+            ).one()
+            assert summary_event.estado_anterior["categoria_principal_id"] == str(
+                current_category_id
+            )
+            assert summary_event.estado_nuevo["categoria_principal_id"] == str(
+                target_category_id
+            )
+            assert summary_event.estado_anterior["atributos"]
+            assert summary_event.estado_nuevo["atributos"]
+            updated_product = session.get(Producto, product_id)
+            assert updated_product is not None
+            assert updated_product.categoria_principal_id == target_category_id
             values = session.exec(
                 select(ProductoAtributoValor)
                 .where(ProductoAtributoValor.producto_id == product_id)
@@ -1065,7 +1370,7 @@ def test_category_change_confirmation_rejects_stale_then_commits_exact_preview()
         reset_current_company_id(company_token)
 
 
-@pytest.mark.parametrize("failure_point", ["bridge", "tax", "eav", "audit"])
+@pytest.mark.parametrize("failure_point", ["tax", "eav", "audit"])
 def test_create_integral_rolls_back_every_table_when_persistence_step_fails(
     failure_point: str,
 ):
@@ -1075,12 +1380,8 @@ def test_create_integral_rolls_back_every_table_when_persistence_step_fails(
             session, default_value="1600"
         )
 
-    if failure_point in {"bridge", "tax"}:
-        table_name = (
-            "tbl_producto_categoria"
-            if failure_point == "bridge"
-            else "tbl_producto_impuesto"
-        )
+    if failure_point == "tax":
+        table_name = "tbl_producto_impuesto"
         with engine.begin() as connection:
             connection.exec_driver_sql(
                 f"CREATE TRIGGER reject_integral_{failure_point} "
@@ -1130,7 +1431,6 @@ def test_create_integral_rolls_back_every_table_when_persistence_step_fails(
 
     with Session(engine) as session:
         assert session.exec(select(Producto)).all() == []
-        assert session.exec(select(ProductoCategoria)).all() == []
         assert session.exec(select(ProductoImpuesto)).all() == []
         assert session.exec(select(ProductoAtributoValor)).all() == []
         assert session.exec(
@@ -1241,6 +1541,7 @@ def test_category_change_confirmation_rejects_preview_stale_after_mapping_change
                 session, _payload(current_category_id, tax_id), actor_id=uuid4()
             )
             product_id = product.id
+            product_version = product.actualizado_en
 
         actor_id = uuid4()
         preview_input = ProductoCambioCategoriaPreviewInput(
@@ -1266,6 +1567,7 @@ def test_category_change_confirmation_rejects_preview_stale_after_mapping_change
                     product_id,
                     ProductoIntegralUpdate(
                         categoria_principal_id=target_category_id,
+                        expected_updated_at=product_version,
                         atributos=[{"atributo_id": str(dpi_id), "valor": 2400}],
                         precondicion_preview=preview.precondicion_preview,
                     ),
@@ -1327,6 +1629,7 @@ def test_postgresql_concurrent_category_mapping_change_rejects_confirmation_atom
                 session, _payload(current_category_id, tax_id), actor_id=uuid4()
             )
             product_id = product.id
+            product_version = product.actualizado_en
 
         actor_id = uuid4()
         preview_input = ProductoCambioCategoriaPreviewInput(
@@ -1384,6 +1687,7 @@ def test_postgresql_concurrent_category_mapping_change_rejects_confirmation_atom
                             product_id,
                             ProductoIntegralUpdate(
                                 categoria_principal_id=target_category_id,
+                                expected_updated_at=product_version,
                                 atributos=[{"atributo_id": str(dpi_id), "valor": 2400}],
                                 precondicion_preview=preview.precondicion_preview,
                             ),
@@ -1444,12 +1748,6 @@ def test_postgresql_concurrent_category_mapping_change_rejects_confirmation_atom
             product = session.get(Producto, product_id)
             assert product is not None
             assert product.categoria_principal_id == current_category_id
-            bridge_ids = session.exec(
-                select(ProductoCategoria.categoria_id).where(
-                    ProductoCategoria.producto_id == product_id
-                )
-            ).all()
-            assert bridge_ids == [current_category_id]
             eav = session.exec(
                 select(ProductoAtributoValor).where(
                     ProductoAtributoValor.producto_id == product_id,
@@ -1458,5 +1756,66 @@ def test_postgresql_concurrent_category_mapping_change_rejects_confirmation_atom
                 )
             ).one()
             assert eav.valor_integer == 1600
+    finally:
+        reset_current_company_id(company_token)
+
+
+def test_postgresql_concurrent_product_update_rejects_stale_version(
+    postgresql_product_engine: Engine,
+) -> None:
+    engine = postgresql_product_engine
+    with Session(engine) as session:
+        company_id, category_id, _attribute_id, tax_id = _seed_catalog(
+            session, default_value="1600"
+        )
+
+    company_token = set_current_company_id(str(company_id))
+    try:
+        with Session(engine) as session:
+            product = ProductoService().create_integral(
+                session, _payload(category_id, tax_id), actor_id=uuid4()
+            )
+            product_id = product.id
+            expected_version = product.actualizado_en
+
+        with Session(engine) as first_session:
+            first_update = ProductoService().update_integral(
+                first_session,
+                product_id,
+                ProductoIntegralUpdate(
+                    categoria_principal_id=category_id,
+                    expected_updated_at=expected_version,
+                    nombre="Edición primera sesión",
+                ),
+                actor_id=uuid4(),
+            )
+            assert first_update is not None
+            assert first_update.actualizado_en != expected_version
+
+        with Session(engine) as second_session:
+            audit_before = second_session.scalar(
+                select(func.count()).select_from(AuditLog)
+            )
+            with pytest.raises(HTTPException) as stale:
+                ProductoService().update_integral(
+                    second_session,
+                    product_id,
+                    ProductoIntegralUpdate(
+                        categoria_principal_id=category_id,
+                        expected_updated_at=expected_version,
+                        nombre="Edición obsoleta",
+                    ),
+                    actor_id=uuid4(),
+                )
+            assert stale.value.status_code == 409
+            assert stale.value.detail["code"] == "PRODUCT_STATE_CHANGED"
+            assert second_session.scalar(
+                select(func.count()).select_from(AuditLog)
+            ) == audit_before
+
+        with Session(engine) as verify_session:
+            product = verify_session.get(Producto, product_id)
+            assert product is not None
+            assert product.nombre == "Edición primera sesión"
     finally:
         reset_current_company_id(company_token)

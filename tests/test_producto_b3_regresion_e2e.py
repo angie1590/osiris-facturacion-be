@@ -34,7 +34,6 @@ from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtribut
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoBodega,
-    ProductoCategoria,
     ProductoImpuesto,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
@@ -81,7 +80,6 @@ def _build_test_engine():
             CategoriaAtributo.__table__,
             ImpuestoCatalogo.__table__,
             Producto.__table__,
-            ProductoCategoria.__table__,
             ProductoBodega.__table__,
             ProductoImpuesto.__table__,
             ProductoAtributoValor.__table__,
@@ -184,13 +182,13 @@ def test_regresion_bloqueo_nativo_producto_en_categoria_con_hijos():
                     "nombre": f"Prod-NoLeaf-{uuid4().hex[:6]}",
                     "tipo": "BIEN",
                     "pvp": 10.50,
-                    "categoria_ids": [categoria_a_id],
+                    "categoria_principal_id": categoria_a_id,
                     "impuesto_catalogo_ids": [iva_id],
-                    "usuario_auditoria": "test",
+                    "atributos": [],
                 },
             )
-            assert r.status_code == 400, r.text
-            assert "Solo se permiten categorías hoja" in r.text
+            assert r.status_code == 409, r.text
+            assert r.json()["detail"]["code"] == "PRODUCT_CATEGORY_NOT_SELECTABLE"
     finally:
         app.dependency_overrides.pop(get_session, None)
         app.dependency_overrides.pop(get_current_usuario, None)
@@ -231,9 +229,9 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
                     "nombre": f"Prod-B3-{uuid4().hex[:6]}",
                     "tipo": "BIEN",
                     "pvp": 22.75,
-                    "categoria_ids": [categoria_x_id],
+                    "categoria_principal_id": categoria_x_id,
                     "impuesto_catalogo_ids": [iva_id],
-                    "usuario_auditoria": "test",
+                    "atributos": [],
                 },
             )
             assert r.status_code == 201, r.text
@@ -263,6 +261,7 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
             r = client.get(f"/api/v1/productos/{producto_id}")
             assert r.status_code == 200, r.text
             body = r.json()
+            assert body["categoria_principal_temporal"] is True
             categorias = body.get("categorias", [])
             assert any(cat.get("id") == general_id for cat in categorias), body
 
@@ -270,7 +269,8 @@ def test_e2e_convivencia_b3_migra_a_general_y_producto_permanece_editable():
                 f"/api/v1/productos/{producto_id}",
                 json={
                     "nombre": f"Prod-B3-Updated-{uuid4().hex[:6]}",
-                    "usuario_auditoria": "test",
+                    "categoria_principal_id": general_id,
+                    "expected_updated_at": body["actualizado_en"],
                 },
             )
             assert r.status_code == 200, r.text

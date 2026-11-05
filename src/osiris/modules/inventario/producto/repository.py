@@ -6,7 +6,6 @@ from sqlmodel import Session, col
 from osiris.domain.repository import BaseRepository
 from .entity import (
     Producto,
-    ProductoCategoria,
     ProductoProveedorPersona,
     ProductoProveedorSociedad,
 )
@@ -14,18 +13,6 @@ from .entity import (
 
 class ProductoRepository(BaseRepository):
     model = Producto
-
-    def set_categorias(
-        self, session: Session, producto_id: UUID, categoria_ids: Iterable[UUID]
-    ) -> None:
-        session.execute(
-            delete(ProductoCategoria).where(
-                col(ProductoCategoria.producto_id) == producto_id
-            )
-        )
-        for cid in categoria_ids:
-            session.add(ProductoCategoria(producto_id=producto_id, categoria_id=cid))
-        session.flush()
 
     def set_proveedores_persona(
         self, session: Session, producto_id: UUID, prov_ids: Iterable[UUID]

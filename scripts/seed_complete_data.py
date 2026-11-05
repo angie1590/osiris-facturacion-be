@@ -36,7 +36,7 @@ from osiris.modules.inventario.categoria_atributo.entity import CategoriaAtribut
 from osiris.modules.inventario.casa_comercial.entity import CasaComercial
 from osiris.modules.common.proveedor_persona.entity import ProveedorPersona
 from osiris.modules.common.proveedor_sociedad.entity import ProveedorSociedad
-from osiris.modules.inventario.producto.entity import Producto, ProductoCategoria, ProductoProveedorPersona, ProductoProveedorSociedad, ProductoImpuesto, ProductoBodega
+from osiris.modules.inventario.producto.entity import Producto, ProductoProveedorPersona, ProductoProveedorSociedad, ProductoImpuesto, ProductoBodega
 from osiris.modules.inventario.producto.models_atributos import ProductoAtributoValor
 from osiris.modules.sri.impuesto_catalogo.entity import ImpuestoCatalogo
 from osiris.modules.sri.tipo_contribuyente.entity import TipoContribuyente  # noqa: F401
@@ -508,6 +508,9 @@ def crear_productos(session: Session, productos_data: list, categorias_map: dict
 
         # Obtener casa comercial
         casa_id = casas_map.get(prod_data.get("casa_comercial"))
+        categoria_id = categorias_map.get(prod_data["categoria"])
+        if categoria_id is None:
+            raise RuntimeError(f"Categoría seed no encontrada: {prod_data['categoria']}")
 
         # Crear producto
         producto = Producto(
@@ -517,6 +520,7 @@ def crear_productos(session: Session, productos_data: list, categorias_map: dict
             tipo=prod_data.get("tipo", "BIEN"),
             pvp=Decimal(str(prod_data["precio"])),
             casa_comercial_id=casa_id,
+            categoria_principal_id=categoria_id,
             usuario_auditoria=AUDIT_USER
         )
         session.add(producto)
@@ -524,15 +528,7 @@ def crear_productos(session: Session, productos_data: list, categorias_map: dict
         session.refresh(producto)
         print(f"  ✓ Producto creado: {prod_data['nombre']} (${prod_data['precio']})")
 
-        # Asignar categoría (solo hojas)
-        categoria_id = categorias_map.get(prod_data["categoria"])
-        if categoria_id:
-            prod_cat = ProductoCategoria(
-                producto_id=producto.id,
-                categoria_id=categoria_id
-            )
-            session.add(prod_cat)
-            print(f"    → Categoría: {prod_data['categoria']}")
+        print(f"    → Categoría principal: {prod_data['categoria']}")
 
         # Asignar impuestos
         if "impuestos" in prod_data:

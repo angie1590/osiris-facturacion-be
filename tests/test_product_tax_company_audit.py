@@ -20,7 +20,6 @@ from osiris.modules.compras.services.compra_service import CompraService
 from osiris.modules.inventario.producto.entity import (
     Producto,
     ProductoBodega,
-    ProductoCategoria,
     ProductoImpuesto,
     TipoProducto,
 )
@@ -43,7 +42,6 @@ def _engine():
             CasaComercial.__table__,
             Producto.__table__,
             Categoria.__table__,
-            ProductoCategoria.__table__,
             Bodega.__table__,
             ProductoBodega.__table__,
             ImpuestoCatalogo.__table__,
@@ -150,6 +148,118 @@ def test_audit_classifies_safe_or_ambiguous_legacy_product_tax_profiles():
         assert len(report["requieren_revision"]) == 3
 
 
+def test_audit_prioritizes_inactive_tax_over_assignment_and_distinguishes_expired_tax():
+    engine = _engine()
+    today = date(2026, 10, 2)
+    with Session(engine) as session:
+        session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
+        company = Empresa(
+            razon_social="Empresa Auditoría",
+            ruc="1790012345001",
+            direccion_matriz="Dirección",
+            regimen="GENERAL",
+            modo_emision="ELECTRONICO",
+            tipo_contribuyente_id="01",
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add(company)
+        session.flush()
+        warehouse = Bodega(
+            codigo_bodega="BA",
+            nombre_bodega="Bodega A",
+            empresa_id=company.id,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        inactive_tax = ImpuestoCatalogo(
+            tipo_impuesto=TipoImpuesto.IVA,
+            codigo_tipo_impuesto="2",
+            codigo_sri="0",
+            descripcion="IVA inactivo",
+            vigente_desde=date(2020, 1, 1),
+            aplica_a=AplicaA.AMBOS,
+            porcentaje_iva=Decimal("0"),
+            usuario_auditoria="test",
+            activo=False,
+        )
+        expired_tax = ImpuestoCatalogo(
+            tipo_impuesto=TipoImpuesto.IVA,
+            codigo_tipo_impuesto="2",
+            codigo_sri="4",
+            descripcion="IVA vencido",
+            vigente_desde=date(2020, 1, 1),
+            vigente_hasta=date(2025, 12, 31),
+            aplica_a=AplicaA.AMBOS,
+            porcentaje_iva=Decimal("15"),
+            usuario_auditoria="test",
+            activo=True,
+        )
+        inactive_tax_product = Producto(
+            nombre="Producto impuesto inactivo",
+            tipo=TipoProducto.BIEN,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        expired_tax_product = Producto(
+            nombre="Producto impuesto vencido",
+            tipo=TipoProducto.BIEN,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add_all(
+            [warehouse, inactive_tax, expired_tax, inactive_tax_product, expired_tax_product]
+        )
+        session.flush()
+        company.impuesto_catalogo_ids = [str(inactive_tax.id), str(expired_tax.id)]
+        session.add_all(
+            [
+                ProductoBodega(
+                    producto_id=inactive_tax_product.id,
+                    bodega_id=warehouse.id,
+                    cantidad=Decimal("0"),
+                    usuario_auditoria="test",
+                    activo=True,
+                ),
+                ProductoBodega(
+                    producto_id=expired_tax_product.id,
+                    bodega_id=warehouse.id,
+                    cantidad=Decimal("0"),
+                    usuario_auditoria="test",
+                    activo=True,
+                ),
+                ProductoImpuesto(
+                    producto_id=inactive_tax_product.id,
+                    impuesto_catalogo_id=inactive_tax.id,
+                    codigo_impuesto_sri="2",
+                    codigo_porcentaje_sri="0",
+                    tarifa=Decimal("0"),
+                    usuario_auditoria="test",
+                    activo=False,
+                ),
+                ProductoImpuesto(
+                    producto_id=expired_tax_product.id,
+                    impuesto_catalogo_id=expired_tax.id,
+                    codigo_impuesto_sri="2",
+                    codigo_porcentaje_sri="4",
+                    tarifa=Decimal("15"),
+                    usuario_auditoria="test",
+                    activo=True,
+                ),
+            ]
+        )
+        session.commit()
+
+        report = build_report(session, today=today)
+        statuses = {row["producto_nombre"]: row["status"] for row in report["relaciones"]}
+
+    assert statuses == {
+        "Producto impuesto inactivo": "INACTIVE_TAX",
+        "Producto impuesto vencido": "EXPIRED_TAX",
+    }
+    engine.dispose()
+
+
 def test_pending_recategorization_count_is_scoped_to_authenticated_company():
     engine = _engine()
     with Session(engine) as session:
@@ -209,8 +319,6 @@ def test_pending_recategorization_count_is_scoped_to_authenticated_company():
         session.flush()
         session.add_all(
             [
-                ProductoCategoria(producto_id=pending_product.id, categoria_id=bucket.id),
-                ProductoCategoria(producto_id=regular_product.id, categoria_id=regular.id),
                 ProductoBodega(producto_id=pending_product.id, bodega_id=warehouse_a.id, cantidad=Decimal("0"), usuario_auditoria="test", activo=True),
                 ProductoBodega(producto_id=regular_product.id, bodega_id=warehouse_b.id, cantidad=Decimal("0"), usuario_auditoria="test", activo=True),
             ]
@@ -231,6 +339,43 @@ def test_pending_recategorization_count_is_scoped_to_authenticated_company():
 
         with pytest.raises(HTTPException, match="empresa autenticada"):
             CategoriaService().contar_productos_sin_recategorizar(session)
+
+
+def test_product_catalog_list_includes_products_without_company_warehouse():
+    engine = _engine()
+    with Session(engine) as session:
+        session.add(TipoContribuyente(codigo="01", nombre="Sociedad", activo=True))
+        company = Empresa(
+            razon_social="Empresa A",
+            ruc="1790012345001",
+            direccion_matriz="Dirección",
+            regimen="GENERAL",
+            modo_emision="ELECTRONICO",
+            tipo_contribuyente_id="01",
+            usuario_auditoria="test",
+            activo=True,
+        )
+        product = Producto(
+            nombre="Producto sin bodega",
+            tipo=TipoProducto.BIEN,
+            usuario_auditoria="test",
+            activo=True,
+        )
+        session.add_all([company, product])
+        session.commit()
+        company_id = company.id
+        product_id = product.id
+
+        token = set_current_company_id(str(company_id))
+        try:
+            rows, metadata = ProductoService().list_paginated_completo(
+                session, only_active=True, limit=50, offset=0
+            )
+        finally:
+            reset_current_company_id(token)
+
+    assert metadata.total == 1
+    assert [row["id"] for row in rows] == [product_id]
 
 
 def test_recategorize_moves_company_product_and_deactivates_empty_bucket():
@@ -279,7 +424,6 @@ def test_recategorize_moves_company_product_and_deactivates_empty_bucket():
         session.flush()
         session.add_all(
             [
-                ProductoCategoria(producto_id=product.id, categoria_id=bucket.id),
                 ProductoBodega(producto_id=product.id, bodega_id=warehouse.id, cantidad=Decimal("0"), usuario_auditoria="test", activo=True),
             ]
         )
@@ -300,11 +444,7 @@ def test_recategorize_moves_company_product_and_deactivates_empty_bucket():
             reset_current_company_id(token)
 
         session.refresh(bucket)
-        category_ids = session.exec(
-            select(ProductoCategoria.categoria_id).where(ProductoCategoria.producto_id == product.id)
-        ).all()
         assert bucket.activo is False
-        assert category_ids == [target.id]
         session.refresh(product)
         assert product.categoria_principal_id == target.id
 

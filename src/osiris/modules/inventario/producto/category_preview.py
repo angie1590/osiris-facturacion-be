@@ -19,7 +19,6 @@ from osiris.modules.inventario.categoria.entity import Categoria
 from osiris.modules.inventario.categoria.resolver import get_effective_attributes
 from osiris.modules.inventario.producto.entity import (
     Producto,
-    ProductoCategoria,
     ProductoImpuesto,
 )
 from osiris.modules.inventario.producto.models import (
@@ -230,7 +229,6 @@ def product_category_preview_state(
     product: Producto,
     current_category_id: UUID | None,
     target_category_id: UUID,
-    bridge_category_ids: list[UUID],
 ) -> dict[str, Any]:
     category_ids = sorted(
         {category_id for category_id in (current_category_id, target_category_id) if category_id},
@@ -248,7 +246,6 @@ def product_category_preview_state(
                 "actualizado_en": product.actualizado_en,
                 "categoria_principal_id": product.categoria_principal_id,
             },
-            "bridge_category_ids": bridge_category_ids,
             "category_chains": {
                 str(category_id): _category_chain_state(session, category_id)
                 for category_id in category_ids
@@ -273,13 +270,6 @@ def preview_product_category_change(
     if product is None:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-    bridge_category_ids = list(
-        session.exec(
-            select(ProductoCategoria.categoria_id)
-            .where(col(ProductoCategoria.producto_id) == product_id)
-            .order_by(col(ProductoCategoria.categoria_id))
-        ).all()
-    )
     current_category_id = product.categoria_principal_id
     if product.activo and current_category_id is None:
         raise HTTPException(
@@ -289,18 +279,6 @@ def preview_product_category_change(
                 "message": "El producto activo no tiene una categoría principal.",
             },
         )
-    if len(bridge_category_ids) > 1 or (
-        product.categoria_principal_id is not None
-        and bridge_category_ids != [product.categoria_principal_id]
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "PRODUCT_PRIMARY_CATEGORY_CONFLICT",
-                "message": "La categoría principal y la proyección legacy no coinciden.",
-            },
-        )
-
     target = session.get(Categoria, payload.categoria_principal_id)
     if target is None or not target.activo:
         raise HTTPException(
@@ -342,7 +320,7 @@ def preview_product_category_change(
         if definition["obligatorio"] is True and attribute_id not in old_required_ids
     }
     provided = {item.atributo_id: item.valor for item in payload.atributos}
-    unknown = set(provided) - set(target_by_id) - set(old_by_id)
+    unknown = set(provided) - set(target_by_id)
     if unknown:
         raise HTTPException(
             status_code=422,
@@ -469,14 +447,14 @@ def preview_product_category_change(
                     )
                 )
                 continue
-            if _effective_value_is_valid(session, definition, value):
+            if _effective_value_is_valid(session, definition, provided_value):
                 continue
             incompatible.append(
                 ProductoCambioCategoriaImpacto(
                     atributo_id=attribute_id,
                     codigo=str(definition.get("codigo", "")),
                     nombre=str(definition.get("atributo_nombre", "Atributo")),
-                    valor=value,
+                    valor=provided_value,
                     motivo="El valor propuesto no cumple el tipo o restricciones destino.",
                 )
             )
@@ -532,7 +510,6 @@ def preview_product_category_change(
         product,
         current_category_id,
         target.id,
-        bridge_category_ids,
     )
     token = product_preview_signer().issue(
         operation=OPERATION,
@@ -555,7 +532,7 @@ def preview_product_category_change(
         f"{len(defaults)} defaults disponibles y {len(missing)} obligatorios faltantes."
     )
     actions = (
-        ["proporcionar_valores", "confirmar", "cancelar"]
+        ["proporcionar_valores", "cancelar"]
         if missing or incompatible
         else ["confirmar", "cancelar"]
     )

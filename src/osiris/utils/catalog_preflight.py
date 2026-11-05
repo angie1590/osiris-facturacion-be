@@ -24,7 +24,6 @@ REQUIRED_COLUMNS = {
         "activo",
     },
     "tbl_producto": {"id", "nombre", "activo"},
-    "tbl_producto_categoria": {"id", "producto_id", "categoria_id"},
     "tbl_producto_atributo_valor": {
         "id",
         "producto_id",
@@ -82,6 +81,14 @@ def audit_catalog(
         if absent:
             missing[name] = sorted(absent)
         tables[name] = table
+    bridge_available = "tbl_producto_categoria" in available
+    if bridge_available:
+        bridge = sa.Table("tbl_producto_categoria", metadata, autoload_with=connection)
+        absent = {"id", "producto_id", "categoria_id"} - set(bridge.c.keys())
+        if absent:
+            missing["tbl_producto_categoria"] = sorted(absent)
+        else:
+            tables["tbl_producto_categoria"] = bridge
 
     conflicts: list[dict[str, Any]] = []
     has_primary_category_column = (
@@ -93,7 +100,7 @@ def audit_catalog(
         "fuente_categoria_principal": (
             "tbl_producto.categoria_principal_id"
             if has_primary_category_column
-            else "tbl_producto_categoria_legacy"
+            else "tbl_producto_categoria_legacy" if bridge_available else "unavailable"
         ),
         "apto_para_migrar": False,
         "total_conflictos": 0,
@@ -116,6 +123,14 @@ def audit_catalog(
         return report
 
     rows = {name: _read_rows(connection, table) for name, table in tables.items()}
+    rows.setdefault("tbl_producto_categoria", [])
+    if not bridge_available:
+        report["advertencias"].append(
+            {
+                "code": "PRODUCT_CATEGORY_BRIDGE_REMOVED",
+                "message": "La clasificacion se audita unicamente desde categoria_principal_id.",
+            }
+        )
     for name in (
         "tbl_producto_atributo_remapeo",
         "tbl_atributo_cambio",
@@ -283,7 +298,7 @@ def audit_catalog(
         for remap in rows.get("tbl_producto_atributo_remapeo", [])
         if remap["activo"]
     }
-    for classification in rows["tbl_producto_categoria"]:
+    for classification in rows.get("tbl_producto_categoria", []):
         if classification.get("activo", True):
             classifications[classification["producto_id"]].append(classification)
     for value in rows["tbl_producto_atributo_valor"]:
@@ -359,7 +374,10 @@ def audit_catalog(
         primary_category_id = product.get("categoria_principal_id")
         bridge_category_ids = [candidate["categoria_id"] for candidate in candidates]
         if primary_category_id is not None:
-            if len(bridge_category_ids) != 1 or bridge_category_ids[0] != primary_category_id:
+            if bridge_available and (
+                len(bridge_category_ids) != 1
+                or bridge_category_ids[0] != primary_category_id
+            ):
                 issue(
                     "PRODUCT_PRIMARY_CATEGORY_CONFLICT",
                     "La categoria principal directa no coincide con la proyeccion legacy.",

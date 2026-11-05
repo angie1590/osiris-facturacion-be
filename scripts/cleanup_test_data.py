@@ -42,16 +42,6 @@ def cleanup_test_data():
         # 2. Eliminar relaciones de productos (tablas bridge)
         print("🗑️  Eliminando relaciones de productos...")
 
-        # Producto-Categoria
-        result = conn.execute(text(f"""
-            DELETE FROM tbl_producto_categoria
-            WHERE producto_id IN (
-                SELECT id FROM tbl_producto
-                WHERE usuario_auditoria IN {test_users}
-            )
-        """))
-        print(f"   - tbl_producto_categoria: {result.rowcount} registros")
-
         # Producto-Proveedor Persona
         result = conn.execute(text(f"""
             DELETE FROM tbl_producto_proveedor_persona
