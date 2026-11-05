@@ -46,6 +46,7 @@ jobs:
         with:
           python-version: "3.10"
           cache: poetry
+          cache-dependency-path: pyproject.toml
       - name: Download and verify private fe_ec wheel
         env:
           FE_EC_WHEEL_URL: ${{ secrets.FE_EC_WHEEL_URL }}
